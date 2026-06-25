@@ -1,0 +1,52 @@
+{
+  "title": "PROJECT_REGISTRY",
+  "version": "0.1.0",
+  "created": "2026-06-25",
+  "last_modified": "2026-06-25",
+  "author": "Hermes \u2014 Chief PMO & Document Controller",
+  "status": "Draft",
+  "project": {
+    "name": "Creator AI Studio",
+    "phase": "Phase 0: Blueprint",
+    "repository": "git@github.com:nugacorp/creator-ai-studio.git"
+  },
+  "official_documents": [
+    "README.md",
+    "PROJECT_STATE.md",
+    "CHANGELOG.md",
+    "ROADMAP.md",
+    "DOCUMENT_REGISTRY.md",
+    "MASTER_INDEX.md",
+    "PROJECT_REGISTRY.json",
+    ".system/standards/DOCUMENT_STANDARD.md"
+  ],
+  "official_directories": [
+    ".system/templates",
+    ".system/registry",
+    ".system/state",
+    ".system/standards",
+    ".system/schemas",
+    ".system/automation",
+    "docs/00-foundation",
+    "docs/01-architecture",
+    "docs/02-business",
+    "docs/03-product",
+    "docs/04-ai",
+    "docs/05-workflows",
+    "docs/99-decisions",
+    "templates",
+    "agents",
+    "workflows",
+    "knowledge",
+    "scripts",
+    "channels"
+  ],
+  "change_history": [
+    {
+      "date": "2026-06-25",
+      "version": "0.1.0",
+      "author": "Hermes",
+      "change": "Initial project registry created."
+    }
+  ]
+}
