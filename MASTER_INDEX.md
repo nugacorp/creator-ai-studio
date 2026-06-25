@@ -18,6 +18,7 @@ Related Documents: DOCUMENT_REGISTRY.md, PROJECT_STATE.md
 - [ROADMAP](ROADMAP.md)
 - [DOCUMENT_REGISTRY](DOCUMENT_REGISTRY.md)
 - [PROJECT_REGISTRY](PROJECT_REGISTRY.json)
+- [DOCUMENTATION_STANDARD](.system/standards/DOCUMENTATION_STANDARD.md)
 - [DOCUMENT_STANDARD](.system/standards/DOCUMENT_STANDARD.md)
 
 ## Official Areas
@@ -35,4 +36,5 @@ Related Documents: DOCUMENT_REGISTRY.md, PROJECT_STATE.md
 
 | Date | Version | Author | Change |
 |---|---:|---|---|
+| 2026-06-25 | 0.1.0 | Hermes | Added official documentation standard reference. |
 | 2026-06-25 | 0.1.0 | Hermes | Initial master index created. |
