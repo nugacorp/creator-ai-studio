@@ -1,16 +1,38 @@
-# MASTER_INDEX
+## Document ID
 
-Version: 0.1.0
-Created: 2026-06-25
-Last Modified: 2026-06-25
-Author: Hermes — Chief PMO & Document Controller
-Status: Draft
-Dependencies: README.md
-Related Documents: DOCUMENT_REGISTRY.md, PROJECT_STATE.md
+MASTER_INDEX
 
----
+## Title
 
-## Official Documents
+Master Index
+
+## Version
+
+0.1.0
+
+## Status
+
+Draft
+
+## Author
+
+Hermes
+
+## Created
+
+2026-06-25
+
+## Last Updated
+
+2026-06-25
+
+## Purpose
+
+Provide the official index of controlled documents and repository areas.
+
+## Scope
+
+Official documents:
 
 - [README](README.md)
 - [PROJECT_STATE](PROJECT_STATE.md)
@@ -21,7 +43,7 @@ Related Documents: DOCUMENT_REGISTRY.md, PROJECT_STATE.md
 - [DOCUMENTATION_STANDARD](.system/standards/DOCUMENTATION_STANDARD.md)
 - [DOCUMENT_STANDARD](.system/standards/DOCUMENT_STANDARD.md)
 
-## Official Areas
+Official areas:
 
 - [.system](.system/)
 - [docs](docs/)
@@ -32,9 +54,18 @@ Related Documents: DOCUMENT_REGISTRY.md, PROJECT_STATE.md
 - [scripts](scripts/)
 - [channels](channels/)
 
+## Dependencies
+
+README.md
+
+## Related Documents
+
+DOCUMENT_REGISTRY.md, PROJECT_STATE.md, DOCUMENTATION_STANDARD.md
+
 ## Change History
 
 | Date | Version | Author | Change |
 |---|---:|---|---|
-| 2026-06-25 | 0.1.0 | Hermes | Added official documentation standard reference. |
 | 2026-06-25 | 0.1.0 | Hermes | Initial master index created. |
+| 2026-06-25 | 0.1.0 | Hermes | Added official documentation standard reference. |
+| 2026-06-25 | 0.1.0 | Hermes | Normalized document to official documentation standard. |

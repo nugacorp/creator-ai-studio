@@ -1,18 +1,40 @@
-# DOCUMENT_STANDARD
+## Document ID
 
-Version: 0.1.0
-Created: 2026-06-25
-Last Modified: 2026-06-25
-Author: Hermes — Chief PMO & Document Controller
-Status: Draft
-Dependencies: HERMES CHARTER v1.0
-Related Documents: DOCUMENT_REGISTRY.md, templates/document-template.md
+DOCUMENT_STANDARD
 
----
+## Title
 
-## Required Header Fields
+Initial Document Standard
 
-Each controlled document must include:
+## Version
+
+0.1.0
+
+## Status
+
+Draft
+
+## Author
+
+Hermes
+
+## Created
+
+2026-06-25
+
+## Last Updated
+
+2026-06-25
+
+## Purpose
+
+Preserve the initial document standard created before DOCUMENTATION_STANDARD.md.
+
+## Scope
+
+This document contains the initial documentation guidance created during CAS OS initialization.
+
+Required header fields originally defined:
 
 - Title
 - Version
@@ -23,36 +45,35 @@ Each controlled document must include:
 - Dependencies
 - Related Documents
 
-## Naming Conventions
+Initial naming conventions:
 
 - Use uppercase snake case for official control documents.
 - Use lowercase kebab case for reusable templates.
 - Use numbered folders for ordered documentation areas.
 
-## Version
+Initial version guidance: initial documents start at version 0.1.0.
 
-Initial documents start at version 0.1.0.
-
-## Status
-
-Allowed initial statuses:
+Initial statuses:
 
 - Draft
 - Approved
 - Deprecated
 
-## Author
+Date format: YYYY-MM-DD.
 
-Author must identify the responsible role or agent.
+Note: DOCUMENTATION_STANDARD.md is now the official documentation standard.
 
-## Date
+## Dependencies
 
-Use ISO format: YYYY-MM-DD.
+HERMES CHARTER v1.0
+
+## Related Documents
+
+DOCUMENT_REGISTRY.md, templates/document-template.md, DOCUMENTATION_STANDARD.md
 
 ## Change History
-
-Each controlled document must include a change history section.
 
 | Date | Version | Author | Change |
 |---|---:|---|---|
 | 2026-06-25 | 0.1.0 | Hermes | Initial document standard created. |
+| 2026-06-25 | 0.1.0 | Hermes | Normalized document to official documentation standard while preserving original guidance. |

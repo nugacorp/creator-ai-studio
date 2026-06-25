@@ -1,35 +1,50 @@
-# ADR Template
+## Document ID
 
-Version: 0.1.0
-Created: 2026-06-25
-Last Modified: 2026-06-25
-Author: Hermes — Chief PMO & Document Controller
-Status: Template
-Dependencies: DOCUMENT_STANDARD.md
-Related Documents: DOCUMENT_REGISTRY.md
+ADR_TEMPLATE
 
----
+## Title
+
+ADR Template
+
+## Version
+
+0.1.0
+
+## Status
+
+Draft
+
+## Author
+
+Hermes
+
+## Created
+
+2026-06-25
+
+## Last Updated
+
+2026-06-25
 
 ## Purpose
 
-To be defined.
+Provide the minimum structure for future Architecture Decision Records.
 
-## Required Metadata
+## Scope
 
-- Title:
-- Version:
-- Created:
-- Last Modified:
-- Author:
-- Status:
-- Dependencies:
-- Related Documents:
+This is an empty reusable template. It does not contain a functional ADR decision.
 
-## Content
+## Dependencies
 
-To be defined.
+DOCUMENTATION_STANDARD.md
+
+## Related Documents
+
+DOCUMENT_REGISTRY.md
 
 ## Change History
 
 | Date | Version | Author | Change |
 |---|---:|---|---|
+| 2026-06-25 | 0.1.0 | Hermes | Initial template created. |
+| 2026-06-25 | 0.1.0 | Hermes | Normalized template to official documentation standard. |
