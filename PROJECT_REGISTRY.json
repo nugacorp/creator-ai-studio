@@ -1,6 +1,6 @@
 {
   "title": "PROJECT_REGISTRY",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "created": "2026-06-25",
   "last_modified": "2026-06-25",
   "author": "Hermes — Chief PMO & Document Controller",
@@ -18,6 +18,7 @@
     "DOCUMENT_REGISTRY.md",
     "MASTER_INDEX.md",
     "PROJECT_REGISTRY.json",
+    "docs/01-architecture/TECH_STACK.md",
     ".system/standards/DOCUMENTATION_STANDARD.md",
     ".system/standards/DOCUMENT_STANDARD.md"
   ],
@@ -54,6 +55,12 @@
       "version": "0.1.0",
       "author": "Hermes",
       "change": "Normalized existing Markdown documents to official documentation standard."
+    },
+    {
+      "date": "2026-06-25",
+      "version": "0.2.0",
+      "author": "Claude Code",
+      "change": "Defined branching and deployment strategy; registered TECH_STACK architecture document."
     }
   ],
   "documentation_standard": ".system/standards/DOCUMENTATION_STANDARD.md",

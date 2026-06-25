@@ -8,7 +8,7 @@ Document Registry
 
 ## Version
 
-0.1.0
+0.2.0
 
 ## Status
 
@@ -43,6 +43,7 @@ Document registry:
 | ROADMAP | Planning | Draft | Hermes | ROADMAP.md |
 | DOCUMENT_REGISTRY | Registry | Draft | Hermes | DOCUMENT_REGISTRY.md |
 | PROJECT_REGISTRY | Metadata | Draft | Hermes | PROJECT_REGISTRY.json |
+| TECH_STACK | Architecture | Draft | Claude Code | docs/01-architecture/TECH_STACK.md |
 | DOCUMENTATION_STANDARD | Standards | Draft | Hermes | .system/standards/DOCUMENTATION_STANDARD.md |
 | DOCUMENT_STANDARD | Standards | Draft | Hermes | .system/standards/DOCUMENT_STANDARD.md |
 | ADR_TEMPLATE | Template | Draft | Hermes | templates/adr-template.md |
@@ -71,3 +72,4 @@ PROJECT_REGISTRY.json, DOCUMENTATION_STANDARD.md
 | 2026-06-25 | 0.1.0 | Hermes | Initial document registry created. |
 | 2026-06-25 | 0.1.0 | Hermes | Registered official documentation standard. |
 | 2026-06-25 | 0.1.0 | Hermes | Normalized document to official documentation standard and registered normalized templates. |
+| 2026-06-25 | 0.2.0 | Claude Code | Registered TECH_STACK architecture document. |
