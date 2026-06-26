@@ -7,9 +7,22 @@ import {
 } from 'react';
 import type {
   EpisodeDetail,
+  EpisodeStage,
+  EpisodeStageStatus,
   EpisodeSummary,
 } from '@creator-ai-studio/shared';
-import { createEpisode, fetchEpisodeDetail, fetchEpisodes } from './api';
+import {
+  createEpisode,
+  fetchEpisodeDetail,
+  fetchEpisodes,
+  updateStageStatus,
+} from './api';
+
+const STAGE_ACTIONS: EpisodeStageStatus[] = [
+  'in_progress',
+  'completed',
+  'blocked',
+];
 
 export function App(): ReactElement {
   const [episodes, setEpisodes] = useState<EpisodeSummary[]>([]);
@@ -49,6 +62,21 @@ export function App(): ReactElement {
       setError('Could not load episode detail');
     } finally {
       setDetailLoading(false);
+    }
+  }
+
+  async function changeStage(
+    stage: EpisodeStage,
+    status: EpisodeStageStatus,
+  ): Promise<void> {
+    if (selectedId === null) {
+      return;
+    }
+    setError(null);
+    try {
+      setDetail(await updateStageStatus(selectedId, stage, status));
+    } catch {
+      setError('Could not update stage');
     }
   }
 
@@ -139,7 +167,21 @@ export function App(): ReactElement {
             <ol>
               {detail.stages.map((stage) => (
                 <li key={stage.stage}>
-                  {stage.stage}: {stage.status}
+                  <span>
+                    {stage.stage}: {stage.status}
+                  </span>
+                  {STAGE_ACTIONS.map((action) => (
+                    <button
+                      key={action}
+                      type="button"
+                      disabled={stage.status === action}
+                      onClick={() => {
+                        void changeStage(stage.stage, action);
+                      }}
+                    >
+                      {action}
+                    </button>
+                  ))}
                 </li>
               ))}
             </ol>

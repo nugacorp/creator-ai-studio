@@ -1,6 +1,8 @@
 import type {
   CreateEpisodeInput,
   EpisodeDetail,
+  EpisodeStage,
+  EpisodeStageStatus,
   EpisodeSummary,
 } from '@creator-ai-studio/shared';
 
@@ -22,6 +24,26 @@ export async function fetchEpisodeDetail(id: string): Promise<EpisodeDetail> {
   );
   if (!response.ok) {
     throw new Error(`Failed to load episode (${response.status})`);
+  }
+  return (await response.json()) as EpisodeDetail;
+}
+
+/** Update a single stage's status and return the refreshed episode detail. */
+export async function updateStageStatus(
+  id: string,
+  stage: EpisodeStage,
+  status: EpisodeStageStatus,
+): Promise<EpisodeDetail> {
+  const response = await fetch(
+    `${API_BASE_URL}/episodes/${encodeURIComponent(id)}/stages/${encodeURIComponent(stage)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to update stage (${response.status})`);
   }
   return (await response.json()) as EpisodeDetail;
 }

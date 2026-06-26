@@ -42,6 +42,16 @@ interface PersistedStage {
   status: EpisodeStageStatus;
 }
 
+/** A located episode on disk. */
+interface LocatedEpisode {
+  /** Absolute path to the episode directory. */
+  dir: string;
+  /** Directory name, relative to the storage root. */
+  name: string;
+  /** Parsed episode summary. */
+  summary: EpisodeSummary;
+}
+
 /** Resolve the local storage root from LOCAL_STORAGE_PATH or the default. */
 export function resolveStoragePath(): string {
   return path.resolve(process.env.LOCAL_STORAGE_PATH ?? DEFAULT_STORAGE_DIR);
@@ -108,17 +118,7 @@ export class EpisodeStorage {
       'utf8',
     );
 
-    await writeFile(
-      path.join(episodeDir, '00-control', 'status.json'),
-      `${JSON.stringify({ episodeId: id, status: episode.status, updatedAt: now }, null, 2)}\n`,
-      'utf8',
-    );
-
-    await writeFile(
-      path.join(episodeDir, '00-control', 'stages.json'),
-      `${JSON.stringify(createInitialStages(), null, 2)}\n`,
-      'utf8',
-    );
+    await this.writeControlFiles(episodeDir, episode, createInitialStages());
 
     for (const stage of EPISODE_STAGE_DIRECTORIES) {
       if (stage === '00-control') {
@@ -159,6 +159,62 @@ export class EpisodeStorage {
 
   /** Read full detail for one episode, or null if it does not exist. */
   async getEpisode(id: string): Promise<EpisodeDetail | null> {
+    const located = await this.findEpisode(id);
+    if (located === null) {
+      return null;
+    }
+
+    return {
+      ...located.summary,
+      workspacePath: located.name,
+      stages: await this.readStages(located.dir),
+    };
+  }
+
+  /**
+   * Update a single stage's status and persist it. Returns the updated detail,
+   * or null if the episode does not exist. Does not enforce transition rules —
+   * that validation belongs to the caller.
+   */
+  async setStageStatus(
+    id: string,
+    stage: EpisodeStage,
+    status: EpisodeStageStatus,
+  ): Promise<EpisodeDetail | null> {
+    const located = await this.findEpisode(id);
+    if (located === null) {
+      return null;
+    }
+
+    const statusByStage = await this.readPersistedStatus(located.dir);
+    statusByStage.set(stage, status);
+
+    const persisted: PersistedStage[] = EPISODE_STAGES.map((current) => ({
+      stage: current,
+      status: statusByStage.get(current) ?? defaultStageStatus(current),
+    }));
+
+    const summary: EpisodeSummary = {
+      ...located.summary,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await writeFile(
+      path.join(located.dir, 'episode.json'),
+      `${JSON.stringify(summary, null, 2)}\n`,
+      'utf8',
+    );
+    await this.writeControlFiles(located.dir, summary, persisted);
+
+    return {
+      ...summary,
+      workspacePath: located.name,
+      stages: await this.readStages(located.dir),
+    };
+  }
+
+  /** Locate an episode directory by id. */
+  private async findEpisode(id: string): Promise<LocatedEpisode | null> {
     if (!existsSync(this.basePath)) {
       return null;
     }
@@ -170,8 +226,8 @@ export class EpisodeStorage {
         continue;
       }
 
-      const episodeDir = path.join(this.basePath, entry.name);
-      const episodeFile = path.join(episodeDir, 'episode.json');
+      const dir = path.join(this.basePath, entry.name);
+      const episodeFile = path.join(dir, 'episode.json');
       if (!existsSync(episodeFile)) {
         continue;
       }
@@ -179,22 +235,36 @@ export class EpisodeStorage {
       const summary = JSON.parse(
         await readFile(episodeFile, 'utf8'),
       ) as EpisodeSummary;
-      if (summary.id !== id) {
-        continue;
+      if (summary.id === id) {
+        return { dir, name: entry.name, summary };
       }
-
-      return {
-        ...summary,
-        workspacePath: entry.name,
-        stages: await this.readStages(episodeDir),
-      };
     }
 
     return null;
   }
 
-  /** Read the stage states for an episode, enriched with expected files. */
-  private async readStages(episodeDir: string): Promise<EpisodeStageState[]> {
+  /** Write `00-control/status.json` and `00-control/stages.json`. */
+  private async writeControlFiles(
+    episodeDir: string,
+    summary: EpisodeSummary,
+    stages: PersistedStage[],
+  ): Promise<void> {
+    await writeFile(
+      path.join(episodeDir, '00-control', 'status.json'),
+      `${JSON.stringify({ episodeId: summary.id, status: summary.status, updatedAt: summary.updatedAt }, null, 2)}\n`,
+      'utf8',
+    );
+    await writeFile(
+      path.join(episodeDir, '00-control', 'stages.json'),
+      `${JSON.stringify(stages, null, 2)}\n`,
+      'utf8',
+    );
+  }
+
+  /** Read the persisted stage->status map for an episode. */
+  private async readPersistedStatus(
+    episodeDir: string,
+  ): Promise<Map<EpisodeStage, EpisodeStageStatus>> {
     const stagesFile = path.join(episodeDir, '00-control', 'stages.json');
     const statusByStage = new Map<EpisodeStage, EpisodeStageStatus>();
 
@@ -206,6 +276,13 @@ export class EpisodeStorage {
         statusByStage.set(item.stage, item.status);
       }
     }
+
+    return statusByStage;
+  }
+
+  /** Read the stage states for an episode, enriched with expected files. */
+  private async readStages(episodeDir: string): Promise<EpisodeStageState[]> {
+    const statusByStage = await this.readPersistedStatus(episodeDir);
 
     return EPISODE_STAGES.map((stage) => {
       const state: EpisodeStageState = {

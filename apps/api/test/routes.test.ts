@@ -161,4 +161,70 @@ describe('api routes', () => {
 
     expect(response.statusCode).toBe(400);
   });
+
+  it('PATCH /episodes/:id/stages/:stage moves a stage to in_progress', async () => {
+    const episode = await createEpisode('Episodio de prueba');
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/episodes/${episode.id}/stages/research`,
+      payload: { status: 'in_progress' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const detail = response.json() as EpisodeDetail;
+    expect(
+      detail.stages.find((stage) => stage.stage === 'research')?.status,
+    ).toBe('in_progress');
+  });
+
+  it('PATCH /episodes/:id/stages/:stage moves a stage to completed', async () => {
+    const episode = await createEpisode('Episodio de prueba');
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/episodes/${episode.id}/stages/script`,
+      payload: { status: 'completed' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const detail = response.json() as EpisodeDetail;
+    expect(
+      detail.stages.find((stage) => stage.stage === 'script')?.status,
+    ).toBe('completed');
+  });
+
+  it('PATCH /episodes/:id/stages/:stage returns 404 for a missing episode', async () => {
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/episodes/does-not-exist/stages/research',
+      payload: { status: 'in_progress' },
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it('PATCH /episodes/:id/stages/:stage rejects an invalid stage', async () => {
+    const episode = await createEpisode('Episodio de prueba');
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/episodes/${episode.id}/stages/not-a-stage`,
+      payload: { status: 'in_progress' },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('PATCH /episodes/:id/stages/:stage rejects an invalid status', async () => {
+    const episode = await createEpisode('Episodio de prueba');
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/episodes/${episode.id}/stages/research`,
+      payload: { status: 'frozen' },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
 });

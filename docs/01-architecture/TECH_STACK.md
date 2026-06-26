@@ -8,7 +8,7 @@ Technology Stack and Deployment Strategy
 
 ## Version
 
-0.3.0
+0.4.0
 
 ## Status
 
@@ -107,6 +107,11 @@ creation, `planning` is `completed` and every other stage is `pending`. The
 stage model lives in `packages/shared`; stage state is persisted per episode in
 `00-control/stages.json`.
 
+Stages are advanced manually (before real agents are connected) via
+`PATCH /episodes/:id/stages/:stage` with a body of `{ "status": "..." }`. Simple
+MVP transition rules (`canTransitionStage` in `packages/shared`) allow moving to
+any other allowed status but reject a no-op transition to the current status.
+
 ### Operational Rules
 
 - No force push to shared branches (`main`, `staging`).
@@ -128,3 +133,4 @@ README.md, DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json
 | 2026-06-25 | 0.1.0 | Claude Code | Initial technology stack and deployment strategy document created. |
 | 2026-06-25 | 0.2.0 | Claude Code | Documented MVP technology stack and local episode storage. |
 | 2026-06-25 | 0.3.0 | Claude Code | Documented production stages model and GET /episodes/:id. |
+| 2026-06-25 | 0.4.0 | Claude Code | Documented manual stage transitions (PATCH /episodes/:id/stages/:stage). |

@@ -103,3 +103,46 @@ export interface EpisodeDetail extends EpisodeSummary {
   /** Production stages with their current status. */
   stages: EpisodeStageState[];
 }
+
+/** Input accepted when updating a single stage's status. */
+export interface UpdateStageInput {
+  status: EpisodeStageStatus;
+}
+
+/** Type guard: is the given value an official production stage? */
+export function isEpisodeStage(value: unknown): value is EpisodeStage {
+  return (
+    typeof value === 'string' &&
+    (EPISODE_STAGES as readonly string[]).includes(value)
+  );
+}
+
+/** Type guard: is the given value an allowed stage status? */
+export function isEpisodeStageStatus(value: unknown): value is EpisodeStageStatus {
+  return (
+    typeof value === 'string' &&
+    (EPISODE_STAGE_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Simple manual transition rules for the MVP: a stage may move to any other
+ * allowed status, but moving to its current status is a no-op and rejected.
+ */
+export const ALLOWED_STAGE_TRANSITIONS: Record<
+  EpisodeStageStatus,
+  EpisodeStageStatus[]
+> = {
+  pending: ['in_progress', 'completed', 'blocked'],
+  in_progress: ['completed', 'blocked', 'pending'],
+  completed: ['in_progress', 'blocked', 'pending'],
+  blocked: ['pending', 'in_progress', 'completed'],
+};
+
+/** Whether a manual stage transition from one status to another is allowed. */
+export function canTransitionStage(
+  from: EpisodeStageStatus,
+  to: EpisodeStageStatus,
+): boolean {
+  return ALLOWED_STAGE_TRANSITIONS[from].includes(to);
+}

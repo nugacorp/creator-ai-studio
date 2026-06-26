@@ -1,7 +1,11 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import type {
-  CreateEpisodeInput,
-  EpisodeSummary,
+import {
+  canTransitionStage,
+  isEpisodeStage,
+  isEpisodeStageStatus,
+  type CreateEpisodeInput,
+  type EpisodeSummary,
+  type UpdateStageInput,
 } from '@creator-ai-studio/shared';
 import { EpisodeStorage, resolveStoragePath } from './storage/index.js';
 
@@ -54,6 +58,38 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const episode = await storage.createEpisode({ title });
     reply.code(201);
     return episode;
+  });
+
+  app.patch('/episodes/:id/stages/:stage', async (request, reply) => {
+    const { id, stage } = request.params as { id: string; stage: string };
+    const body = (request.body ?? {}) as Partial<UpdateStageInput>;
+    const status = body.status;
+
+    if (!isEpisodeStage(stage)) {
+      reply.code(400);
+      return { error: 'invalid stage' };
+    }
+
+    if (!isEpisodeStageStatus(status)) {
+      reply.code(400);
+      return { error: 'invalid status' };
+    }
+
+    const detail = await storage.getEpisode(id);
+    if (detail === null) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+
+    const current = detail.stages.find((entry) => entry.stage === stage);
+    if (current && !canTransitionStage(current.status, status)) {
+      reply.code(400);
+      return {
+        error: `cannot transition stage from ${current.status} to ${status}`,
+      };
+    }
+
+    return storage.setStageStatus(id, stage, status);
   });
 
   return app;

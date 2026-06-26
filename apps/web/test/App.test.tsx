@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import {
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  within,
+} from '@testing-library/react';
 import type {
   EpisodeDetail,
   EpisodeSummary,
@@ -123,5 +129,45 @@ describe('App', () => {
     expect(screen.getByText(/planning: completed/)).toBeInTheDocument();
     expect(screen.getByText(/research: pending/)).toBeInTheDocument();
     expect(screen.queryByText('No episode selected')).not.toBeInTheDocument();
+  });
+
+  it('updates a stage status from the detail view', async () => {
+    const updatedDetail: EpisodeDetail = {
+      ...sampleDetail,
+      stages: [
+        { stage: 'planning', status: 'completed' },
+        { stage: 'research', status: 'in_progress' },
+      ],
+    };
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const method = init?.method ?? 'GET';
+      const url = String(input);
+      if (method === 'PATCH') {
+        return jsonResponse(updatedDetail);
+      }
+      if (url.includes(`/episodes/${sampleEpisode.id}`)) {
+        return jsonResponse(sampleDetail);
+      }
+      return jsonResponse([sampleEpisode]);
+    });
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Demo/i }));
+
+    const researchRow = (await screen.findByText('research: pending')).closest(
+      'li',
+    );
+    expect(researchRow).not.toBeNull();
+    fireEvent.click(
+      within(researchRow as HTMLElement).getByRole('button', {
+        name: 'in_progress',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('research: in_progress')).toBeInTheDocument(),
+    );
   });
 });
