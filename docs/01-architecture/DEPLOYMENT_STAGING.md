@@ -61,6 +61,19 @@ Recommended Coolify strategy for staging:
 7. Mount a persistent volume for the API at `/data/episodes`.
 8. Keep the worker disabled until a Work Order explicitly enables it.
 
+### Staging URL
+
+| Field | Value |
+|---|---|
+| Display name | Creator AI Studio |
+| Public URL | `http://creator-ai-studio.217.76.56.66.sslip.io` |
+| FQDN | `creator-ai-studio.217.76.56.66.sslip.io` |
+| Server IP | `217.76.56.66` |
+
+The sslip.io hostname uses `creator-ai-studio` (hyphens) because DNS labels cannot contain spaces. Coolify Traefik routes `Host(creator-ai-studio.217.76.56.66.sslip.io)` to the web container on port `8080`.
+
+Reference copy: [deploy/staging.env.example](../../deploy/staging.env.example).
+
 ### Variables de entorno
 
 | Variable | Service | Required | Example / Placeholder | Notes |
@@ -176,7 +189,7 @@ After deploy:
 Validate API health through the public web domain and same-origin nginx proxy:
 
 ```bash
-curl -i https://staging.example.com/api/health
+curl -i http://creator-ai-studio.217.76.56.66.sslip.io/api/health
 ```
 
 Expected response:
@@ -188,7 +201,7 @@ Expected response:
 Validate episode listing:
 
 ```bash
-curl -i https://staging.example.com/api/episodes
+curl -i http://creator-ai-studio.217.76.56.66.sslip.io/api/episodes
 ```
 
 Expected response for an empty staging volume:
@@ -211,3 +224,4 @@ DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json, docs/01-architecture/TECH_STACK.md
 |---|---:|---|---|
 | 2026-06-25 | 0.1.0 | Hermes | Initial Coolify staging deployment document created for CAS-HERMES-DEPLOY-0023. |
 | 2026-06-25 | 0.2.0 | Hermes | Documented same-origin `/api` nginx proxy strategy for staging. |
+| 2026-06-26 | 0.3.0 | Cursor | Documented staging URL `creator-ai-studio.217.76.56.66.sslip.io`. |

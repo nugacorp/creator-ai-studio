@@ -20,9 +20,11 @@ Operational procedures for deploying, monitoring, and recovering Creator AI Stud
 
 ## Deploy to Coolify (Staging)
 
+**Staging URL:** http://creator-ai-studio.217.76.56.66.sslip.io (Creator AI Studio)
+
 1. Push validated changes to the `staging` branch.
 2. In Coolify, trigger redeploy of the CAS stack.
-3. Verify health: `curl https://your-domain/api/health`
+3. Verify health: `curl http://creator-ai-studio.217.76.56.66.sslip.io/api/health`
 4. Smoke test: create episode → edit script → generate with AI copilot.
 
 ## Environment Variables (Required for Full Functionality)

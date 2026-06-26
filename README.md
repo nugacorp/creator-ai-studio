@@ -67,6 +67,7 @@ Roles:
 Deployment:
 
 - **Coolify** is the recommended deployment platform for the `staging` environment on the VPS.
+- **Staging URL:** http://creator-ai-studio.217.76.56.66.sslip.io (Creator AI Studio on `217.76.56.66`).
 - `main` represents the stable production state.
 
 Operational rules:
