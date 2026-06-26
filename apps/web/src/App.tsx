@@ -5,8 +5,11 @@ import {
   type FormEvent,
   type ReactElement,
 } from 'react';
-import type { EpisodeSummary } from '@creator-ai-studio/shared';
-import { createEpisode, fetchEpisodes } from './api';
+import type {
+  EpisodeDetail,
+  EpisodeSummary,
+} from '@creator-ai-studio/shared';
+import { createEpisode, fetchEpisodeDetail, fetchEpisodes } from './api';
 
 export function App(): ReactElement {
   const [episodes, setEpisodes] = useState<EpisodeSummary[]>([]);
@@ -14,6 +17,10 @@ export function App(): ReactElement {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<EpisodeDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const loadEpisodes = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -30,6 +37,20 @@ export function App(): ReactElement {
   useEffect(() => {
     void loadEpisodes();
   }, [loadEpisodes]);
+
+  async function selectEpisode(id: string): Promise<void> {
+    setSelectedId(id);
+    setDetail(null);
+    setDetailLoading(true);
+    setError(null);
+    try {
+      setDetail(await fetchEpisodeDetail(id));
+    } catch {
+      setError('Could not load episode detail');
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
@@ -86,10 +107,43 @@ export function App(): ReactElement {
           <ul>
             {episodes.map((episode) => (
               <li key={episode.id}>
-                {episode.title} — {episode.status}
+                <button
+                  type="button"
+                  aria-pressed={episode.id === selectedId}
+                  onClick={() => {
+                    void selectEpisode(episode.id);
+                  }}
+                >
+                  {episode.title} — {episode.status}
+                </button>
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section aria-label="Episode detail">
+        <h2>Episode Detail</h2>
+        {selectedId === null ? (
+          <p>No episode selected</p>
+        ) : detailLoading ? (
+          <p>Loading detail…</p>
+        ) : detail === null ? (
+          <p>No episode selected</p>
+        ) : (
+          <article>
+            <h3>{detail.title}</h3>
+            <p>Status: {detail.status}</p>
+            <p>Workspace: {detail.workspacePath}</p>
+            <h4>Stages</h4>
+            <ol>
+              {detail.stages.map((stage) => (
+                <li key={stage.stage}>
+                  {stage.stage}: {stage.status}
+                </li>
+              ))}
+            </ol>
+          </article>
         )}
       </section>
     </main>

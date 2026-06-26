@@ -30,6 +30,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return storage.listEpisodes();
   });
 
+  app.get('/episodes/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const detail = await storage.getEpisode(id);
+
+    if (detail === null) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+
+    return detail;
+  });
+
   app.post('/episodes', async (request, reply) => {
     const body = (request.body ?? {}) as Partial<CreateEpisodeInput>;
     const title = typeof body.title === 'string' ? body.title.trim() : '';

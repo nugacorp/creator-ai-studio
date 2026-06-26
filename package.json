@@ -11,7 +11,7 @@
   "scripts": {
     "build": "npm run build --workspace @creator-ai-studio/shared && npm run build --workspace @creator-ai-studio/api && npm run build --workspace @creator-ai-studio/web && npm run build --workspace @creator-ai-studio/production-worker",
     "typecheck": "npm run build --workspace @creator-ai-studio/shared && npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run build --workspace @creator-ai-studio/shared && npm run test --workspaces --if-present"
   },
   "devDependencies": {
     "typescript": "^5.7.2",

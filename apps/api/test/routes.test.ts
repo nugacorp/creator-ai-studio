@@ -1,9 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import type { EpisodeSummary } from '@creator-ai-studio/shared';
+import {
+  EPISODE_STAGES,
+  type EpisodeDetail,
+  type EpisodeStageState,
+  type EpisodeSummary,
+} from '@creator-ai-studio/shared';
 import { buildApp } from '../src/app.js';
 import {
   EPISODE_STAGE_DIRECTORIES,
@@ -24,6 +29,15 @@ describe('api routes', () => {
     await app.close();
     await rm(storageDir, { recursive: true, force: true });
   });
+
+  async function createEpisode(title: string): Promise<EpisodeSummary> {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/episodes',
+      payload: { title },
+    });
+    return response.json() as EpisodeSummary;
+  }
 
   it('GET /health returns the service status', async () => {
     const response = await app.inject({ method: 'GET', url: '/health' });
@@ -62,11 +76,7 @@ describe('api routes', () => {
   });
 
   it('GET /episodes returns the created episode', async () => {
-    await app.inject({
-      method: 'POST',
-      url: '/episodes',
-      payload: { title: 'Episodio de prueba' },
-    });
+    await createEpisode('Episodio de prueba');
 
     const response = await app.inject({ method: 'GET', url: '/episodes' });
     const episodes = response.json() as EpisodeSummary[];
@@ -77,20 +87,13 @@ describe('api routes', () => {
   });
 
   it('POST /episodes creates the full stage folder structure on disk', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/episodes',
-      payload: { title: 'Episodio de prueba' },
-    });
-    const episode = response.json() as EpisodeSummary;
-    const episodeDir = path.join(
-      storageDir,
-      `${episode.id}-${episode.slug}`,
-    );
+    const episode = await createEpisode('Episodio de prueba');
+    const episodeDir = path.join(storageDir, `${episode.id}-${episode.slug}`);
 
     const expectedFiles = [
       'episode.json',
       '00-control/status.json',
+      '00-control/stages.json',
       ...EPISODE_STAGE_DIRECTORIES.filter((stage) => stage !== '00-control').map(
         (stage) => `${stage}/.gitkeep`,
       ),
@@ -100,6 +103,53 @@ describe('api routes', () => {
       const stats = await stat(path.join(episodeDir, file));
       expect(stats.isFile()).toBe(true);
     }
+  });
+
+  it('POST /episodes writes stages.json with planning completed and the rest pending', async () => {
+    const episode = await createEpisode('Episodio de prueba');
+    const stagesFile = path.join(
+      storageDir,
+      `${episode.id}-${episode.slug}`,
+      '00-control',
+      'stages.json',
+    );
+
+    const stages = JSON.parse(
+      await readFile(stagesFile, 'utf8'),
+    ) as EpisodeStageState[];
+
+    expect(stages).toHaveLength(EPISODE_STAGES.length);
+    expect(stages.find((stage) => stage.stage === 'planning')?.status).toBe(
+      'completed',
+    );
+    const others = stages.filter((stage) => stage.stage !== 'planning');
+    expect(others.every((stage) => stage.status === 'pending')).toBe(true);
+  });
+
+  it('GET /episodes/:id returns the episode detail with stages', async () => {
+    const episode = await createEpisode('Episodio de prueba');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/episodes/${episode.id}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const detail = response.json() as EpisodeDetail;
+    expect(detail.id).toBe(episode.id);
+    expect(detail.workspacePath).toBe(`${episode.id}-${episode.slug}`);
+    expect(detail.stages).toHaveLength(EPISODE_STAGES.length);
+    expect(detail.stages[0]?.stage).toBe('planning');
+    expect(detail.stages[0]?.status).toBe('completed');
+  });
+
+  it('GET /episodes/:id returns 404 for a missing episode', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/episodes/does-not-exist',
+    });
+
+    expect(response.statusCode).toBe(404);
   });
 
   it('POST /episodes rejects an empty title', async () => {

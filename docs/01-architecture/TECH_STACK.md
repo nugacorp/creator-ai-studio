@@ -8,7 +8,7 @@ Technology Stack and Deployment Strategy
 
 ## Version
 
-0.2.0
+0.3.0
 
 ## Status
 
@@ -91,8 +91,21 @@ services (OpenAI, Claude, ElevenLabs, YouTube) are called.
 - Storage module: `apps/api/src/storage`.
 - Root directory: `LOCAL_STORAGE_PATH` if set, otherwise `episodes/` (git-ignored).
 - `POST /episodes` creates `episodes/<id>-<slug>/` with `episode.json`,
-  `00-control/status.json`, and stage folders `01-research` … `12-review`
-  (each preserved with a `.gitkeep`).
+  `00-control/status.json`, `00-control/stages.json`, and stage folders
+  `01-research` … `12-review` (each preserved with a `.gitkeep`).
+- `GET /episodes/:id` returns the episode detail: summary metadata, the
+  workspace path (relative to the storage root), and the production stages with
+  their status (and expected files where applicable). Returns `404` if missing.
+
+### Production Stages
+
+Episodes progress through 15 ordered stages (`planning`, `research`, `script`,
+`doctrine_review`, `editorial_review`, `storyboard`, `assets`, `audio`, `video`,
+`thumbnail`, `seo`, `shorts`, `final_review`, `publishing`, `analytics`). Each
+stage has a status (`pending`, `in_progress`, `completed`, `blocked`). On
+creation, `planning` is `completed` and every other stage is `pending`. The
+stage model lives in `packages/shared`; stage state is persisted per episode in
+`00-control/stages.json`.
 
 ### Operational Rules
 
@@ -114,3 +127,4 @@ README.md, DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json
 |---|---:|---|---|
 | 2026-06-25 | 0.1.0 | Claude Code | Initial technology stack and deployment strategy document created. |
 | 2026-06-25 | 0.2.0 | Claude Code | Documented MVP technology stack and local episode storage. |
+| 2026-06-25 | 0.3.0 | Claude Code | Documented production stages model and GET /episodes/:id. |

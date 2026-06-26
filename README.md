@@ -8,7 +8,7 @@ Creator AI Studio Repository Entry Point
 
 ## Version
 
-0.3.0
+0.4.0
 
 ## Status
 
@@ -100,7 +100,12 @@ Run the API (Fastify, defaults to `http://localhost:3000`):
 npm run start --workspace @creator-ai-studio/api
 ```
 
-Endpoints: `GET /health`, `GET /episodes`, `POST /episodes` (body `{ "title": "..." }`).
+Endpoints:
+
+- `GET /health` — service status.
+- `GET /episodes` — list episodes.
+- `POST /episodes` — create an episode (body `{ "title": "..." }`).
+- `GET /episodes/:id` — episode detail (metadata, workspace path and stages); `404` if not found.
 
 Run the web dashboard (Vite dev server, defaults to `http://localhost:5173`):
 
@@ -143,3 +148,4 @@ MASTER_INDEX.md, PROJECT_STATE.md, docs/01-architecture/TECH_STACK.md
 | 2026-06-25 | 0.1.0 | Hermes | Normalized document to official documentation standard. |
 | 2026-06-25 | 0.2.0 | Claude Code | Added branching and deployment strategy (main / staging / feature). |
 | 2026-06-25 | 0.3.0 | Claude Code | Added Local Development instructions (install, API, web, worker, CA note). |
+| 2026-06-25 | 0.4.0 | Claude Code | Documented GET /episodes/:id (episode detail with stages). |

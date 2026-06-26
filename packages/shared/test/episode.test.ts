@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  EPISODE_STAGE_STATUSES,
+  EPISODE_STAGES,
   EPISODE_STATUSES,
   type CreateEpisodeInput,
+  type EpisodeStageState,
   type EpisodeSummary,
 } from '../src/index.js';
 
@@ -31,5 +34,40 @@ describe('shared episode model', () => {
   it('describes the create episode input', () => {
     const input: CreateEpisodeInput = { title: 'Pilot' };
     expect(input.title).toBe('Pilot');
+  });
+
+  it('includes all official production stages, in order', () => {
+    expect(EPISODE_STAGES).toEqual([
+      'planning',
+      'research',
+      'script',
+      'doctrine_review',
+      'editorial_review',
+      'storyboard',
+      'assets',
+      'audio',
+      'video',
+      'thumbnail',
+      'seo',
+      'shorts',
+      'final_review',
+      'publishing',
+      'analytics',
+    ]);
+  });
+
+  it('defines the four official stage statuses', () => {
+    expect(EPISODE_STAGE_STATUSES).toEqual([
+      'pending',
+      'in_progress',
+      'completed',
+      'blocked',
+    ]);
+  });
+
+  it('allows constructing a stage state', () => {
+    const state: EpisodeStageState = { stage: 'script', status: 'in_progress' };
+    expect(state.stage).toBe('script');
+    expect(EPISODE_STAGE_STATUSES).toContain(state.status);
   });
 });

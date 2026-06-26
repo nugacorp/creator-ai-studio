@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import type { EpisodeSummary } from '@creator-ai-studio/shared';
+import type {
+  EpisodeDetail,
+  EpisodeSummary,
+} from '@creator-ai-studio/shared';
 import { App } from '../src/App';
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -19,6 +22,15 @@ const sampleEpisode: EpisodeSummary = {
   updatedAt: '2026-06-25T00:00:00.000Z',
 };
 
+const sampleDetail: EpisodeDetail = {
+  ...sampleEpisode,
+  workspacePath: 'ep-1-demo',
+  stages: [
+    { stage: 'planning', status: 'completed' },
+    { stage: 'research', status: 'pending' },
+  ],
+};
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -35,6 +47,7 @@ describe('App', () => {
     expect(
       screen.getByText('YouTube Christian Bible Channel Production System'),
     ).toBeInTheDocument();
+    expect(screen.getByText('No episode selected')).toBeInTheDocument();
 
     await waitFor(() =>
       expect(screen.getByText('No episodes created yet')).toBeInTheDocument(),
@@ -49,7 +62,9 @@ describe('App', () => {
     render(<App />);
 
     await waitFor(() =>
-      expect(screen.getByText(/Demo/)).toBeInTheDocument(),
+      expect(
+        screen.getByRole('button', { name: /Demo/i }),
+      ).toBeInTheDocument(),
     );
     expect(screen.queryByText('No episodes created yet')).not.toBeInTheDocument();
   });
@@ -72,10 +87,41 @@ describe('App', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /create episode/i }));
 
-    await waitFor(() => expect(screen.getByText(/Demo/)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Demo/i }),
+      ).toBeInTheDocument(),
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    const postCall = fetchMock.mock.calls[1];
-    expect(postCall?.[1]).toMatchObject({ method: 'POST' });
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: 'POST' });
+  });
+
+  it('shows episode detail and stages when an episode is selected', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes(`/episodes/${sampleEpisode.id}`)) {
+        return jsonResponse(sampleDetail);
+      }
+      return jsonResponse([sampleEpisode]);
+    });
+
+    render(<App />);
+
+    const episodeButton = await screen.findByRole('button', {
+      name: /Demo/i,
+    });
+    fireEvent.click(episodeButton);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { level: 3, name: 'Demo' }),
+      ).toBeInTheDocument(),
+    );
+
+    expect(screen.getByText(/Workspace: ep-1-demo/)).toBeInTheDocument();
+    expect(screen.getByText(/planning: completed/)).toBeInTheDocument();
+    expect(screen.getByText(/research: pending/)).toBeInTheDocument();
+    expect(screen.queryByText('No episode selected')).not.toBeInTheDocument();
   });
 });

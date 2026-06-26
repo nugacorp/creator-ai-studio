@@ -1,5 +1,6 @@
 import type {
   CreateEpisodeInput,
+  EpisodeDetail,
   EpisodeSummary,
 } from '@creator-ai-studio/shared';
 
@@ -12,6 +13,17 @@ export async function fetchEpisodes(): Promise<EpisodeSummary[]> {
     throw new Error(`Failed to load episodes (${response.status})`);
   }
   return (await response.json()) as EpisodeSummary[];
+}
+
+/** Fetch full detail for a single episode. */
+export async function fetchEpisodeDetail(id: string): Promise<EpisodeDetail> {
+  const response = await fetch(
+    `${API_BASE_URL}/episodes/${encodeURIComponent(id)}`,
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to load episode (${response.status})`);
+  }
+  return (await response.json()) as EpisodeDetail;
 }
 
 /** Create a new episode via the API. */
