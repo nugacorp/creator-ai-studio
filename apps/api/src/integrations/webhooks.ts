@@ -1,4 +1,4 @@
-import process from 'node:process';
+import { getSecret } from '../secrets/resolver.js';
 
 type WebhookEvent = 'job.completed' | 'job.failed' | 'episode.published';
 
@@ -6,7 +6,7 @@ export async function dispatchWebhook(
   event: WebhookEvent,
   payload: Record<string, unknown>,
 ): Promise<void> {
-  const url = process.env.WEBHOOK_URL;
+  const url = await getSecret('WEBHOOK_URL');
   if (!url) return;
 
   try {

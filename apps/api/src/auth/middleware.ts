@@ -1,10 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import process from 'node:process';
 
-const PUBLIC_PATHS = new Set([
-  '/health',
-  '/api/health',
-]);
+const PUBLIC_PATHS = new Set(['/health', '/api/health']);
 
 export function registerAuthHook(app: FastifyInstance): void {
   const apiKey = process.env.CAS_API_KEY;
@@ -37,8 +34,15 @@ export function registerAuthHook(app: FastifyInstance): void {
     }
 
     if (supabaseJwtSecret && authHeader?.startsWith('Bearer ')) {
-      // JWT validation placeholder — production should verify signature with jose/jsonwebtoken
-      return;
+      const token = authHeader.slice(7);
+      try {
+        const { jwtVerify } = await import('jose');
+        await jwtVerify(token, new TextEncoder().encode(supabaseJwtSecret));
+        return;
+      } catch {
+        reply.code(401);
+        return reply.send({ error: 'invalid_token' });
+      }
     }
 
     reply.code(401);

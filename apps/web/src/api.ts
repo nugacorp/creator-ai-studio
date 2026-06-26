@@ -8,6 +8,10 @@ import type {
   EpisodeSummary,
   ProductionJob,
   ProjectStatus,
+  SecretProvider,
+  SecretsPatch,
+  SecretStatus,
+  SecretTestResult,
   UpdateEpisodeInput,
 } from '@creator-ai-studio/shared';
 
@@ -135,3 +139,108 @@ export interface ChannelData {
 export async function fetchChannels(): Promise<ChannelData[]> {
   return apiFetch<ChannelData[]>('/channels');
 }
+
+export interface SecretsResponse {
+  encryptionAvailable: boolean;
+  items: SecretStatus[];
+}
+
+export async function fetchSecrets(): Promise<SecretsResponse> {
+  return apiFetch<SecretsResponse>('/secrets');
+}
+
+export async function updateSecrets(patch: SecretsPatch): Promise<{ items: SecretStatus[] }> {
+  return apiFetch<{ items: SecretStatus[] }>('/secrets', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+}
+
+export async function testSecret(provider: SecretProvider): Promise<SecretTestResult> {
+  return apiFetch<SecretTestResult>(`/secrets/test/${provider}`, { method: 'POST' });
+}
+
+export interface SystemMode {
+  demoMode: boolean;
+  aiProvider: string;
+}
+
+export async function fetchSystemMode(): Promise<SystemMode> {
+  return apiFetch<SystemMode>('/system/mode');
+}
+
+export async function scheduleCalendarEvent(input: {
+  episodeId: string;
+  date?: string;
+}): Promise<CalendarEvent> {
+  return apiFetch<CalendarEvent>('/calendar/events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function aiChat(message: string): Promise<{ reply: string }> {
+  return apiFetch<{ reply: string }>('/gemini/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+}
+
+export async function aiGenerateScript(
+  prompt: string,
+  options?: Record<string, string>,
+): Promise<{ text: string }> {
+  return apiFetch<{ text: string }>('/gemini/generate-script', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, options }),
+  });
+}
+
+export async function aiRewrite(script: string, instruction: string): Promise<{ text: string }> {
+  return apiFetch<{ text: string }>('/gemini/rewrite', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ script, instruction }),
+  });
+}
+
+export async function aiGenerateImage(body: {
+  prompt: string;
+  aspectRatio?: string;
+  imageSize?: string;
+  style?: string;
+}): Promise<{ imageUrl: string }> {
+  return apiFetch<{ imageUrl: string }>('/gemini/generate-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function aiTts(
+  text: string,
+  voice?: string,
+): Promise<{ audioUrl?: string; audio?: string; isDemo?: boolean }> {
+  return apiFetch<{ audioUrl?: string; audio?: string; isDemo?: boolean }>('/gemini/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, voice }),
+  });
+}
+
+export async function aiSeo(
+  title: string,
+  script: string,
+): Promise<{ titles?: string[]; description?: string; tags?: string[] }> {
+  return apiFetch<{ titles?: string[]; description?: string; tags?: string[] }>('/gemini/seo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, script }),
+  });
+}
+
+export type { SecretsPatch, SecretProvider, SecretStatus };

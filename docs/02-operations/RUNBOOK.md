@@ -30,8 +30,11 @@ Operational procedures for deploying, monitoring, and recovering Creator AI Stud
 | Variable | Purpose |
 |---|---|
 | `LOCAL_STORAGE_PATH` | Episode filesystem storage (mount persistent volume) |
-| `GEMINI_API_KEY` | Primary AI provider (or OpenAI/Anthropic) |
-| `CAS_API_KEY` | Optional API authentication |
+| `CAS_SECRETS_KEY` | Master key for encrypted API keys saved from Settings UI (32+ chars) |
+| `GEMINI_API_KEY` | Primary AI provider (or configure via Settings UI when `CAS_SECRETS_KEY` is set) |
+| `CAS_API_KEY` | Optional API authentication (worker should use same key) |
+| `REDIS_URL` | Optional BullMQ queue (`redis://redis:6379` with worker profile) |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Optional Postgres sync for episodes |
 
 ## Rollback
 

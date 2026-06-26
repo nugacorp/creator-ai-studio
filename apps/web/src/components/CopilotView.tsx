@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bot, Send, User, Sparkles, RefreshCw, Terminal, AlertCircle } from 'lucide-react';
+import { aiChat } from '../api';
 
 interface ChatMessage {
   id: string;
@@ -40,16 +41,9 @@ export default function CopilotView({ episodeTitle }: CopilotViewProps) {
     setIsSending(true);
 
     try {
-      const response = await fetch('/api/gemini/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: episodeTitle
-            ? `[Contexto: episodio activo "${episodeTitle}"] ${userMsgText}`
-            : userMsgText,
-        }),
-      });
-      const data = await response.json();
+      const data = await aiChat(
+        episodeTitle ? `[Contexto: episodio activo "${episodeTitle}"] ${userMsgText}` : userMsgText,
+      );
       
       const assistantMsgId = `asst_${Date.now()}`;
       setMessages(prev => [

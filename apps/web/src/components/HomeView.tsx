@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, CheckCircle2, Clock, Volume2, Image as ImageIcon, Calendar, ArrowRight, Activity, Sparkles, Plus, Zap, X, FileText, Sliders, RefreshCw } from 'lucide-react';
 import { VideoProject, ProjectStatus } from '../types';
+import { aiGenerateImage, aiGenerateScript } from '../api';
 
 interface HomeViewProps {
   onContinueWorking: (projectId: string) => void;
@@ -99,23 +100,15 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
     }, 1200);
 
     try {
-      const response = await fetch('/api/gemini/generate-script', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: aiScriptPrompt,
-          options: {
-            theme: aiScriptTheme,
-            style: aiScriptStyle,
-            emotion: aiScriptEmotion,
-            audience: aiScriptAudience,
-            duration: aiScriptDuration,
-            objective: 'Inspirar y Reflexionar'
-          }
-        })
+      const data = await aiGenerateScript(aiScriptPrompt, {
+        theme: aiScriptTheme,
+        style: aiScriptStyle,
+        emotion: aiScriptEmotion,
+        audience: aiScriptAudience,
+        duration: aiScriptDuration,
+        objective: 'Inspirar y Reflexionar',
       });
 
-      const data = await response.json();
       clearInterval(interval);
       setAiLogs(prev => [...prev, '✓ Compilación de guion finalizada.']);
 
@@ -174,17 +167,12 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
     setGeneratedThumbUrl('');
 
     try {
-      const response = await fetch('/api/gemini/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: thumbPrompt,
-          aspectRatio: thumbAspect,
-          imageSize: '1K'
-        })
+      const data = await aiGenerateImage({
+        prompt: thumbPrompt,
+        aspectRatio: thumbAspect,
+        imageSize: '1K',
       });
 
-      const data = await response.json();
       if (data.imageUrl) {
         setGeneratedThumbUrl(data.imageUrl);
         

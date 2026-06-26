@@ -15,6 +15,7 @@ import ProductionView from './components/ProductionView';
 import MultichannelView from './components/MultichannelView';
 import TeamsView from './components/TeamsView';
 import SettingsView from './components/SettingsView';
+import DemoModeBanner from './components/DemoModeBanner';
 
 import {
   INITIAL_CHANNELS,
@@ -241,6 +242,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
         />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-7xl w-full mx-auto">
+          <DemoModeBanner />
           {currentView === 'home' && (
             <HomeView
               onContinueWorking={handleContinueWorking}

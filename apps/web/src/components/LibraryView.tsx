@@ -14,6 +14,7 @@ import {
   ExternalLink,
   RefreshCw
 } from 'lucide-react';
+import { aiGenerateImage, aiGenerateScript } from '../api';
 
 interface LibraryViewProps {
   onAddNewScript: (title: string, script: string, outline: string[]) => void;
@@ -54,22 +55,14 @@ export default function LibraryView({ onAddNewScript }: LibraryViewProps) {
     setIsGenerating(true);
     setProgressText('Copiloto de Guiones IA está planificando la estructura dramática...');
     try {
-      const response = await fetch('/api/gemini/generate-script', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: customIdea,
-          options: {
-            theme: topic,
-            objective,
-            duration,
-            audience,
-            style,
-            emotion
-          }
-        })
+      const data = await aiGenerateScript(customIdea, {
+        theme: topic,
+        objective,
+        duration,
+        audience,
+        style,
+        emotion,
       });
-      const data = await response.json();
       if (data.text) {
         setGeneratedScript(data.text);
       }
@@ -97,16 +90,11 @@ export default function LibraryView({ onAddNewScript }: LibraryViewProps) {
     setIsGenerating(true);
     setProgressText('Imagen de Alta Fidelidad modelando composición y luz...');
     try {
-      const response = await fetch('/api/gemini/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: imagePrompt,
-          aspectRatio: selectedAspectRatio,
-          imageSize: selectedSize
-        })
+      const data = await aiGenerateImage({
+        prompt: imagePrompt,
+        aspectRatio: selectedAspectRatio,
+        imageSize: selectedSize,
       });
-      const data = await response.json();
       if (data.imageUrl) {
         setGeneratedImageUrl(data.imageUrl);
       }

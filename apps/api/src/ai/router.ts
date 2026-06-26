@@ -1,24 +1,24 @@
-import process from 'node:process';
 import { ClaudeAIProvider } from './claude.js';
 import { DemoAIProvider } from './demo.js';
 import { GeminiAIProvider } from './gemini.js';
 import { OpenAIProvider } from './openai.js';
 import type { AIProvider, AIProviderName, AIUsageLog } from './types.js';
+import { getSecret } from '../secrets/resolver.js';
 
 const usageLogs: AIUsageLog[] = [];
 
-function createProvider(name: AIProviderName): AIProvider {
+async function createProvider(name: AIProviderName): Promise<AIProvider> {
   switch (name) {
     case 'gemini': {
-      const key = process.env.GEMINI_API_KEY;
+      const key = await getSecret('GEMINI_API_KEY');
       return key ? new GeminiAIProvider(key) : new DemoAIProvider();
     }
     case 'openai': {
-      const key = process.env.OPENAI_API_KEY;
+      const key = await getSecret('OPENAI_API_KEY');
       return key ? new OpenAIProvider(key) : new DemoAIProvider();
     }
     case 'claude': {
-      const key = process.env.ANTHROPIC_API_KEY;
+      const key = await getSecret('ANTHROPIC_API_KEY');
       return key ? new ClaudeAIProvider(key) : new DemoAIProvider();
     }
     default:
@@ -26,10 +26,8 @@ function createProvider(name: AIProviderName): AIProvider {
   }
 }
 
-function resolveProvider(operation?: string): AIProvider {
-  const envKey = operation
-    ? `AI_${operation.toUpperCase()}_PROVIDER`
-    : undefined;
+async function resolveProvider(operation?: string): Promise<AIProvider> {
+  const envKey = operation ? `AI_${operation.toUpperCase()}_PROVIDER` : undefined;
   const override = envKey ? process.env[envKey] : undefined;
   const name = (override ?? process.env.AI_PROVIDER_DEFAULT ?? 'gemini') as AIProviderName;
   return createProvider(name);
@@ -39,7 +37,7 @@ export async function withProvider<T>(
   operation: string,
   fn: (provider: AIProvider) => Promise<T>,
 ): Promise<T> {
-  const provider = resolveProvider(operation);
+  const provider = await resolveProvider(operation);
   const start = Date.now();
   try {
     return await fn(provider);

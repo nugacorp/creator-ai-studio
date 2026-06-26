@@ -12,11 +12,15 @@ import {
   type UpdateStageInput,
 } from '@creator-ai-studio/shared';
 import { registerAuthHook } from './auth/middleware.js';
+import { registerSecretRoutes } from './secrets/routes.js';
 import { registerAIRoutes } from './ai/routes.js';
 import { registerJobRoutes } from './jobs/routes.js';
 import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
+import { createChannel, deleteChannel, listChannels, updateChannel } from './channels/store.js';
 import { EpisodeStorage, resolveStoragePath } from './storage/index.js';
+import { getSecret } from './secrets/resolver.js';
+import { resolveProvider } from './ai/router.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -34,6 +38,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerRoutes(app, storage, prefix);
     registerAIRoutes(app, prefix);
     registerJobRoutes(app, prefix);
+    registerSecretRoutes(app, prefix);
   }
 
   return app;
@@ -80,6 +85,11 @@ function registerRoutes(
       return { error: 'title is required' };
     }
     const episode = await storage.createEpisode({ title });
+    const detail = await storage.getEpisode(episode.id);
+    if (detail) {
+      const { syncEpisodeToSupabase } = await import('./db/episodes-sync.js');
+      await syncEpisodeToSupabase(detail);
+    }
     reply.code(201);
     return episode;
   });
@@ -98,6 +108,8 @@ function registerRoutes(
       reply.code(404);
       return { error: 'episode not found' };
     }
+    const { syncEpisodeToSupabase } = await import('./db/episodes-sync.js');
+    await syncEpisodeToSupabase(detail);
     return detail;
   });
 
@@ -116,6 +128,8 @@ function registerRoutes(
       reply.code(404);
       return { error: 'episode not found' };
     }
+    const { syncEpisodeToSupabase } = await import('./db/episodes-sync.js');
+    await syncEpisodeToSupabase(detail);
     return detail;
   });
 
@@ -147,7 +161,12 @@ function registerRoutes(
       };
     }
 
-    return storage.setStageStatus(id, stage, status);
+    const updated = await storage.setStageStatus(id, stage, status);
+    if (updated) {
+      const { syncEpisodeToSupabase } = await import('./db/episodes-sync.js');
+      await syncEpisodeToSupabase(updated);
+    }
+    return updated;
   });
 
   app.get(route(prefix, '/settings'), async () => getSettings());
@@ -157,13 +176,63 @@ function registerRoutes(
     return saveSettings(body);
   });
 
-  app.get(route(prefix, '/channels'), async () => {
-    return [
-      { id: 'ch1', name: 'Canal Cristiano', type: 'YouTube', status: 'Produciendo', subscribers: 125000, avatar: '⛪' },
-      { id: 'ch2', name: 'Canal Finanzas', type: 'YouTube', status: 'Publicado', subscribers: 84000, avatar: '💰' },
-      { id: 'ch3', name: 'Canal IA', type: 'TikTok', status: 'En edición', subscribers: 45000, avatar: '🤖' },
-      { id: 'ch4', name: 'Canal Podcast', type: 'Podcast', status: 'Investigación', subscribers: 18000, avatar: '🎙️' },
-    ];
+  app.get(route(prefix, '/channels'), async () => listChannels());
+
+  app.post(route(prefix, '/channels'), async (request, reply) => {
+    const body = (request.body ?? {}) as {
+      name?: string;
+      type?: string;
+      status?: string;
+      subscribers?: number;
+      avatar?: string;
+    };
+    if (!body.name?.trim() || !body.type?.trim()) {
+      reply.code(400);
+      return { error: 'name and type are required' };
+    }
+    const channel = await createChannel({
+      name: body.name,
+      type: body.type,
+      status: body.status,
+      subscribers: body.subscribers,
+      avatar: body.avatar,
+    });
+    reply.code(201);
+    return channel;
+  });
+
+  app.patch(route(prefix, '/channels/:id'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const updated = await updateChannel(id, body as Parameters<typeof updateChannel>[1]);
+    if (!updated) {
+      reply.code(404);
+      return { error: 'channel not found' };
+    }
+    return updated;
+  });
+
+  app.delete(route(prefix, '/channels/:id'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const ok = await deleteChannel(id);
+    if (!ok) {
+      reply.code(404);
+      return { error: 'channel not found' };
+    }
+    reply.code(204);
+    return null;
+  });
+
+  app.get(route(prefix, '/system/mode'), async () => {
+    const gemini = await getSecret('GEMINI_API_KEY');
+    const openai = await getSecret('OPENAI_API_KEY');
+    const anthropic = await getSecret('ANTHROPIC_API_KEY');
+    const hasAiKey = Boolean(gemini || openai || anthropic);
+    const provider = await resolveProvider();
+    return {
+      demoMode: !hasAiKey || provider.name === 'demo',
+      aiProvider: provider.name,
+    };
   });
 
   app.get(route(prefix, '/analytics'), async () => {
@@ -201,8 +270,55 @@ function registerRoutes(
   });
 
   app.post(route(prefix, '/integrations/elevenlabs/tts'), async (request) => {
-    const body = (request.body ?? {}) as { text?: string; voiceId?: string };
+    const body = (request.body ?? {}) as { text?: string; voiceId?: string; episodeId?: string };
     const { synthesizeSpeech } = await import('./integrations/elevenlabs.js');
-    return synthesizeSpeech(body.text ?? '', body.voiceId);
+    let saveDir: string | undefined;
+    if (body.episodeId) {
+      const episode = await storage.getEpisode(body.episodeId);
+      if (episode) {
+        const path = await import('node:path');
+        saveDir = path.join(resolveStoragePath(), episode.workspacePath, '05-audio');
+      }
+    }
+    const result = await synthesizeSpeech(body.text ?? '', body.voiceId, { saveDir });
+    if (body.episodeId && result.audioUrl && !result.isDemo) {
+      const episode = await storage.getEpisode(body.episodeId);
+      if (episode) {
+        await storage.updateEpisode(body.episodeId, {
+          content: { ...episode.content, audioUrl: result.audioUrl },
+        });
+      }
+    }
+    return result;
+  });
+
+  app.post(route(prefix, '/calendar/events'), async (request, reply) => {
+    const body = (request.body ?? {}) as {
+      episodeId?: string;
+      title?: string;
+      date?: string;
+      status?: string;
+    };
+    if (body.episodeId) {
+      const episode = await storage.updateEpisode(body.episodeId, {
+        status: 'review',
+        content: {
+          scheduledAt: body.date ? `${body.date}T18:00:00Z` : undefined,
+        },
+      });
+      if (!episode) {
+        reply.code(404);
+        return { error: 'episode not found' };
+      }
+      reply.code(201);
+      return {
+        id: episode.id,
+        title: episode.title,
+        date: body.date ?? episode.updatedAt.split('T')[0],
+        status: 'scheduled',
+      };
+    }
+    reply.code(400);
+    return { error: 'episodeId is required' };
   });
 }

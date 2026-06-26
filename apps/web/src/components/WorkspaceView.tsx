@@ -28,6 +28,7 @@ import {
   Plus
 } from 'lucide-react';
 import { VideoProject, Scene } from '../types';
+import { aiGenerateImage, aiRewrite, aiSeo, aiTts } from '../api';
 
 interface WorkspaceViewProps {
   project: VideoProject;
@@ -99,12 +100,7 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
     setIsProcessing(true);
     setProcessingMessage('Copiloto IA está reescribiendo tu guion...');
     try {
-      const response = await fetch('/api/gemini/rewrite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script: scriptText, instruction }),
-      });
-      const data = await response.json();
+      const data = await aiRewrite(scriptText, instruction);
       if (data.text) {
         setScriptText(data.text);
         triggerFeedback('success', '✓ Guion reescrito por IA');
@@ -122,12 +118,7 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
     setIsProcessing(true);
     setProcessingMessage('Sintetizando voz en off con Gemini TTS...');
     try {
-      const response = await fetch('/api/gemini/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: scriptText, voice: selectedVoice }),
-      });
-      const data = await response.json();
+      const data = await aiTts(scriptText, selectedVoice);
       
       if (data.audio) {
         setAudioBase64(data.audio);
@@ -186,12 +177,7 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
     setIsProcessing(true);
     setProcessingMessage('IA está modelando y generando la toma visual...');
     try {
-      const response = await fetch('/api/gemini/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: textDescription, aspectRatio: '16:9' }),
-      });
-      const data = await response.json();
+      const data = await aiGenerateImage({ prompt: textDescription, aspectRatio: '16:9' });
       if (data.imageUrl) {
         setScenes(prev =>
           prev.map(sc => (sc.id === sceneId ? { ...sc, imageUrl: data.imageUrl } : sc))
@@ -211,16 +197,11 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
     setIsProcessing(true);
     setProcessingMessage('Especialista SEO IA está analizando palabras clave...');
     try {
-      const response = await fetch('/api/gemini/seo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: project.title, script: scriptText }),
-      });
-      const data = await response.json();
+      const data = await aiSeo(project.title, scriptText);
       if (data.titles && data.description) {
         setSeoTitles(data.titles);
         setSeoDescription(data.description);
-        setSeoTags(data.tags);
+        if (data.tags) setSeoTags(data.tags);
         triggerFeedback('success', '✓ SEO optimizado por el Agente Especialista IA');
       }
     } catch (err) {
@@ -948,12 +929,10 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
                         setIsProcessing(true);
                         setProcessingMessage('Iniciando generador de miniaturas conceptuales con IA...');
                         try {
-                          const response = await fetch('/api/gemini/generate-image', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ prompt: `high quality background for video thumbnail about: ${thumbnailText}, highly artistic, beautiful lightning, trending on artstation`, aspectRatio: '16:9' })
+                          const data = await aiGenerateImage({
+                            prompt: `high quality background for video thumbnail about: ${thumbnailText}, highly artistic, beautiful lightning, trending on artstation`,
+                            aspectRatio: '16:9',
                           });
-                          const data = await response.json();
                           if (data.imageUrl) {
                             setThumbnailUrl(data.imageUrl);
                             triggerFeedback('success', '✓ Miniatura cargada por IA');

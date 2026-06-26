@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { isJobType } from '@creator-ai-studio/shared';
 import { createJob, getJob, listJobsForEpisode, getPendingJobs, updateJob } from './store.js';
+import { enqueueJob } from './queue.js';
 
 function route(prefix: string, path: string): string {
   return `${prefix}${path}`;
@@ -17,6 +18,7 @@ export function registerJobRoutes(app: FastifyInstance, prefix: '' | '/api'): vo
     }
 
     const job = await createJob(id, { type: body.type, payload: body.payload });
+    await enqueueJob(job);
     reply.code(201);
     return job;
   });

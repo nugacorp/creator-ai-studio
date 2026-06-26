@@ -253,6 +253,64 @@ export interface AppSettings {
   aiProviderDefault: string;
 }
 
+/** Integration providers that accept API keys or credentials. */
+export type SecretProvider =
+  | 'gemini'
+  | 'openai'
+  | 'anthropic'
+  | 'elevenlabs'
+  | 'youtube'
+  | 'webhook';
+
+/** Where a configured secret value was resolved from. */
+export type SecretSource = 'store' | 'env' | 'none';
+
+/** Masked status of one integration secret (never includes plaintext). */
+export interface SecretStatus {
+  provider: SecretProvider;
+  configured: boolean;
+  maskedValue?: string;
+  source: SecretSource;
+}
+
+/** Writable secret fields (PATCH body). Empty string clears stored value. */
+export interface SecretsPatch {
+  geminiApiKey?: string;
+  openaiApiKey?: string;
+  anthropicApiKey?: string;
+  elevenlabsApiKey?: string;
+  elevenlabsVoiceId?: string;
+  youtubeClientId?: string;
+  youtubeClientSecret?: string;
+  youtubeAccessToken?: string;
+  webhookUrl?: string;
+}
+
+/** Result of POST /secrets/test/:provider */
+export interface SecretTestResult {
+  provider: SecretProvider;
+  ok: boolean;
+  message: string;
+}
+
+/** Channel managed by the platform. */
+export interface ChannelRecord {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  subscribers: number;
+  avatar: string;
+}
+
+export interface CreateChannelInput {
+  name: string;
+  type: string;
+  status?: string;
+  subscribers?: number;
+  avatar?: string;
+}
+
 export function isJobType(value: unknown): value is JobType {
   return typeof value === 'string' && (JOB_TYPES as readonly string[]).includes(value);
 }
