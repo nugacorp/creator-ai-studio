@@ -1,9 +1,9 @@
 {
   "title": "PROJECT_REGISTRY",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "created": "2026-06-25",
   "last_modified": "2026-06-25",
-  "author": "Hermes — Chief PMO & Document Controller",
+  "author": "Hermes \u2014 Chief PMO & Document Controller",
   "status": "Draft",
   "project": {
     "name": "Creator AI Studio",
@@ -20,7 +20,8 @@
     "PROJECT_REGISTRY.json",
     "docs/01-architecture/TECH_STACK.md",
     ".system/standards/DOCUMENTATION_STANDARD.md",
-    ".system/standards/DOCUMENT_STANDARD.md"
+    ".system/standards/DOCUMENT_STANDARD.md",
+    "docs/01-architecture/DEPLOYMENT_STAGING.md"
   ],
   "official_directories": [
     ".system/templates",
@@ -41,7 +42,8 @@
     "workflows",
     "knowledge",
     "scripts",
-    "channels"
+    "channels",
+    "deploy"
   ],
   "change_history": [
     {
@@ -61,6 +63,12 @@
       "version": "0.2.0",
       "author": "Claude Code",
       "change": "Defined branching and deployment strategy; registered TECH_STACK architecture document."
+    },
+    {
+      "date": "2026-06-25",
+      "version": "0.3.0",
+      "author": "Hermes",
+      "change": "Prepared Coolify staging deployment configuration and registered DEPLOYMENT_STAGING document for CAS-HERMES-DEPLOY-0023."
     }
   ],
   "documentation_standard": ".system/standards/DOCUMENTATION_STANDARD.md",
@@ -81,6 +89,7 @@
     "templates/module-template.md",
     "templates/roadmap-template.md",
     "templates/work-order-template.md",
-    "templates/workflow-template.md"
+    "templates/workflow-template.md",
+    "docs/01-architecture/DEPLOYMENT_STAGING.md"
   ]
 }

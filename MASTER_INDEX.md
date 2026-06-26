@@ -42,6 +42,8 @@ Official documents:
 - [PROJECT_REGISTRY](PROJECT_REGISTRY.json)
 - [DOCUMENTATION_STANDARD](.system/standards/DOCUMENTATION_STANDARD.md)
 - [DOCUMENT_STANDARD](.system/standards/DOCUMENT_STANDARD.md)
+- [TECH_STACK](docs/01-architecture/TECH_STACK.md)
+- [DEPLOYMENT_STAGING](docs/01-architecture/DEPLOYMENT_STAGING.md)
 
 Official areas:
 
@@ -53,6 +55,7 @@ Official areas:
 - [knowledge](knowledge/)
 - [scripts](scripts/)
 - [channels](channels/)
+- [deploy](deploy/)
 
 ## Dependencies
 
@@ -69,3 +72,4 @@ DOCUMENT_REGISTRY.md, PROJECT_STATE.md, DOCUMENTATION_STANDARD.md
 | 2026-06-25 | 0.1.0 | Hermes | Initial master index created. |
 | 2026-06-25 | 0.1.0 | Hermes | Added official documentation standard reference. |
 | 2026-06-25 | 0.1.0 | Hermes | Normalized document to official documentation standard. |
+| 2026-06-25 | 0.1.0 | Hermes | Added staging deployment document and deploy area references. |
