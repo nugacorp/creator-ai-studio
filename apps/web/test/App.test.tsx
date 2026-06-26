@@ -51,6 +51,15 @@ describe('Official dashboard shell', () => {
     }
   });
 
+  it('renders home dashboard without crashing before episodes load', () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
+
+    render(<App initialView="home" />);
+
+    expect(screen.getByText(/Buenos días, Ramiro/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Abrir proyecto/i })).toBeInTheDocument();
+  });
+
   it('loads real episodes from the backend into the Projects view', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);

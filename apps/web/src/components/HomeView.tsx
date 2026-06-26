@@ -12,8 +12,10 @@ interface HomeViewProps {
 }
 
 export default function HomeView({ onContinueWorking, projects, setProjects, onAddNotification, onCreateEpisode }: HomeViewProps) {
-  // Active project: highest progress that is not complete
-  const continueProject = projects.find(p => p.progress < 100) || projects[0];
+  const continueProject =
+    projects.find(p => p.id === 'ansiedad_biblia' && p.progress < 100) ??
+    projects.find(p => p.progress < 100) ??
+    projects[0];
 
   const [isOpen, setIsOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<'new-project' | 'ai-script' | 'generate-thumbnail' | null>(null);
@@ -280,44 +282,55 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
               </span>
             </div>
 
-            <div className="space-y-2 mt-4">
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-indigo-950/40 text-indigo-300 border border-indigo-800/20">
-                {continueProject.series}
-              </span>
-              <h2 className="font-display font-bold text-2xl text-white tracking-tight hover:text-indigo-400 transition-colors italic">
-                "{continueProject.title}"
-              </h2>
-            </div>
+            {continueProject ? (
+              <>
+                <div className="space-y-2 mt-4">
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-indigo-950/40 text-indigo-300 border border-indigo-800/20">
+                    {continueProject.series}
+                  </span>
+                  <h2 className="font-display font-bold text-2xl text-white tracking-tight hover:text-indigo-400 transition-colors italic">
+                    &quot;{continueProject.title}&quot;
+                  </h2>
+                </div>
 
-            {/* Pipeline Status indicators */}
-            <div className="pt-4 space-y-2.5">
-              <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-                <span className="flex items-center gap-1.5">
-                  Estado actual: <strong className="text-indigo-400 font-semibold">{continueProject.status}</strong>
-                </span>
-                <span className="font-semibold text-white font-mono">{continueProject.progress}%</span>
-              </div>
-              <div className="w-full h-2 bg-[#0B0F14] rounded-full overflow-hidden p-[1px] border border-white/5">
-                <div
-                  className="h-full bg-gradient-to-r from-indigo-500 via-indigo-400 to-purple-500 rounded-full transition-all duration-500"
-                  style={{ width: `${continueProject.progress}%` }}
-                />
-              </div>
-            </div>
+                <div className="pt-4 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
+                    <span className="flex items-center gap-1.5">
+                      Estado actual:{' '}
+                      <strong className="text-indigo-400 font-semibold">{continueProject.status}</strong>
+                    </span>
+                    <span className="font-semibold text-white font-mono">{continueProject.progress}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-[#0B0F14] rounded-full overflow-hidden p-[1px] border border-white/5">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500 via-indigo-400 to-purple-500 rounded-full transition-all duration-500"
+                      style={{ width: `${continueProject.progress}%` }}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="mt-4 text-sm text-slate-400">
+                No hay proyectos activos. Usa el botón flotante para crear el primero.
+              </p>
+            )}
           </div>
 
           <div className="pt-8 flex items-center justify-between">
             <div className="text-xs text-slate-400">
-              Completa la **Edición** y diseña la **Miniatura** final con un solo click.
+              Completa la <strong className="text-white">Edición</strong> y diseña la{' '}
+              <strong className="text-white">Miniatura</strong> final con un solo click.
             </div>
-            <button
-              id="open-project-btn"
-              onClick={() => onContinueWorking(continueProject.id)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-500/20 active:scale-98 transition-all cursor-pointer"
-            >
-              <span>Abrir proyecto</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            {continueProject && (
+              <button
+                id="open-project-btn"
+                onClick={() => onContinueWorking(continueProject.id)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-500/20 active:scale-98 transition-all cursor-pointer"
+              >
+                <span>Abrir proyecto</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 

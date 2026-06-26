@@ -16,7 +16,13 @@ import MultichannelView from './components/MultichannelView';
 import TeamsView from './components/TeamsView';
 import SettingsView from './components/SettingsView';
 
-import { INITIAL_CHANNELS, INITIAL_NOTIFICATIONS, INITIAL_SERIES, TEAM_MEMBERS } from './data';
+import {
+  INITIAL_CHANNELS,
+  INITIAL_NOTIFICATIONS,
+  INITIAL_PROJECTS,
+  INITIAL_SERIES,
+  TEAM_MEMBERS,
+} from './data';
 import { Channel, VideoProject, Notification, TeamMember } from './types';
 import type { EpisodeDetail, EpisodeSummary } from '@creator-ai-studio/shared';
 import {
@@ -61,9 +67,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [currentView, setCurrentView] = useState<string>(initialView);
   const [channels, setChannels] = useState<Channel[]>(INITIAL_CHANNELS);
   const [selectedChannel, setSelectedChannel] = useState<Channel>(INITIAL_CHANNELS[0]);
-  const [projects, setProjects] = useState<VideoProject[]>([]);
+  const [projects, setProjects] = useState<VideoProject[]>(INITIAL_PROJECTS);
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
-  const [activeProjectId, setActiveProjectId] = useState<string>('');
+  const [activeProjectId, setActiveProjectId] = useState<string>('ansiedad_biblia');
   const [team, setTeam] = useState<TeamMember[]>(TEAM_MEMBERS);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -72,6 +78,14 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const loadProjects = useCallback(async () => {
     try {
       const episodes = await fetchEpisodes();
+      if (episodes.length === 0) {
+        setProjects(INITIAL_PROJECTS);
+        setActiveProjectId(prev =>
+          INITIAL_PROJECTS.some(p => p.id === prev) ? prev : 'ansiedad_biblia',
+        );
+        return;
+      }
+
       const details = await Promise.all(
         episodes.map(async ep => {
           try {
@@ -83,13 +97,16 @@ export function App({ initialView = 'home' }: AppProps = {}) {
         }),
       );
       setProjects(details);
-      if (details.length > 0 && !activeProjectId) {
-        setActiveProjectId(details[0].id);
-      }
+      setActiveProjectId(prev =>
+        details.some(p => p.id === prev) ? prev : details[0].id,
+      );
     } catch {
-      setProjects([]);
+      setProjects(INITIAL_PROJECTS);
+      setActiveProjectId(prev =>
+        INITIAL_PROJECTS.some(p => p.id === prev) ? prev : 'ansiedad_biblia',
+      );
     }
-  }, [activeProjectId]);
+  }, []);
 
   useEffect(() => {
     void loadProjects();
