@@ -8,6 +8,7 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 3000
       LOCAL_STORAGE_PATH: /data/episodes
+      CAS_SECRETS_KEY: ${CAS_SECRETS_KEY:?Set CAS_SECRETS_KEY in Coolify (32+ chars) to enable UI API key storage}
       REDIS_URL: ${REDIS_URL:-}
       RCLONE_REMOTE: ${RCLONE_REMOTE:-}
       RCLONE_CONFIG: ${RCLONE_CONFIG:-/config/rclone/rclone.conf}
