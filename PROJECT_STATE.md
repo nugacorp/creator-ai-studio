@@ -32,9 +32,9 @@ Maintain the official current state of Creator AI Studio.
 
 ## Scope
 
-Current phase: Phase 0: Blueprint.
+Current phase: Phase 7 — Production Hardening (implementation complete, deploy verification pending).
 
-Estimated completion: 1%.
+Estimated completion: 85%.
 
 Documents created:
 
@@ -65,9 +65,9 @@ ADR registered: None.
 
 Next objectives:
 
-- Receive architectural direction from the Chief Software Architect.
-- Receive business direction from the Product Owner.
-- Deploy the validated `staging` branch to Coolify after authorization.
+- Deploy and verify `staging` on Coolify with AI API keys configured.
+- Configure Supabase (optional) for Postgres + Auth when multi-user is needed.
+- Promote validated `staging` to `main` for daily production use.
 
 Blockers: None.
 

@@ -6,12 +6,15 @@ import process from 'node:process';
 import {
   EPISODE_STAGES,
   STAGE_EXPECTED_FILES,
+  createDefaultContent,
   type CreateEpisodeInput,
+  type EpisodeContent,
   type EpisodeDetail,
   type EpisodeStage,
   type EpisodeStageState,
   type EpisodeStageStatus,
   type EpisodeSummary,
+  type UpdateEpisodeInput,
 } from '@creator-ai-studio/shared';
 
 /**
@@ -119,6 +122,7 @@ export class EpisodeStorage {
     );
 
     await this.writeControlFiles(episodeDir, episode, createInitialStages());
+    await this.writeContent(episodeDir, createDefaultContent());
 
     for (const stage of EPISODE_STAGE_DIRECTORIES) {
       if (stage === '00-control') {
@@ -168,6 +172,49 @@ export class EpisodeStorage {
       ...located.summary,
       workspacePath: located.name,
       stages: await this.readStages(located.dir),
+      content: await this.readContent(located.dir),
+    };
+  }
+
+  /** Update episode metadata and/or content. Returns null if not found. */
+  async updateEpisode(
+    id: string,
+    input: UpdateEpisodeInput,
+  ): Promise<EpisodeDetail | null> {
+    const located = await this.findEpisode(id);
+    if (located === null) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const summary: EpisodeSummary = {
+      ...located.summary,
+      ...(input.title !== undefined ? { title: input.title.trim() } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      updatedAt: now,
+    };
+
+    await writeFile(
+      path.join(located.dir, 'episode.json'),
+      `${JSON.stringify(summary, null, 2)}\n`,
+      'utf8',
+    );
+
+    if (input.content) {
+      const current = await this.readContent(located.dir);
+      const merged = { ...current, ...input.content };
+      await this.writeContent(located.dir, merged);
+    }
+
+    const stages = await this.readStages(located.dir);
+    const persisted = stages.map((s) => ({ stage: s.stage, status: s.status }));
+    await this.writeControlFiles(located.dir, summary, persisted);
+
+    return {
+      ...summary,
+      workspacePath: located.name,
+      stages,
+      content: await this.readContent(located.dir),
     };
   }
 
@@ -210,7 +257,54 @@ export class EpisodeStorage {
       ...summary,
       workspacePath: located.name,
       stages: await this.readStages(located.dir),
+      content: await this.readContent(located.dir),
     };
+  }
+
+  /** Read persisted content for an episode. */
+  async readContent(episodeDir: string): Promise<EpisodeContent> {
+    const contentFile = path.join(episodeDir, '00-control', 'content.json');
+    if (!existsSync(contentFile)) {
+      return createDefaultContent();
+    }
+    const parsed = JSON.parse(await readFile(contentFile, 'utf8')) as EpisodeContent;
+    return { ...createDefaultContent(), ...parsed };
+  }
+
+  /** Write content to disk and stage-specific files. */
+  private async writeContent(episodeDir: string, content: EpisodeContent): Promise<void> {
+    await writeFile(
+      path.join(episodeDir, '00-control', 'content.json'),
+      `${JSON.stringify(content, null, 2)}\n`,
+      'utf8',
+    );
+
+    if (content.script) {
+      await writeFile(
+        path.join(episodeDir, '02-script', 'script.md'),
+        content.script,
+        'utf8',
+      );
+    }
+
+    if (content.scenes.length > 0) {
+      await writeFile(
+        path.join(episodeDir, '03-storyboard', 'scenes.json'),
+        `${JSON.stringify(content.scenes, null, 2)}\n`,
+        'utf8',
+      );
+    }
+
+    const seoMeta = {
+      titles: content.seoTitles,
+      description: content.seoDescription,
+      tags: content.seoTags,
+    };
+    await writeFile(
+      path.join(episodeDir, '08-seo', 'metadata.json'),
+      `${JSON.stringify(seoMeta, null, 2)}\n`,
+      'utf8',
+    );
   }
 
   /** Locate an episode directory by id. */

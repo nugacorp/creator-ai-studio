@@ -48,11 +48,21 @@ services:
     environment:
       NODE_ENV: production
       LOCAL_STORAGE_PATH: /data/episodes
+      API_BASE_URL: http://api:3000/api
+      WORKER_POLL_INTERVAL_MS: 5000
     volumes:
       - creator-ai-studio-staging-episodes:/data/episodes
     depends_on:
       api:
         condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    profiles:
+      - worker
+    image: redis:7-alpine
+    expose:
+      - "6379"
     restart: unless-stopped
 
 volumes:

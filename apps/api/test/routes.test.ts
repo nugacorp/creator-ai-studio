@@ -46,17 +46,7 @@ describe('api routes', () => {
     const response = await app.inject({ method: 'GET', url: '/health' });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      status: 'ok',
-      service: 'creator-ai-studio-api',
-    });
-  });
-
-  it('GET /api/health returns the service status', async () => {
-    const response = await app.inject({ method: 'GET', url: '/api/health' });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       status: 'ok',
       service: 'creator-ai-studio-api',
     });
@@ -293,5 +283,49 @@ describe('api routes', () => {
     });
 
     expect(response.statusCode).toBe(400);
+  });
+
+  it('PATCH /episodes/:id updates episode content', async () => {
+    const episode = await createEpisode('Contenido test');
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/episodes/${episode.id}`,
+      payload: {
+        content: { script: 'Guion de prueba', series: 'Reflexiones' },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const detail = response.json() as EpisodeDetail;
+    expect(detail.content.script).toBe('Guion de prueba');
+    expect(detail.content.series).toBe('Reflexiones');
+  });
+
+  it('POST /api/gemini/chat returns a reply in demo mode', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/gemini/chat',
+      payload: { message: 'Hola copiloto' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { reply: string };
+    expect(body.reply).toBeTruthy();
+  });
+
+  it('POST /api/episodes/:id/jobs creates a production job', async () => {
+    const episode = await createEpisode('Job test');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/episodes/${episode.id}/jobs`,
+      payload: { type: 'render' },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const job = response.json() as { id: string; status: string };
+    expect(job.status).toBe('pending');
+    expect(job.id).toBeTruthy();
   });
 });

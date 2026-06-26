@@ -8,7 +8,7 @@ Creator AI Studio Repository Entry Point
 
 ## Version
 
-0.7.0
+0.8.0
 
 ## Status
 
@@ -119,12 +119,21 @@ By default the dashboard calls the same-origin API base path `/api`. Set
 `VITE_API_BASE_URL` (see [.env.example](.env.example)) only when a local or
 non-staging environment needs to override that base URL.
 
-The dashboard's visual design (dark "Creator OS" theme, sidebar/header layout,
-cards and navigation) was integrated from the Google AI Studio UI/UX reference
-([nugacorp/Creator-AI-Studio-ui-ux](https://github.com/nugacorp/Creator-AI-Studio-ui-ux))
-as a visual reference only. Its Gemini server, secrets and mock data were **not**
-imported — the dashboard talks exclusively to the local API above. Styling uses
-Tailwind CSS v4 and `lucide-react` icons.
+The dashboard is the **official Creator AI Studio interface** imported from
+[nugacorp/Creator-AI-Studio-ui-ux](https://github.com/nugacorp/Creator-AI-Studio-ui-ux):
+its full "Creator OS" layout, sidebar (Home, Proyectos, Contenido, IA Copilot,
+Biblioteca IA, Publicaciones, Analytics, Automatización, Agentes IA, Modo
+Producción, Modo Multicanal, Equipos, Configuración), header, KPI cards, theme,
+typography and icons. Stack: React + Vite + Tailwind CSS v4 + `lucide-react` +
+`motion`.
+
+Backend wiring status:
+
+- **Connected:** Home, Proyectos (Kanban + backend sync), Contenido/Workspace (content persistence via PATCH), ProductionStagesPanel, IA Copilot, Biblioteca IA (AI routes), Calendar (API events), Analytics (API data), Automatización (job queue), Agentes IA (stage mapping), Modo Multicanal (channels API), Configuración (settings API).
+- **AI gateway:** `/api/gemini/*` (UI compatibility) and `/api/ai/*` (canonical). Multi-provider support: Gemini, OpenAI, Claude, with demo fallback when no API keys are set.
+- **Worker:** Production worker polls `/api/jobs/pending` and processes render, TTS, thumbnail, and publish jobs.
+- **Auth (optional):** Set `CAS_API_KEY` or `SUPABASE_JWT_SECRET` to enable API authentication.
+- **Integrations (optional):** YouTube upload, ElevenLabs TTS, webhooks — activate with env vars in Coolify.
 
 Run the production worker (placeholder):
 
@@ -163,3 +172,4 @@ MASTER_INDEX.md, PROJECT_STATE.md, docs/01-architecture/TECH_STACK.md
 | 2026-06-25 | 0.5.0 | Claude Code | Documented PATCH /episodes/:id/stages/:stage (manual stage transitions). |
 | 2026-06-25 | 0.6.0 | Claude Code | Integrated Google AI Studio UI/UX dashboard design (Tailwind v4, sidebar/header layout). |
 | 2026-06-25 | 0.7.0 | Hermes | Documented same-origin `/api` dashboard/API routing for staging. |
+| 2026-06-25 | 0.8.0 | Claude Code | Replaced MVP frontend with the official Creator AI Studio UI; wired Home/Projects/Create/Detail/Stages to the backend. |

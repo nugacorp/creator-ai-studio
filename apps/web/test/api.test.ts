@@ -20,6 +20,6 @@ describe('web API client', () => {
 
     await fetchEpisodes();
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/episodes');
+    expect(fetchMock).toHaveBeenCalledWith('/api/episodes', undefined);
   });
 });

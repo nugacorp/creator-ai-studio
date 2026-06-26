@@ -1,64 +1,137 @@
 import type {
+  AppSettings,
   CreateEpisodeInput,
+  CreateJobInput,
   EpisodeDetail,
   EpisodeStage,
   EpisodeStageStatus,
   EpisodeSummary,
+  ProductionJob,
+  ProjectStatus,
+  UpdateEpisodeInput,
 } from '@creator-ai-studio/shared';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
-/** Fetch all episodes from the API. */
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  if (!response.ok) {
+    throw new Error(`API error (${response.status})`);
+  }
+  return (await response.json()) as T;
+}
+
 export async function fetchEpisodes(): Promise<EpisodeSummary[]> {
-  const response = await fetch(`${API_BASE_URL}/episodes`);
-  if (!response.ok) {
-    throw new Error(`Failed to load episodes (${response.status})`);
-  }
-  return (await response.json()) as EpisodeSummary[];
+  return apiFetch<EpisodeSummary[]>('/episodes');
 }
 
-/** Fetch full detail for a single episode. */
 export async function fetchEpisodeDetail(id: string): Promise<EpisodeDetail> {
-  const response = await fetch(
-    `${API_BASE_URL}/episodes/${encodeURIComponent(id)}`,
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to load episode (${response.status})`);
-  }
-  return (await response.json()) as EpisodeDetail;
+  return apiFetch<EpisodeDetail>(`/episodes/${encodeURIComponent(id)}`);
 }
 
-/** Update a single stage's status and return the refreshed episode detail. */
+export async function updateEpisode(
+  id: string,
+  input: UpdateEpisodeInput,
+): Promise<EpisodeDetail> {
+  return apiFetch<EpisodeDetail>(`/episodes/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateEpisodeProjectStatus(
+  id: string,
+  projectStatus: ProjectStatus,
+): Promise<EpisodeDetail> {
+  return apiFetch<EpisodeDetail>(`/episodes/${encodeURIComponent(id)}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectStatus }),
+  });
+}
+
 export async function updateStageStatus(
   id: string,
   stage: EpisodeStage,
   status: EpisodeStageStatus,
 ): Promise<EpisodeDetail> {
-  const response = await fetch(
-    `${API_BASE_URL}/episodes/${encodeURIComponent(id)}/stages/${encodeURIComponent(stage)}`,
+  return apiFetch<EpisodeDetail>(
+    `/episodes/${encodeURIComponent(id)}/stages/${encodeURIComponent(stage)}`,
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     },
   );
-  if (!response.ok) {
-    throw new Error(`Failed to update stage (${response.status})`);
-  }
-  return (await response.json()) as EpisodeDetail;
 }
 
-/** Create a new episode via the API. */
-export async function createEpisode(
-  input: CreateEpisodeInput,
-): Promise<EpisodeSummary> {
-  const response = await fetch(`${API_BASE_URL}/episodes`, {
+export async function createEpisode(input: CreateEpisodeInput): Promise<EpisodeSummary> {
+  return apiFetch<EpisodeSummary>('/episodes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
-  if (!response.ok) {
-    throw new Error(`Failed to create episode (${response.status})`);
-  }
-  return (await response.json()) as EpisodeSummary;
+}
+
+export async function createJob(
+  episodeId: string,
+  input: CreateJobInput,
+): Promise<ProductionJob> {
+  return apiFetch<ProductionJob>(`/episodes/${encodeURIComponent(episodeId)}/jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function fetchJob(id: string): Promise<ProductionJob> {
+  return apiFetch<ProductionJob>(`/jobs/${encodeURIComponent(id)}`);
+}
+
+export type { AppSettings };
+
+export async function fetchSettings(): Promise<AppSettings> {
+  return apiFetch<AppSettings>('/settings');
+}
+
+export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+  return apiFetch<AppSettings>('/settings', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string;
+  status: string;
+}
+
+export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
+  return apiFetch<CalendarEvent[]>('/calendar/events');
+}
+
+export interface AnalyticsData {
+  kpis: { views: number; subscribers: number; watchTimeHours: number; engagement: string };
+  chartData: number[];
+}
+
+export async function fetchAnalytics(): Promise<AnalyticsData> {
+  return apiFetch<AnalyticsData>('/analytics');
+}
+
+export interface ChannelData {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  subscribers: number;
+  avatar: string;
+}
+
+export async function fetchChannels(): Promise<ChannelData[]> {
+  return apiFetch<ChannelData[]>('/channels');
 }

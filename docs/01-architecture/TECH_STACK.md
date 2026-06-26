@@ -8,7 +8,7 @@ Technology Stack and Deployment Strategy
 
 ## Version
 
-0.6.0
+0.7.0
 
 ## Status
 
@@ -94,7 +94,7 @@ The executable MVP is an npm workspaces monorepo:
 |---|---|---|
 | Shared types | TypeScript | `packages/shared` |
 | API | Fastify (Node.js, ESM) | `apps/api` |
-| Web dashboard | React + Vite + Tailwind CSS v4 + lucide-react | `apps/web` |
+| Web dashboard | React + Vite + Tailwind CSS v4 + lucide-react + motion | `apps/web` |
 | Production worker | Node.js (placeholder) | `workers/production` |
 | Tests | Vitest | per workspace |
 | Build / typecheck | TypeScript (`tsc`) + Vite | per workspace |
@@ -134,19 +134,29 @@ transition to the current status.
 
 ### Dashboard UI/UX
 
-The `apps/web` dashboard's visual design — dark "Creator OS" theme, sidebar +
-header layout, card components, navigation and styling — was integrated from the
-Google AI Studio UI/UX reference repository
-([nugacorp/Creator-AI-Studio-ui-ux](https://github.com/nugacorp/Creator-AI-Studio-ui-ux))
-as a **visual reference only**.
+The `apps/web` dashboard is the **official Creator AI Studio interface**, imported
+in full from the approved reference repository
+([nugacorp/Creator-AI-Studio-ui-ux](https://github.com/nugacorp/Creator-AI-Studio-ui-ux)).
+It replaces the previous MVP frontend entirely while keeping the monorepo
+architecture (React + Vite + Tailwind v4 + lucide-react + motion).
 
-- Adopted: layout shell (`Sidebar`, `Header`), the dark theme and typography
-  (Tailwind CSS v4 `@theme`), card/pill/button styling, `lucide-react` icons.
-- Discarded: the Gemini Express server (`server.ts`, `@google/genai`), all
-  `GEMINI_API_KEY` runtime config, mock data, and views that depend on external
-  AI calls (Copilot, Library image generation, Analytics charts, etc.).
-- The dashboard talks exclusively to the local API; no external services are
-  called and no secrets are required.
+- Imported verbatim: the complete "Creator OS" shell — `Sidebar` (Home,
+  Proyectos, Contenido, IA Copilot, Biblioteca IA, Publicaciones, Analytics,
+  Automatización, Agentes IA, Modo Producción, Modo Multicanal, Equipos,
+  Configuración), `Header` (channel selector, notifications, profile), the
+  dashboard KPI cards, recent activity, current project and system status, all
+  views, theme, typography, colors and icons.
+- Backend-connected views: all 13 sidebar views are wired to the API. Episodes
+  include full workspace content (`PATCH /episodes/:id`). Kanban moves sync via
+  `PATCH /episodes/:id/status`. AI features use `/api/gemini/*` and `/api/ai/*`.
+- AI gateway (`apps/api/src/ai/`): multi-provider abstraction (Gemini, OpenAI,
+  Claude) with demo fallback. Configure via `GEMINI_API_KEY`, `OPENAI_API_KEY`,
+  `ANTHROPIC_API_KEY` and `AI_PROVIDER_DEFAULT` env vars.
+- Production worker polls `/api/jobs/pending` and processes background jobs
+  (render, TTS, thumbnail, publish). Enable with `docker compose --profile worker up`.
+- Optional auth: `CAS_API_KEY` header or `SUPABASE_JWT_SECRET`. Optional
+  Supabase: `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`.
+- CI: GitHub Actions runs typecheck, test, and build on push/PR.
 
 ### Operational Rules
 
@@ -172,3 +182,4 @@ README.md, DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json
 | 2026-06-25 | 0.4.0 | Claude Code | Documented manual stage transitions (PATCH /episodes/:id/stages/:stage). |
 | 2026-06-25 | 0.5.0 | Claude Code | Documented Google AI Studio UI/UX dashboard integration (visual reference). |
 | 2026-06-25 | 0.6.0 | Hermes | Documented same-origin `/api` nginx proxy routing for staging. |
+| 2026-06-25 | 0.7.0 | Claude Code | Replaced MVP frontend with the official Creator AI Studio UI (full import); documented connected vs mock views. |
