@@ -71,6 +71,7 @@ export default function SettingsView() {
   const [encryptionAvailable, setEncryptionAvailable] = useState(false);
   const [draftSecrets, setDraftSecrets] = useState<SecretsPatch>({});
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, string>>({});
 
   const loadSecrets = () => {
@@ -90,10 +91,17 @@ export default function SettingsView() {
   }, []);
 
   const handleSave = async () => {
+    setSaveError(null);
     try {
       const updated = await updateSettings(settings);
       setSettings(updated);
       if (Object.keys(draftSecrets).length > 0) {
+        if (!encryptionAvailable) {
+          setSaveError(
+            'El servidor aún no tiene CAS_SECRETS_KEY. Puedes escribir las keys aquí, pero contacta al administrador para activar el guardado desde la UI, o usa variables de entorno en Coolify.',
+          );
+          return;
+        }
         const res = await updateSecrets(draftSecrets);
         setSecretItems(res.items);
         setDraftSecrets({});
@@ -103,6 +111,31 @@ export default function SettingsView() {
       setTimeout(() => setSaved(false), 2000);
     } catch {
       setSaved(false);
+      setSaveError('No se pudo guardar. Verifica que CAS_SECRETS_KEY esté configurada en el servidor.');
+    }
+  };
+
+  const handleSaveSecretsOnly = async () => {
+    setSaveError(null);
+    if (Object.keys(draftSecrets).length === 0) {
+      setSaveError('Escribe al menos una API key antes de guardar.');
+      return;
+    }
+    if (!encryptionAvailable) {
+      setSaveError(
+        'Falta CAS_SECRETS_KEY en el servidor. Se está configurando automáticamente en staging; recarga esta página en unos segundos e intenta de nuevo.',
+      );
+      return;
+    }
+    try {
+      const res = await updateSecrets(draftSecrets);
+      setSecretItems(res.items);
+      setDraftSecrets({});
+      loadSecrets();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setSaveError('Error al guardar las API keys.');
     }
   };
 
@@ -140,8 +173,15 @@ export default function SettingsView() {
 
           {!encryptionAvailable && (
             <p className="text-xs text-amber-300/90 bg-amber-950/30 border border-amber-900/30 rounded-xl p-3">
-              El servidor no tiene <code className="font-mono">CAS_SECRETS_KEY</code> configurada. Las keys
-              solo pueden definirse como variables de entorno en Coolify hasta que se active el cifrado.
+              El cifrado de keys en el servidor se está activando. Ya puedes escribir tus API keys abajo;
+              cuando <code className="font-mono">CAS_SECRETS_KEY</code> esté lista, pulsa{' '}
+              <strong>Guardar API Keys</strong>.
+            </p>
+          )}
+
+          {saveError && (
+            <p className="text-xs text-rose-300 bg-rose-950/30 border border-rose-900/30 rounded-xl p-3">
+              {saveError}
             </p>
           )}
 
@@ -180,7 +220,7 @@ export default function SettingsView() {
                       <input
                         type="password"
                         placeholder={field.placeholder}
-                        disabled={!encryptionAvailable}
+                        autoComplete="off"
                         value={draftSecrets[field.key] ?? ''}
                         onChange={e =>
                           setDraftSecrets(s => ({
@@ -188,7 +228,7 @@ export default function SettingsView() {
                             [field.key]: e.target.value,
                           }))
                         }
-                        className="w-full bg-[#15191E] border border-white/10 rounded-xl px-3 py-2 text-xs text-white disabled:opacity-50"
+                        className="w-full bg-[#15191E] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50"
                       />
                     </div>
                   ))}
@@ -196,6 +236,14 @@ export default function SettingsView() {
               );
             })}
           </div>
+
+          <button
+            type="button"
+            onClick={() => void handleSaveSecretsOnly()}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors"
+          >
+            Guardar API Keys
+          </button>
         </div>
 
         <div className="bg-[#15191E] border border-white/10 rounded-3xl p-6 space-y-6 shadow-xl">
