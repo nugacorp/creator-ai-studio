@@ -10,6 +10,12 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 
 export const SECRET_STORE_FIELDS = {
+  googleOAuthClientId: 'GOOGLE_OAUTH_CLIENT_ID',
+  googleOAuthClientSecret: 'GOOGLE_OAUTH_CLIENT_SECRET',
+  googleOAuthAccessToken: 'GOOGLE_OAUTH_ACCESS_TOKEN',
+  googleOAuthRefreshToken: 'GOOGLE_OAUTH_REFRESH_TOKEN',
+  googleOAuthExpiresAt: 'GOOGLE_OAUTH_EXPIRES_AT',
+  googleOAuthScopes: 'GOOGLE_OAUTH_SCOPES',
   geminiApiKey: 'GEMINI_API_KEY',
   openaiApiKey: 'OPENAI_API_KEY',
   anthropicApiKey: 'ANTHROPIC_API_KEY',
@@ -128,6 +134,13 @@ export async function listSecretStatuses(): Promise<SecretStatus[]> {
   ];
 
   return providers.map(provider => {
+    if (provider === 'gemini') {
+      return statusForGemini(stored);
+    }
+    if (provider === 'youtube') {
+      return statusForYoutube(stored);
+    }
+
     const fields = PROVIDER_FIELDS[provider];
     let source: SecretSource = 'none';
     let maskedValue: string | undefined;
@@ -146,6 +159,83 @@ export async function listSecretStatuses(): Promise<SecretStatus[]> {
       }
     }
 
-    return { provider, configured, maskedValue, source };
+    return { provider, configured, maskedValue, source, authMethod: configured ? 'api_key' : 'none' };
   });
+}
+
+function readStoredOrEnv(stored: Record<string, string>, envName: string): string | undefined {
+  return stored[envName] ?? process.env[envName];
+}
+
+function statusForGemini(stored: Record<string, string>): SecretStatus {
+  const oauthAccess = readStoredOrEnv(stored, 'GOOGLE_OAUTH_ACCESS_TOKEN');
+  const oauthRefresh = readStoredOrEnv(stored, 'GOOGLE_OAUTH_REFRESH_TOKEN');
+  if (oauthAccess || oauthRefresh) {
+    const fromStore = Boolean(stored.GOOGLE_OAUTH_ACCESS_TOKEN ?? stored.GOOGLE_OAUTH_REFRESH_TOKEN);
+    return {
+      provider: 'gemini',
+      configured: true,
+      source: fromStore ? 'store' : 'env',
+      maskedValue: maskSecret(oauthAccess ?? 'oauth'),
+      authMethod: 'oauth',
+    };
+  }
+
+  const apiKey = readStoredOrEnv(stored, 'GEMINI_API_KEY');
+  if (apiKey) {
+    const fromStore = Boolean(stored.GEMINI_API_KEY);
+    return {
+      provider: 'gemini',
+      configured: true,
+      source: fromStore ? 'store' : 'env',
+      maskedValue: maskSecret(apiKey),
+      authMethod: 'api_key',
+    };
+  }
+
+  return { provider: 'gemini', configured: false, source: 'none', authMethod: 'none' };
+}
+
+function statusForYoutube(stored: Record<string, string>): SecretStatus {
+  const youtubeToken = readStoredOrEnv(stored, 'YOUTUBE_ACCESS_TOKEN');
+  const oauthAccess = readStoredOrEnv(stored, 'GOOGLE_OAUTH_ACCESS_TOKEN');
+  const scopes = readStoredOrEnv(stored, 'GOOGLE_OAUTH_SCOPES') ?? '';
+  const hasYoutubeScope = scopes.includes('youtube');
+
+  if (youtubeToken) {
+    const fromStore = Boolean(stored.YOUTUBE_ACCESS_TOKEN);
+    return {
+      provider: 'youtube',
+      configured: true,
+      source: fromStore ? 'store' : 'env',
+      maskedValue: maskSecret(youtubeToken),
+      authMethod: fromStore && oauthAccess ? 'oauth' : 'api_key',
+    };
+  }
+
+  if (oauthAccess && hasYoutubeScope) {
+    const fromStore = Boolean(stored.GOOGLE_OAUTH_ACCESS_TOKEN);
+    return {
+      provider: 'youtube',
+      configured: true,
+      source: fromStore ? 'store' : 'env',
+      maskedValue: maskSecret(oauthAccess),
+      authMethod: 'oauth',
+    };
+  }
+
+  const clientId = readStoredOrEnv(stored, 'YOUTUBE_CLIENT_ID');
+  const clientSecret = readStoredOrEnv(stored, 'YOUTUBE_CLIENT_SECRET');
+  if (clientId && clientSecret) {
+    const fromStore = Boolean(stored.YOUTUBE_CLIENT_ID ?? stored.YOUTUBE_CLIENT_SECRET);
+    return {
+      provider: 'youtube',
+      configured: false,
+      source: fromStore ? 'store' : 'env',
+      maskedValue: maskSecret(clientId),
+      authMethod: 'none',
+    };
+  }
+
+  return { provider: 'youtube', configured: false, source: 'none', authMethod: 'none' };
 }

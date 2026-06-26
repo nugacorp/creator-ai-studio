@@ -331,16 +331,26 @@ export type SecretProvider =
 /** Where a configured secret value was resolved from. */
 export type SecretSource = 'store' | 'env' | 'none';
 
+/** How an integration authenticates when configured. */
+export type SecretAuthMethod = 'api_key' | 'oauth' | 'none';
+
 /** Masked status of one integration secret (never includes plaintext). */
 export interface SecretStatus {
   provider: SecretProvider;
   configured: boolean;
   maskedValue?: string;
   source: SecretSource;
+  authMethod?: SecretAuthMethod;
 }
 
 /** Writable secret fields (PATCH body). Empty string clears stored value. */
 export interface SecretsPatch {
+  googleOAuthClientId?: string;
+  googleOAuthClientSecret?: string;
+  googleOAuthAccessToken?: string;
+  googleOAuthRefreshToken?: string;
+  googleOAuthExpiresAt?: string;
+  googleOAuthScopes?: string;
   geminiApiKey?: string;
   openaiApiKey?: string;
   anthropicApiKey?: string;

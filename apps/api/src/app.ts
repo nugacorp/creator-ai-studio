@@ -13,12 +13,14 @@ import {
 } from '@creator-ai-studio/shared';
 import { registerAuthHook } from './auth/middleware.js';
 import { registerSecretRoutes } from './secrets/routes.js';
+import { registerOAuthRoutes } from './oauth/routes.js';
 import { registerAIRoutes } from './ai/routes.js';
 import { registerJobRoutes } from './jobs/routes.js';
 import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
 import { createChannel, deleteChannel, listChannels, updateChannel } from './channels/store.js';
 import { EpisodeStorage, resolveStoragePath } from './storage/index.js';
+import { getGeminiAuth } from './secrets/google-auth.js';
 import { getSecret } from './secrets/resolver.js';
 import { resolveProvider } from './ai/router.js';
 
@@ -28,7 +30,10 @@ export interface BuildAppOptions {
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({
+    logger: options.logger ?? false,
+    trustProxy: true,
+  });
   const storage = options.storage ?? new EpisodeStorage(resolveStoragePath());
 
   registerAuthHook(app);
@@ -39,6 +44,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerAIRoutes(app, prefix);
     registerJobRoutes(app, prefix);
     registerSecretRoutes(app, prefix);
+    registerOAuthRoutes(app, prefix);
   }
 
   return app;
@@ -236,11 +242,11 @@ function registerRoutes(
   });
 
   app.get(route(prefix, '/system/mode'), async () => {
-    const gemini = await getSecret('GEMINI_API_KEY');
+    const geminiAuth = await getGeminiAuth();
     const openai = await getSecret('OPENAI_API_KEY');
     const anthropic = await getSecret('ANTHROPIC_API_KEY');
     const elevenlabs = await getSecret('ELEVENLABS_API_KEY');
-    const hasAiKey = Boolean(gemini || openai || anthropic);
+    const hasAiKey = Boolean(geminiAuth || openai || anthropic);
     const provider = await resolveProvider();
     const settings = await getSettings();
     return {

@@ -2,6 +2,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import process from 'node:process';
 
 const PUBLIC_PATHS = new Set(['/health', '/api/health']);
+const PUBLIC_PATH_PREFIXES = ['/oauth/', '/api/oauth/'];
+
+function isPublicPath(pathname: string): boolean {
+  if (PUBLIC_PATHS.has(pathname)) {
+    return true;
+  }
+  return PUBLIC_PATH_PREFIXES.some(prefix => pathname.startsWith(prefix));
+}
 
 export function registerAuthHook(app: FastifyInstance): void {
   const apiKey = process.env.CAS_API_KEY;
@@ -12,7 +20,7 @@ export function registerAuthHook(app: FastifyInstance): void {
   }
 
   app.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (PUBLIC_PATHS.has(request.url.split('?')[0] ?? '')) {
+    if (isPublicPath(request.url.split('?')[0] ?? '')) {
       return;
     }
 

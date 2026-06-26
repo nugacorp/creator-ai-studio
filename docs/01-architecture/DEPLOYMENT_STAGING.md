@@ -66,7 +66,7 @@ Recommended Coolify strategy for staging:
 | Field | Value |
 |---|---|
 | Display name | Creator AI Studio |
-| Public URL | `http://creator-ai-studio.217.76.56.66.sslip.io` |
+| Public URL | `https://creator-ai-studio.217.76.56.66.sslip.io` (enable SSL in Coolify; see [deploy/HTTPS_COOLIFY.md](../../deploy/HTTPS_COOLIFY.md)) |
 | FQDN | `creator-ai-studio.217.76.56.66.sslip.io` |
 | Server IP | `217.76.56.66` |
 
@@ -82,7 +82,12 @@ Reference copy: [deploy/staging.env.example](../../deploy/staging.env.example).
 | `API_HOST` | API | Yes | `0.0.0.0` | Required inside container. |
 | `API_PORT` | API | Yes | `3000` | API listens on this port. |
 | `LOCAL_STORAGE_PATH` | API, Worker | Yes | `/data/episodes` | Must point to a persistent mounted volume. |
+| `CAS_PUBLIC_URL` | API | No | `https://creator-ai-studio.217.76.56.66.sslip.io` | Public URL for OAuth redirects (must match browser URL, include `https://` when SSL is enabled). |
 | `VITE_API_BASE_URL` | Web build | No | `/api` | Optional override. Leave unset/defaulted to `/api` in staging so the dashboard uses the same-origin nginx proxy. |
+
+### HTTPS (Google OAuth)
+
+Google OAuth in **production** mode requires `https://` URLs. Enable Let's Encrypt in Coolify before configuring Google OAuth. Steps: [deploy/HTTPS_COOLIFY.md](../../deploy/HTTPS_COOLIFY.md).
 
 No OpenAI, Claude, ElevenLabs, YouTube, or other real external-service secrets are required for this staging MVP deployment.
 
@@ -189,7 +194,7 @@ After deploy:
 Validate API health through the public web domain and same-origin nginx proxy:
 
 ```bash
-curl -i http://creator-ai-studio.217.76.56.66.sslip.io/api/health
+curl -i https://creator-ai-studio.217.76.56.66.sslip.io/api/health
 ```
 
 Expected response:

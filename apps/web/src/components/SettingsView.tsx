@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Sliders, ShieldCheck, HelpCircle, ExternalLink, KeyRound, PlugZap } from 'lucide-react';
-import type { SecretProvider, SecretStatus } from '@creator-ai-studio/shared';
+import { Sliders, ShieldCheck, HelpCircle, ExternalLink, KeyRound, PlugZap, CheckCircle2, Loader2, LogIn } from 'lucide-react';
+import type { SecretAuthMethod, SecretProvider, SecretStatus } from '@creator-ai-studio/shared';
 import {
   fetchSecrets,
   fetchSettings,
+  startGoogleOAuth,
   testSecret,
   updateSecrets,
   updateSettings,
@@ -21,19 +22,36 @@ const DEFAULT_SETTINGS: AppSettings = {
   diskWarningThresholdGb: 5,
 };
 
-const SECRET_FIELDS: Array<{
+const GOOGLE_OAUTH_SETUP: Array<{ key: keyof SecretsPatch; label: string; placeholder: string }> = [
+  {
+    key: 'googleOAuthClientId',
+    label: 'Google OAuth Client ID',
+    placeholder: '123456789.apps.googleusercontent.com',
+  },
+  {
+    key: 'googleOAuthClientSecret',
+    label: 'Google OAuth Client Secret',
+    placeholder: 'GOCSPX-...',
+  },
+];
+
+const API_KEY_FIELDS: Array<{
   provider: SecretProvider;
   label: string;
-  fields: Array<{ key: keyof SecretsPatch; label: string; placeholder: string }>;
+  oauthPurpose?: 'gemini' | 'youtube';
+  openAiGuided?: boolean;
+  fields: Array<{ key: keyof SecretsPatch; label: string; placeholder: string; optional?: boolean }>;
 }> = [
   {
     provider: 'gemini',
     label: 'Google Gemini',
-    fields: [{ key: 'geminiApiKey', label: 'API Key', placeholder: 'AIza...' }],
+    oauthPurpose: 'gemini',
+    fields: [{ key: 'geminiApiKey', label: 'API Key manual (alternativa)', placeholder: 'AIza...', optional: true }],
   },
   {
     provider: 'openai',
     label: 'OpenAI',
+    openAiGuided: true,
     fields: [{ key: 'openaiApiKey', label: 'API Key', placeholder: 'sk-...' }],
   },
   {
@@ -46,17 +64,14 @@ const SECRET_FIELDS: Array<{
     label: 'ElevenLabs',
     fields: [
       { key: 'elevenlabsApiKey', label: 'API Key', placeholder: 'xi-...' },
-      { key: 'elevenlabsVoiceId', label: 'Voice ID (opcional)', placeholder: '21m00Tcm4TlvDq8ikWAM' },
+      { key: 'elevenlabsVoiceId', label: 'Voice ID (opcional)', placeholder: '21m00Tcm4TlvDq8ikWAM', optional: true },
     ],
   },
   {
     provider: 'youtube',
     label: 'YouTube',
-    fields: [
-      { key: 'youtubeClientId', label: 'Client ID', placeholder: '...apps.googleusercontent.com' },
-      { key: 'youtubeClientSecret', label: 'Client Secret', placeholder: 'GOCSPX-...' },
-      { key: 'youtubeAccessToken', label: 'Access Token', placeholder: 'ya29...' },
-    ],
+    oauthPurpose: 'youtube',
+    fields: [],
   },
   {
     provider: 'webhook',
@@ -70,9 +85,14 @@ export default function SettingsView() {
   const [secretItems, setSecretItems] = useState<SecretStatus[]>([]);
   const [encryptionAvailable, setEncryptionAvailable] = useState(false);
   const [draftSecrets, setDraftSecrets] = useState<SecretsPatch>({});
-  const [saved, setSaved] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [secretsSaved, setSecretsSaved] = useState(false);
+  const [secretsSaving, setSecretsSaving] = useState(false);
+  const [secretsSaveMessage, setSecretsSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, string>>({});
+  const [oauthConnecting, setOauthConnecting] = useState<string | null>(null);
+  const [showManualGeminiKey, setShowManualGeminiKey] = useState(false);
 
   const loadSecrets = () => {
     void fetchSecrets()
@@ -88,6 +108,19 @@ export default function SettingsView() {
       .then(setSettings)
       .catch(() => setSettings(DEFAULT_SETTINGS));
     loadSecrets();
+
+    const params = new URLSearchParams(window.location.search);
+    const oauthStatus = params.get('oauth_status');
+    const oauthProvider = params.get('oauth');
+    const oauthMessage = params.get('oauth_message');
+    if (oauthStatus === 'success' && oauthProvider) {
+      setSecretsSaveMessage(`Cuenta de ${oauthProvider === 'youtube' ? 'YouTube' : 'Google Gemini'} conectada por OAuth.`);
+      loadSecrets();
+      window.history.replaceState({}, '', `${window.location.pathname}?view=settings`);
+    } else if (oauthStatus === 'error') {
+      setSaveError(`OAuth falló: ${oauthMessage ?? 'error desconocido'}`);
+      window.history.replaceState({}, '', `${window.location.pathname}?view=settings`);
+    }
   }, []);
 
   const handleSave = async () => {
@@ -107,35 +140,59 @@ export default function SettingsView() {
         setDraftSecrets({});
         loadSecrets();
       }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 3000);
     } catch {
-      setSaved(false);
+      setSettingsSaved(false);
       setSaveError('No se pudo guardar. Verifica que CAS_SECRETS_KEY esté configurada en el servidor.');
     }
   };
 
+  const savedFieldLabels = (patch: SecretsPatch): string[] => {
+    const labels: string[] = [];
+    for (const group of API_KEY_FIELDS) {
+      if (group.fields.some(f => patch[f.key]?.trim())) {
+        labels.push(group.label);
+      }
+    }
+    if (GOOGLE_OAUTH_SETUP.some(f => patch[f.key]?.trim())) {
+      labels.push('Google OAuth');
+    }
+    return labels;
+  };
+
   const handleSaveSecretsOnly = async () => {
     setSaveError(null);
+    setSecretsSaveMessage(null);
     if (Object.keys(draftSecrets).length === 0) {
       setSaveError('Escribe al menos una API key antes de guardar.');
       return;
     }
     if (!encryptionAvailable) {
       setSaveError(
-        'Falta CAS_SECRETS_KEY en el servidor. Se está configurando automáticamente en staging; recarga esta página en unos segundos e intenta de nuevo.',
+        'Falta CAS_SECRETS_KEY en el servidor. Recarga esta página e intenta de nuevo.',
       );
       return;
     }
+    setSecretsSaving(true);
+    const savedLabels = savedFieldLabels(draftSecrets);
     try {
       const res = await updateSecrets(draftSecrets);
       setSecretItems(res.items);
       setDraftSecrets({});
       loadSecrets();
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setSecretsSaved(true);
+      const list = savedLabels.length > 0 ? savedLabels.join(', ') : 'integraciones';
+      setSecretsSaveMessage(`API keys guardadas correctamente (${list}). Ya puedes usar Probar para verificar la conexión.`);
+      setTimeout(() => {
+        setSecretsSaved(false);
+        setSecretsSaveMessage(null);
+      }, 6000);
     } catch {
-      setSaveError('Error al guardar las API keys.');
+      setSecretsSaved(false);
+      setSaveError('Error al guardar las API keys. Intenta de nuevo.');
+    } finally {
+      setSecretsSaving(false);
     }
   };
 
@@ -150,6 +207,26 @@ export default function SettingsView() {
     } catch {
       setTestResults(prev => ({ ...prev, [provider]: 'Error al probar conexión' }));
     }
+  };
+
+  const handleGoogleOAuth = async (purpose: 'gemini' | 'youtube') => {
+    setSaveError(null);
+    setOauthConnecting(purpose);
+    try {
+      const { authorizeUrl } = await startGoogleOAuth(purpose);
+      window.location.href = authorizeUrl;
+    } catch {
+      setSaveError(
+        'No se pudo iniciar OAuth. Guarda primero el Client ID y Client Secret de Google Cloud, y añade la URL de callback en la consola de Google.',
+      );
+      setOauthConnecting(null);
+    }
+  };
+
+  const authLabel = (authMethod?: SecretAuthMethod) => {
+    if (authMethod === 'oauth') return 'OAuth';
+    if (authMethod === 'api_key') return 'API Key';
+    return 'Sin configurar';
   };
 
   return (
@@ -180,13 +257,60 @@ export default function SettingsView() {
           )}
 
           {saveError && (
-            <p className="text-xs text-rose-300 bg-rose-950/30 border border-rose-900/30 rounded-xl p-3">
+            <p role="alert" className="text-xs text-rose-300 bg-rose-950/30 border border-rose-900/30 rounded-xl p-3">
               {saveError}
             </p>
           )}
 
+          {secretsSaveMessage && (
+            <p
+              role="status"
+              className="text-xs text-emerald-300 bg-emerald-950/40 border border-emerald-800/40 rounded-xl p-3 flex items-start gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{secretsSaveMessage}</span>
+            </p>
+          )}
+
+          <div className="bg-[#0B0F14] border border-white/5 rounded-2xl p-4 space-y-3">
+            <h5 className="text-sm font-bold text-white">Google Cloud OAuth (Gemini + YouTube)</h5>
+            <p className="text-[10px] text-slate-500">
+              Crea credenciales OAuth 2.0 en{' '}
+              <a
+                href="https://console.cloud.google.com/apis/credentials"
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-400 hover:text-indigo-300"
+              >
+                Google Cloud Console
+              </a>
+              . Añade como redirect URI:{' '}
+              <code className="font-mono text-slate-400">
+                {`${window.location.origin}/api/oauth/google/callback`}
+              </code>
+            </p>
+            {GOOGLE_OAUTH_SETUP.map(field => (
+              <div key={field.key} className="space-y-1">
+                <label className="text-slate-400 text-[10px] uppercase block">{field.label}</label>
+                <input
+                  type="password"
+                  placeholder={field.placeholder}
+                  autoComplete="off"
+                  value={draftSecrets[field.key] ?? ''}
+                  onChange={e =>
+                    setDraftSecrets(s => ({
+                      ...s,
+                      [field.key]: e.target.value,
+                    }))
+                  }
+                  className="w-full bg-[#15191E] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50"
+                />
+              </div>
+            ))}
+          </div>
+
           <div className="space-y-4">
-            {SECRET_FIELDS.map(group => {
+            {API_KEY_FIELDS.map(group => {
               const status = statusFor(group.provider);
               return (
                 <div
@@ -198,7 +322,7 @@ export default function SettingsView() {
                       <h5 className="text-sm font-bold text-white">{group.label}</h5>
                       <p className="text-[10px] text-slate-500 font-mono">
                         {status?.configured
-                          ? `${status.source === 'env' ? 'Env' : 'UI'} · ${status.maskedValue ?? '••••'}`
+                          ? `${status.source === 'env' ? 'Env' : 'UI'} · ${authLabel(status.authMethod)} · ${status.maskedValue ?? '••••'}`
                           : 'Sin configurar'}
                       </p>
                     </div>
@@ -211,27 +335,83 @@ export default function SettingsView() {
                       Probar
                     </button>
                   </div>
+
+                  {group.oauthPurpose && (
+                    <button
+                      type="button"
+                      disabled={oauthConnecting === group.oauthPurpose}
+                      onClick={() => void handleGoogleOAuth(group.oauthPurpose!)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white text-[#0B0F14] hover:bg-slate-100 disabled:opacity-60 text-xs font-bold transition-colors"
+                    >
+                      {oauthConnecting === group.oauthPurpose ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Redirigiendo a Google…
+                        </>
+                      ) : (
+                        <>
+                          <LogIn className="w-4 h-4" />
+                          Conectar con Google (OAuth)
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {group.openAiGuided && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-slate-500">
+                        OpenAI no ofrece OAuth público para apps de terceros. Crea tu API key en la plataforma
+                        y pégala abajo (se guarda cifrada en el servidor).
+                      </p>
+                      <a
+                        href="https://platform.openai.com/api-keys"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-[10px] font-bold text-indigo-400 hover:text-indigo-300"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Obtener API key en OpenAI
+                      </a>
+                    </div>
+                  )}
+
                   {testResults[group.provider] && (
                     <p className="text-[10px] text-slate-400 font-mono">{testResults[group.provider]}</p>
                   )}
-                  {group.fields.map(field => (
-                    <div key={field.key} className="space-y-1">
-                      <label className="text-slate-400 text-[10px] uppercase block">{field.label}</label>
-                      <input
-                        type="password"
-                        placeholder={field.placeholder}
-                        autoComplete="off"
-                        value={draftSecrets[field.key] ?? ''}
-                        onChange={e =>
-                          setDraftSecrets(s => ({
-                            ...s,
-                            [field.key]: e.target.value,
-                          }))
-                        }
-                        className="w-full bg-[#15191E] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50"
-                      />
-                    </div>
-                  ))}
+
+                  {group.provider === 'gemini' && !showManualGeminiKey && (
+                    <button
+                      type="button"
+                      onClick={() => setShowManualGeminiKey(true)}
+                      className="text-[10px] text-slate-500 hover:text-slate-300 underline"
+                    >
+                      Usar API key manual en lugar de OAuth
+                    </button>
+                  )}
+
+                  {group.fields.map(field => {
+                    if (group.provider === 'gemini' && !showManualGeminiKey) {
+                      return null;
+                    }
+                    return (
+                      <div key={field.key} className="space-y-1">
+                        <label className="text-slate-400 text-[10px] uppercase block">{field.label}</label>
+                        <input
+                          type="password"
+                          placeholder={field.placeholder}
+                          autoComplete="off"
+                          value={draftSecrets[field.key] ?? ''}
+                          onChange={e =>
+                            setDraftSecrets(s => ({
+                              ...s,
+                              [field.key]: e.target.value,
+                            }))
+                          }
+                          className="w-full bg-[#15191E] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -239,10 +419,23 @@ export default function SettingsView() {
 
           <button
             type="button"
+            disabled={secretsSaving}
             onClick={() => void handleSaveSecretsOnly()}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-bold transition-colors"
           >
-            Guardar API Keys
+            {secretsSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Guardando…
+              </>
+            ) : secretsSaved ? (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                ✓ Keys guardadas
+              </>
+            ) : (
+              'Guardar API Keys'
+            )}
           </button>
         </div>
 
@@ -368,7 +561,7 @@ export default function SettingsView() {
               onClick={() => void handleSave()}
               className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors"
             >
-              {saved ? '✓ Guardado' : 'Guardar configuración'}
+              {settingsSaved ? '✓ Configuración guardada' : 'Guardar configuración'}
             </button>
           </div>
 

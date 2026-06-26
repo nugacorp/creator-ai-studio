@@ -164,6 +164,12 @@ export async function testSecret(provider: SecretProvider): Promise<SecretTestRe
   return apiFetch<SecretTestResult>(`/secrets/test/${provider}`, { method: 'POST' });
 }
 
+export async function startGoogleOAuth(purpose: 'gemini' | 'youtube'): Promise<{ authorizeUrl: string }> {
+  const returnUrl = `${window.location.origin}${window.location.pathname}?view=settings`;
+  const query = new URLSearchParams({ purpose, returnUrl });
+  return apiFetch<{ authorizeUrl: string }>(`/oauth/google/start?${query.toString()}`);
+}
+
 export interface SystemMode {
   demoMode: boolean;
   aiProvider: string;

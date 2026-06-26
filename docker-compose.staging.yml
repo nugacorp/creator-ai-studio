@@ -8,6 +8,7 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 3000
       LOCAL_STORAGE_PATH: /data/episodes
+      CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:-https://creator-ai-studio.217.76.56.66.sslip.io}
       CAS_SECRETS_KEY: ${CAS_SECRETS_KEY:?Set CAS_SECRETS_KEY in Coolify (32+ chars) to enable UI API key storage}
       REDIS_URL: ${REDIS_URL:-}
       RCLONE_REMOTE: ${RCLONE_REMOTE:-}
@@ -37,8 +38,11 @@ services:
       dockerfile: Dockerfile.web
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
+    labels:
+      - coolify.managed=true
+      - coolify.proxy=true
     depends_on:
       api:
         condition: service_healthy

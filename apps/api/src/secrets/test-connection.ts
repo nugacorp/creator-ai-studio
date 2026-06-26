@@ -1,19 +1,30 @@
 import type { SecretProvider, SecretTestResult } from '@creator-ai-studio/shared';
+import { getGeminiAuth, getValidGoogleAccessToken } from './google-auth.js';
 import { getSecret, getSecretByField } from './resolver.js';
 
 export async function testSecretProvider(provider: SecretProvider): Promise<SecretTestResult> {
   try {
     switch (provider) {
       case 'gemini': {
-        const key = await getSecretByField('geminiApiKey');
-        if (!key) return { provider, ok: false, message: 'GEMINI_API_KEY no configurada' };
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`,
-        );
+        const auth = await getGeminiAuth();
+        if (!auth) {
+          return { provider, ok: false, message: 'Gemini no configurado (OAuth o API key)' };
+        }
+        const headers: Record<string, string> = {};
+        const url =
+          auth.mode === 'api_key'
+            ? `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(auth.value)}`
+            : 'https://generativelanguage.googleapis.com/v1beta/models';
+        if (auth.mode === 'oauth') {
+          headers.Authorization = `Bearer ${auth.accessToken}`;
+        }
+        const res = await fetch(url, { headers });
         return {
           provider,
           ok: res.ok,
-          message: res.ok ? 'Conexión con Gemini OK' : `Gemini respondió ${res.status}`,
+          message: res.ok
+            ? `Conexión con Gemini OK (${auth.mode === 'oauth' ? 'OAuth' : 'API key'})`
+            : `Gemini respondió ${res.status}`,
         };
       }
       case 'openai': {
@@ -63,8 +74,11 @@ export async function testSecretProvider(provider: SecretProvider): Promise<Secr
         };
       }
       case 'youtube': {
-        const token = await getSecretByField('youtubeAccessToken');
-        if (!token) return { provider, ok: false, message: 'YOUTUBE_ACCESS_TOKEN no configurado' };
+        const token =
+          (await getSecretByField('youtubeAccessToken')) ?? (await getValidGoogleAccessToken());
+        if (!token) {
+          return { provider, ok: false, message: 'YouTube no conectado (OAuth o access token)' };
+        }
         const res = await fetch(
           'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
           { headers: { Authorization: `Bearer ${token}` } },

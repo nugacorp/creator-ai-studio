@@ -1,8 +1,10 @@
+import process from 'node:process';
 import { ClaudeAIProvider } from './claude.js';
 import { DemoAIProvider } from './demo.js';
 import { GeminiAIProvider } from './gemini.js';
 import { OpenAIProvider } from './openai.js';
 import type { AIProvider, AIProviderName, AIUsageLog } from './types.js';
+import { getGeminiAuth } from '../secrets/google-auth.js';
 import { getSecret } from '../secrets/resolver.js';
 
 const usageLogs: AIUsageLog[] = [];
@@ -10,8 +12,8 @@ const usageLogs: AIUsageLog[] = [];
 async function createProvider(name: AIProviderName): Promise<AIProvider> {
   switch (name) {
     case 'gemini': {
-      const key = await getSecret('GEMINI_API_KEY');
-      return key ? new GeminiAIProvider(key) : new DemoAIProvider();
+      const auth = await getGeminiAuth();
+      return auth ? new GeminiAIProvider(auth) : new DemoAIProvider();
     }
     case 'openai': {
       const key = await getSecret('OPENAI_API_KEY');

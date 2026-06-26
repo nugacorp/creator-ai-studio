@@ -66,7 +66,10 @@ interface AppProps {
 }
 
 export function App({ initialView = 'home' }: AppProps = {}) {
-  const [currentView, setCurrentView] = useState<string>(initialView);
+  const [currentView, setCurrentView] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') ?? initialView;
+  });
   const [channels, setChannels] = useState<Channel[]>(INITIAL_CHANNELS);
   const [selectedChannel, setSelectedChannel] = useState<Channel>(INITIAL_CHANNELS[0]);
   const [projects, setProjects] = useState<VideoProject[]>(INITIAL_PROJECTS);
