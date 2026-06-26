@@ -15,6 +15,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   ttsSampleRate: '24000',
   ttsAccent: 'es-ES',
   aiProviderDefault: 'gemini',
+  ttsProvider: 'elevenlabs',
+  autoArchiveOnPublish: true,
+  maxActiveEpisodes: 1,
+  diskWarningThresholdGb: 5,
 };
 
 const SECRET_FIELDS: Array<{
@@ -229,6 +233,27 @@ export default function SettingsView() {
             </div>
 
             <div className="space-y-1">
+              <label className="text-slate-400 text-[10px] uppercase block">Motor de voz (TTS)</label>
+              <select
+                value={settings.ttsProvider ?? 'elevenlabs'}
+                onChange={e =>
+                  setSettings(s => ({
+                    ...s,
+                    ttsProvider: e.target.value as AppSettings['ttsProvider'],
+                  }))
+                }
+                className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs"
+              >
+                <option value="elevenlabs">ElevenLabs (recomendado — API desde CAS)</option>
+                <option value="piper">Piper (gratis, CPU en VPS)</option>
+                <option value="gemini">Gemini (experimental)</option>
+              </select>
+              <p className="text-[10px] text-slate-500">
+                Con ElevenLabs solo pegas la API key arriba; la narración se genera desde el workspace sin abrir su web.
+              </p>
+            </div>
+
+            <div className="space-y-1">
               <label className="text-slate-400 text-[10px] uppercase block">Proveedor de IA por defecto</label>
               <select
                 value={settings.aiProviderDefault}
@@ -239,6 +264,56 @@ export default function SettingsView() {
                 <option value="openai">OpenAI</option>
                 <option value="claude">Anthropic Claude</option>
               </select>
+            </div>
+
+            <div className="pt-4 border-t border-white/5 space-y-3">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                Almacenamiento VPS + Google Drive
+              </h4>
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={settings.autoArchiveOnPublish ?? true}
+                  onChange={e =>
+                    setSettings(s => ({ ...s, autoArchiveOnPublish: e.target.checked }))
+                  }
+                  className="accent-indigo-500"
+                />
+                Archivar en Drive al confirmar publicación
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-400 text-[10px] uppercase block">Episodios activos en VPS</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={settings.maxActiveEpisodes ?? 1}
+                    onChange={e =>
+                      setSettings(s => ({
+                        ...s,
+                        maxActiveEpisodes: Number(e.target.value) || 1,
+                      }))
+                    }
+                    className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 text-[10px] uppercase block">Alerta disco (GB)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={settings.diskWarningThresholdGb ?? 5}
+                    onChange={e =>
+                      setSettings(s => ({
+                        ...s,
+                        diskWarningThresholdGb: Number(e.target.value) || 5,
+                      }))
+                    }
+                    className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
+              </div>
             </div>
 
             <button

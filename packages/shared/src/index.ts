@@ -17,6 +17,9 @@ export const EPISODE_STATUSES = [
 /** A single valid episode status. */
 export type EpisodeStatus = (typeof EPISODE_STATUSES)[number];
 
+/** Whether episode assets live on VPS disk or were archived to cloud storage. */
+export type ArchiveStatus = 'local' | 'archived';
+
 /** Lightweight summary of an episode, suitable for list views and APIs. */
 export interface EpisodeSummary {
   /** Stable unique identifier. */
@@ -31,6 +34,14 @@ export interface EpisodeSummary {
   createdAt: string;
   /** ISO-8601 timestamp of the last update. */
   updatedAt: string;
+  /** `local` while on VPS; `archived` after Google Drive backup. */
+  archiveStatus?: ArchiveStatus;
+  /** When the workspace was moved to cloud storage. */
+  archivedAt?: string;
+  /** Remote path (e.g. rclone remote) after archive. */
+  drivePath?: string;
+  /** Original VPS folder name (`{id}-{slug}`) for restore from Drive. */
+  localWorkspace?: string;
 }
 
 /** Input accepted when creating a new episode. */
@@ -119,6 +130,10 @@ export interface EpisodeContent {
   seoTags: string[];
   thumbnailUrl?: string;
   audioUrl?: string;
+  videoUrl?: string;
+  shortsUrl?: string;
+  youtubeVideoId?: string;
+  publishConfirmed?: boolean;
   scheduledAt?: string;
   duration: string;
 }
@@ -220,7 +235,16 @@ export function isEpisodeStatus(value: unknown): value is EpisodeStatus {
 }
 
 /** Job types processed by the production worker. */
-export const JOB_TYPES = ['script', 'tts', 'render', 'thumbnail', 'publish'] as const;
+export const JOB_TYPES = [
+  'script',
+  'tts',
+  'render',
+  'thumbnail',
+  'shorts',
+  'publish',
+  'archive',
+  'pipeline',
+] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
 /** Job lifecycle statuses. */
@@ -246,11 +270,53 @@ export interface CreateJobInput {
   payload?: Record<string, unknown>;
 }
 
+/** TTS engine used for narration (configured once in Settings). */
+export type TtsProvider = 'elevenlabs' | 'piper' | 'gemini';
+
 /** Global application settings persisted by the API. */
 export interface AppSettings {
   ttsSampleRate: string;
   ttsAccent: string;
   aiProviderDefault: string;
+  /** Preferred narration engine — all TTS from CAS UI uses this. */
+  ttsProvider: TtsProvider;
+  /** Move workspace to Google Drive after publish is confirmed. */
+  autoArchiveOnPublish: boolean;
+  /** Max non-archived episodes allowed on VPS disk at once. */
+  maxActiveEpisodes: number;
+  /** Warn when episode storage exceeds this size (GB). */
+  diskWarningThresholdGb: number;
+}
+
+/** Disk usage snapshot for the operations dashboard. */
+export interface StorageStats {
+  episodesPath: string;
+  totalBytes: number;
+  usedBytes: number;
+  freeBytes: number;
+  episodesBytes: number;
+  activeEpisodeCount: number;
+  archivedEpisodeCount: number;
+  maxActiveEpisodes: number;
+  diskWarning: boolean;
+  archiveConfigured: boolean;
+  ffmpegAvailable: boolean;
+  piperAvailable: boolean;
+}
+
+/** ElevenLabs voice entry for the narration picker. */
+export interface ElevenLabsVoice {
+  voiceId: string;
+  name: string;
+  category?: string;
+  previewUrl?: string;
+}
+
+/** Result of archiving an episode workspace to cloud storage. */
+export interface ArchiveResult {
+  ok: boolean;
+  drivePath?: string;
+  message: string;
 }
 
 /** Integration providers that accept API keys or credentials. */

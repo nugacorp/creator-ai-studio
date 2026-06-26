@@ -27,6 +27,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/workers/production/package.json workers/production/package.json
 COPY --from=builder /app/workers/production/dist workers/production/dist
 
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg rclone \
+  && rm -rf /var/lib/apt/lists/*
+
 RUN mkdir -p /data/episodes
 
 CMD ["npm", "run", "start", "--workspace", "@creator-ai-studio/production-worker"]

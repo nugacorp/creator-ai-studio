@@ -28,7 +28,8 @@ import {
   Plus
 } from 'lucide-react';
 import { VideoProject, Scene } from '../types';
-import { aiGenerateImage, aiRewrite, aiSeo, aiTts } from '../api';
+import { aiGenerateImage, aiRewrite, aiSeo, aiTts, fetchElevenLabsVoices } from '../api';
+import type { ElevenLabsVoice } from '../api';
 
 interface WorkspaceViewProps {
   project: VideoProject;
@@ -49,7 +50,8 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
   const [selectedOutlineIndex, setSelectedOutlineIndex] = useState(0);
 
   // Audio State (Narracion)
-  const [selectedVoice, setSelectedVoice] = useState('Kore');
+  const [selectedVoice, setSelectedVoice] = useState('21m00Tcm4TlvDq8ikWAM');
+  const [elevenVoices, setElevenVoices] = useState<ElevenLabsVoice[]>([]);
   const [audioBase64, setAudioBase64] = useState<string | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -113,28 +115,36 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
     }
   };
 
-  // 2. TTS Voiceover Generation
+  useEffect(() => {
+    void fetchElevenLabsVoices()
+      .then(setElevenVoices)
+      .catch(() => setElevenVoices([]));
+  }, []);
+
+  // 2. TTS Voiceover Generation (ElevenLabs / Piper / Gemini via CAS API)
   const handleGenerateVoice = async () => {
     setIsProcessing(true);
-    setProcessingMessage('Sintetizando voz en off con Gemini TTS...');
+    setProcessingMessage('Generando narración desde Creator AI Studio…');
     try {
-      const data = await aiTts(scriptText, selectedVoice);
-      
-      if (data.audio) {
+      const data = await aiTts(scriptText, selectedVoice, project.id);
+
+      if (data.audioUrl) {
+        setAudioBase64(data.audioUrl);
+        triggerFeedback(
+          'success',
+          data.isDemo
+            ? 'Modo demo — configura ElevenLabs en Configuración'
+            : `✓ Voz generada (${data.provider ?? 'CAS'}) y guardada en el episodio`,
+        );
+      } else if (data.audio) {
         setAudioBase64(data.audio);
-        triggerFeedback('success', '✓ Audio generado correctamente con Gemini API');
+        triggerFeedback('success', '✓ Audio generado');
       } else if (data.isDemo) {
-        // Fallback: Use client Speech Synthesis
-        triggerFeedback('success', '✓ Modo Demo: Iniciando narrador de voz nativo en tu navegador');
-        // Synthesize natively for premium effect
-        const utterance = new SpeechSynthesisUtterance(scriptText.substring(0, 400));
-        utterance.lang = 'es-ES';
-        // Mocking audio source
+        triggerFeedback('success', 'Modo demo: usa el narrador del navegador');
         setAudioBase64('demo_active');
       }
-    } catch (err) {
-      console.error(err);
-      triggerFeedback('error', 'Error generando voz');
+    } catch {
+      triggerFeedback('error', 'Error generando voz — revisa Configuración → ElevenLabs');
     } finally {
       setIsProcessing(false);
     }
@@ -156,8 +166,10 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
     }
 
     if (!audioRef.current && audioBase64) {
-      const audioUrl = `data:audio/wav;base64,${audioBase64}`;
-      audioRef.current = new Audio(audioUrl);
+      const src = audioBase64.startsWith('data:') || audioBase64.startsWith('http') || audioBase64.startsWith('/')
+        ? audioBase64
+        : `data:audio/wav;base64,${audioBase64}`;
+      audioRef.current = new Audio(src);
       audioRef.current.onended = () => setIsPlayingAudio(false);
     }
 
@@ -423,7 +435,8 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
             <div className="space-y-2">
               <h3 className="font-display font-bold text-lg text-white">Narración de Voz con Inteligencia Artificial</h3>
               <p className="text-xs text-[#8B949E] max-w-md mx-auto leading-relaxed">
-                Nuestros agentes de voz utilizan el modelo **gemini-3.1-flash-tts-preview** para sintetizar audio natural de alta fidelidad, con respiraciones y entonación humana.
+                La voz se genera desde esta app usando tu proveedor configurado (ElevenLabs recomendado).
+                Pega tu API key una sola vez en Configuración — no necesitas abrir ElevenLabs cada vez.
               </p>
             </div>
 
@@ -434,13 +447,22 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
                 <select
                   value={selectedVoice}
                   onChange={e => setSelectedVoice(e.target.value)}
-                  className="bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
+                  className="bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none w-full"
                 >
-                  <option value="Kore">Kore (Voz Bíblica - Profunda y Solemne)</option>
-                  <option value="Zephyr">Zephyr (Voz Narrativa - Amigable y Fluida)</option>
-                  <option value="Puck">Puck (Voz Rápida - Dinámica para Shorts)</option>
-                  <option value="Fenrir">Fenrir (Voz de Suspenso - Misteriosa)</option>
-                  <option value="Charon">Charon (Voz Clásica - Neutral)</option>
+                  {elevenVoices.length > 0 ? (
+                    elevenVoices.map(v => (
+                      <option key={v.voiceId} value={v.voiceId}>
+                        {v.name}
+                        {v.category ? ` (${v.category})` : ''}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="21m00Tcm4TlvDq8ikWAM">Rachel (ElevenLabs — por defecto)</option>
+                      <option value="pNInz6obpgDQGcFmaJgB">Adam</option>
+                      <option value="EXAVITQu4vr4xnSDxMaL">Bella</option>
+                    </>
+                  )}
                 </select>
               </div>
 

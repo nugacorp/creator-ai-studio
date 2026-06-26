@@ -107,6 +107,7 @@ export class EpisodeStorage {
       status: 'draft',
       createdAt: now,
       updatedAt: now,
+      archiveStatus: 'local',
     };
 
     const episodeDir = path.join(this.basePath, `${id}-${slug}`);
@@ -134,8 +135,51 @@ export class EpisodeStorage {
     return episode;
   }
 
+  /** Count episodes still stored on local disk (not archived). */
+  async countActiveLocalEpisodes(): Promise<number> {
+    const onDisk = await this.listLocalEpisodes();
+    return onDisk.filter(e => e.archiveStatus !== 'archived').length;
+  }
+
+  /** Absolute path to an episode workspace directory. */
+  async getEpisodeDirectory(id: string): Promise<string | null> {
+    const located = await this.findEpisode(id);
+    return located?.dir ?? null;
+  }
+
+  /** Mark episode as archived in the index (workspace folder may already be removed). */
+  async markArchived(
+    summary: EpisodeSummary,
+    drivePath: string,
+    localWorkspace: string,
+  ): Promise<EpisodeSummary> {
+    const archived: EpisodeSummary = {
+      ...summary,
+      archiveStatus: 'archived',
+      archivedAt: new Date().toISOString(),
+      drivePath,
+      localWorkspace,
+      updatedAt: new Date().toISOString(),
+    };
+    const index = await this.readArchivedIndex();
+    const next = index.filter(e => e.id !== summary.id);
+    next.push(archived);
+    await this.writeArchivedIndex(next);
+    return archived;
+  }
+
   /** List every stored episode, sorted by creation time (oldest first). */
   async listEpisodes(): Promise<EpisodeSummary[]> {
+    const local = await this.listLocalEpisodes();
+    const archived = await this.readArchivedIndex();
+    const localIds = new Set(local.map(e => e.id));
+    const merged = [...local, ...archived.filter(e => !localIds.has(e.id))];
+    merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return merged;
+  }
+
+  /** Episodes with workspace folders on disk. */
+  async listLocalEpisodes(): Promise<EpisodeSummary[]> {
     if (!existsSync(this.basePath)) {
       return [];
     }
@@ -154,25 +198,63 @@ export class EpisodeStorage {
       }
 
       const raw = await readFile(episodeFile, 'utf8');
-      episodes.push(JSON.parse(raw) as EpisodeSummary);
+      const summary = JSON.parse(raw) as EpisodeSummary;
+      episodes.push({ ...summary, archiveStatus: summary.archiveStatus ?? 'local' });
     }
 
     episodes.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     return episodes;
   }
 
+  private archivedIndexPath(): string {
+    return path.join(this.basePath, '..', 'archived-episodes.json');
+  }
+
+  private async readArchivedIndex(): Promise<EpisodeSummary[]> {
+    const file = this.archivedIndexPath();
+    if (!existsSync(file)) return [];
+    try {
+      return JSON.parse(await readFile(file, 'utf8')) as EpisodeSummary[];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeArchivedIndex(episodes: EpisodeSummary[]): Promise<void> {
+    const file = this.archivedIndexPath();
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, `${JSON.stringify(episodes, null, 2)}\n`, 'utf8');
+  }
+
+  async removeFromArchivedIndex(id: string): Promise<void> {
+    const index = await this.readArchivedIndex();
+    await this.writeArchivedIndex(index.filter(e => e.id !== id));
+  }
+
   /** Read full detail for one episode, or null if it does not exist. */
   async getEpisode(id: string): Promise<EpisodeDetail | null> {
     const located = await this.findEpisode(id);
-    if (located === null) {
-      return null;
+    if (located !== null) {
+      return {
+        ...located.summary,
+        workspacePath: located.name,
+        stages: await this.readStages(located.dir),
+        content: await this.readContent(located.dir),
+      };
     }
 
+    const archived = (await this.readArchivedIndex()).find(e => e.id === id);
+    if (!archived) return null;
+
     return {
-      ...located.summary,
-      workspacePath: located.name,
-      stages: await this.readStages(located.dir),
-      content: await this.readContent(located.dir),
+      ...archived,
+      workspacePath: archived.drivePath ?? archived.slug,
+      stages: EPISODE_STAGES.map(stage => ({
+        stage,
+        status: stage === 'analytics' ? 'completed' : 'completed',
+        expectedFiles: STAGE_EXPECTED_FILES[stage],
+      })),
+      content: createDefaultContent(),
     };
   }
 

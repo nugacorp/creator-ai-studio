@@ -2,6 +2,7 @@ import type {
   AppSettings,
   CreateEpisodeInput,
   CreateJobInput,
+  ElevenLabsVoice,
   EpisodeDetail,
   EpisodeStage,
   EpisodeStageStatus,
@@ -12,6 +13,8 @@ import type {
   SecretsPatch,
   SecretStatus,
   SecretTestResult,
+  StorageStats,
+  TtsProvider,
   UpdateEpisodeInput,
 } from '@creator-ai-studio/shared';
 
@@ -164,6 +167,8 @@ export async function testSecret(provider: SecretProvider): Promise<SecretTestRe
 export interface SystemMode {
   demoMode: boolean;
   aiProvider: string;
+  ttsProvider?: TtsProvider;
+  ttsConfigured?: boolean;
 }
 
 export async function fetchSystemMode(): Promise<SystemMode> {
@@ -224,13 +229,41 @@ export async function aiGenerateImage(body: {
 export async function aiTts(
   text: string,
   voice?: string,
-): Promise<{ audioUrl?: string; audio?: string; isDemo?: boolean }> {
-  return apiFetch<{ audioUrl?: string; audio?: string; isDemo?: boolean }>('/gemini/tts', {
+  episodeId?: string,
+): Promise<{ audioUrl?: string; audio?: string; isDemo?: boolean; provider?: string }> {
+  return apiFetch('/integrations/elevenlabs/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, voice }),
+    body: JSON.stringify({ text, voiceId: voice, episodeId }),
   });
 }
+
+export async function fetchElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
+  const res = await apiFetch<{ voices: ElevenLabsVoice[] }>('/integrations/elevenlabs/voices');
+  return res.voices;
+}
+
+export async function fetchStorageStats(): Promise<StorageStats> {
+  return apiFetch<StorageStats>('/system/storage');
+}
+
+export async function runEpisodePipeline(episodeId: string): Promise<ProductionJob> {
+  return apiFetch<ProductionJob>(`/episodes/${encodeURIComponent(episodeId)}/pipeline`, {
+    method: 'POST',
+  });
+}
+
+export async function confirmPublish(episodeId: string): Promise<EpisodeDetail> {
+  return apiFetch<EpisodeDetail>(`/episodes/${encodeURIComponent(episodeId)}/confirm-publish`, {
+    method: 'POST',
+  });
+}
+
+export async function archiveEpisode(episodeId: string): Promise<{ ok: boolean; message: string }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/archive`, { method: 'POST' });
+}
+
+export type { StorageStats, TtsProvider, ElevenLabsVoice };
 
 export async function aiSeo(
   title: string,

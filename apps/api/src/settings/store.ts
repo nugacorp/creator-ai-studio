@@ -8,6 +8,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   ttsSampleRate: '24000',
   ttsAccent: 'es-ES',
   aiProviderDefault: 'gemini',
+  ttsProvider: 'elevenlabs',
+  autoArchiveOnPublish: true,
+  maxActiveEpisodes: 1,
+  diskWarningThresholdGb: 5,
 };
 
 function settingsPath(): string {

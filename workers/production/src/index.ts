@@ -46,73 +46,131 @@ async function patchJob(
   });
 }
 
+async function runScriptJob(job: ProductionJob): Promise<void> {
+  const episodeRes = await apiFetch(`/episodes/${job.episodeId}`);
+  const episode = (await episodeRes.json()) as {
+    title?: string;
+    content?: { script?: string; outline?: string[] };
+  };
+
+  const res = await apiFetch('/ai/generate-script', {
+    method: 'POST',
+    body: JSON.stringify({
+      prompt: episode.title ?? 'Nuevo video',
+      options: { theme: 'Reflexiones', style: 'Narrativo' },
+    }),
+  });
+  const data = (await res.json()) as { text?: string };
+  await apiFetch(`/episodes/${job.episodeId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      content: {
+        script: data.text ?? '',
+        outline: episode.content?.outline ?? [],
+      },
+    }),
+  });
+}
+
+async function runTtsJob(job: ProductionJob): Promise<void> {
+  const episodeRes = await apiFetch(`/episodes/${job.episodeId}`);
+  const episode = (await episodeRes.json()) as { content?: { script?: string } };
+  await apiFetch('/integrations/elevenlabs/tts', {
+    method: 'POST',
+    body: JSON.stringify({
+      text: episode.content?.script ?? '',
+      episodeId: job.episodeId,
+    }),
+  });
+}
+
+async function runThumbnailJob(job: ProductionJob): Promise<void> {
+  await apiFetch(`/episodes/${job.episodeId}/thumbnail`, { method: 'POST' });
+}
+
+async function runRenderJob(job: ProductionJob): Promise<void> {
+  const res = await apiFetch(`/episodes/${job.episodeId}/render`, { method: 'POST' });
+  if (!res.ok) {
+    const err = (await res.json()) as { message?: string };
+    throw new Error(err.message ?? 'render failed');
+  }
+}
+
+async function runShortsJob(job: ProductionJob): Promise<void> {
+  const res = await apiFetch(`/episodes/${job.episodeId}/shorts`, { method: 'POST' });
+  if (!res.ok) {
+    const err = (await res.json()) as { message?: string };
+    throw new Error(err.message ?? 'shorts failed');
+  }
+}
+
+async function runPublishJob(job: ProductionJob): Promise<void> {
+  await apiFetch('/integrations/youtube/upload', {
+    method: 'POST',
+    body: JSON.stringify({ episodeId: job.episodeId }),
+  });
+}
+
+async function runArchiveJob(job: ProductionJob): Promise<void> {
+  const res = await apiFetch(`/episodes/${job.episodeId}/archive`, { method: 'POST' });
+  if (!res.ok) {
+    const err = (await res.json()) as { message?: string };
+    throw new Error(err.message ?? 'archive failed');
+  }
+}
+
+async function runPipelineJob(job: ProductionJob): Promise<void> {
+  const steps: Array<{ label: string; fn: () => Promise<void> }> = [
+    { label: 'script', fn: () => runScriptJob(job) },
+    { label: 'tts', fn: () => runTtsJob(job) },
+    { label: 'thumbnail', fn: () => runThumbnailJob(job) },
+    { label: 'render', fn: () => runRenderJob(job) },
+    { label: 'shorts', fn: () => runShortsJob(job) },
+    { label: 'publish', fn: () => runPublishJob(job) },
+    { label: 'confirm', fn: async () => {
+      await apiFetch(`/episodes/${job.episodeId}/confirm-publish`, { method: 'POST' });
+    }},
+  ];
+
+  for (let i = 0; i < steps.length; i++) {
+    const progress = Math.round(((i + 1) / steps.length) * 90);
+    await patchJob(job.id, { status: 'active', progress });
+    await steps[i].fn();
+  }
+}
+
 export async function processJob(job: ProductionJob): Promise<void> {
   console.log(`Processing job ${job.id} (${job.type}) for episode ${job.episodeId}`);
-  await patchJob(job.id, { status: 'active', progress: 10 });
+  await patchJob(job.id, { status: 'active', progress: 5 });
 
   try {
-    const episodeRes = await apiFetch(`/episodes/${job.episodeId}`);
-    const episode = (await episodeRes.json()) as {
-      title?: string;
-      content?: { script?: string; outline?: string[] };
-    };
-
-    if (job.type === 'script') {
-      const res = await apiFetch('/ai/generate-script', {
-        method: 'POST',
-        body: JSON.stringify({
-          prompt: episode.title ?? 'Nuevo video',
-          options: { theme: 'Reflexiones', style: 'Narrativo' },
-        }),
-      });
-      const data = (await res.json()) as { text?: string };
-      await apiFetch(`/episodes/${job.episodeId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          content: {
-            script: data.text ?? '',
-            outline: episode.content?.outline ?? [],
-          },
-        }),
-      });
-    }
-
-    if (job.type === 'tts') {
-      await apiFetch('/integrations/elevenlabs/tts', {
-        method: 'POST',
-        body: JSON.stringify({
-          text: episode.content?.script ?? '',
-          episodeId: job.episodeId,
-        }),
-      });
-    }
-
-    if (job.type === 'thumbnail') {
-      const res = await apiFetch('/ai/generate-image', {
-        method: 'POST',
-        body: JSON.stringify({
-          prompt: `Miniatura YouTube para: ${episode.title ?? 'video'}`,
-          aspectRatio: '16:9',
-        }),
-      });
-      const data = (await res.json()) as { imageUrl?: string };
-      if (data.imageUrl) {
-        await apiFetch(`/episodes/${job.episodeId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ content: { thumbnailUrl: data.imageUrl } }),
-        });
-      }
-    }
-
-    if (job.type === 'render') {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-    }
-
-    if (job.type === 'publish') {
-      await apiFetch('/integrations/youtube/upload', {
-        method: 'POST',
-        body: JSON.stringify({ episodeId: job.episodeId }),
-      });
+    switch (job.type) {
+      case 'script':
+        await runScriptJob(job);
+        break;
+      case 'tts':
+        await runTtsJob(job);
+        break;
+      case 'thumbnail':
+        await runThumbnailJob(job);
+        break;
+      case 'render':
+        await runRenderJob(job);
+        break;
+      case 'shorts':
+        await runShortsJob(job);
+        break;
+      case 'publish':
+        await runPublishJob(job);
+        break;
+      case 'archive':
+        await runArchiveJob(job);
+        break;
+      case 'pipeline':
+        await runPipelineJob(job);
+        break;
+      default:
+        throw new Error(`unknown job type: ${job.type}`);
     }
 
     await patchJob(job.id, { status: 'completed', progress: 100, result: { ok: true } });

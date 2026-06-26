@@ -9,8 +9,11 @@ services:
       API_PORT: 3000
       LOCAL_STORAGE_PATH: /data/episodes
       REDIS_URL: ${REDIS_URL:-}
+      RCLONE_REMOTE: ${RCLONE_REMOTE:-}
+      RCLONE_CONFIG: ${RCLONE_CONFIG:-/config/rclone/rclone.conf}
     volumes:
       - creator-ai-studio-staging-episodes:/data/episodes
+      - ${RCLONE_CONFIG_VOLUME:-creator-ai-studio-rclone-config}:/config/rclone:ro
     expose:
       - "3000"
     healthcheck:
@@ -69,3 +72,4 @@ services:
 
 volumes:
   creator-ai-studio-staging-episodes:
+  creator-ai-studio-rclone-config:

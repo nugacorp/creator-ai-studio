@@ -11,6 +11,7 @@ import AutomationView from './components/AutomationView';
 import AgentsView from './components/AgentsView';
 import CopilotView from './components/CopilotView';
 import ProductionStagesPanel from './components/ProductionStagesPanel';
+import PipelinePanel from './components/PipelinePanel';
 import ProductionView from './components/ProductionView';
 import MultichannelView from './components/MultichannelView';
 import TeamsView from './components/TeamsView';
@@ -266,6 +267,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
 
           {currentView === 'workspace' && activeProject && (
             <div className="space-y-6">
+              <PipelinePanel episodeId={activeProject.id} episodeTitle={activeProject.title} />
               <ProductionStagesPanel episodeId={activeProject.id} />
               <WorkspaceView project={activeProject} onUpdateProject={handleUpdateProject} />
             </div>

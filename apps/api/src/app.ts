@@ -84,6 +84,18 @@ function registerRoutes(
       reply.code(400);
       return { error: 'title is required' };
     }
+
+    const settings = await getSettings();
+    const activeCount = await storage.countActiveLocalEpisodes();
+    if (activeCount >= settings.maxActiveEpisodes) {
+      reply.code(409);
+      return {
+        error: `Máximo ${settings.maxActiveEpisodes} episodio(s) activo(s) en el VPS. Archiva o publica el actual antes de crear otro.`,
+        activeCount,
+        maxActiveEpisodes: settings.maxActiveEpisodes,
+      };
+    }
+
     const episode = await storage.createEpisode({ title });
     const detail = await storage.getEpisode(episode.id);
     if (detail) {
@@ -227,12 +239,21 @@ function registerRoutes(
     const gemini = await getSecret('GEMINI_API_KEY');
     const openai = await getSecret('OPENAI_API_KEY');
     const anthropic = await getSecret('ANTHROPIC_API_KEY');
+    const elevenlabs = await getSecret('ELEVENLABS_API_KEY');
     const hasAiKey = Boolean(gemini || openai || anthropic);
     const provider = await resolveProvider();
+    const settings = await getSettings();
     return {
       demoMode: !hasAiKey || provider.name === 'demo',
       aiProvider: provider.name,
+      ttsProvider: settings.ttsProvider,
+      ttsConfigured: Boolean(elevenlabs) || settings.ttsProvider === 'piper',
     };
+  });
+
+  app.get(route(prefix, '/system/storage'), async () => {
+    const { getStorageStats } = await import('./system/storage.js');
+    return getStorageStats(storage);
   });
 
   app.get(route(prefix, '/analytics'), async () => {
@@ -265,22 +286,48 @@ function registerRoutes(
     const episode = body.episodeId ? await storage.getEpisode(body.episodeId) : null;
     const title = episode?.title ?? 'Untitled';
     const description = episode?.content?.seoDescription ?? '';
+    let videoPath = '';
+    if (body.episodeId) {
+      const dir = await storage.getEpisodeDirectory(body.episodeId);
+      if (dir) {
+        const pathMod = await import('node:path');
+        const candidate = pathMod.join(dir, '06-video', 'episode.mp4');
+        const { existsSync } = await import('node:fs');
+        if (existsSync(candidate)) videoPath = candidate;
+      }
+    }
     const { uploadToYouTube } = await import('./integrations/youtube.js');
-    return uploadToYouTube(title, description, '');
+    const result = await uploadToYouTube(title, description, videoPath);
+    if (body.episodeId && episode && result.videoId) {
+      await storage.updateEpisode(body.episodeId, {
+        status: 'published',
+        content: { youtubeVideoId: result.videoId },
+      });
+    }
+    return result;
+  });
+
+  app.get(route(prefix, '/integrations/elevenlabs/voices'), async () => {
+    const { listElevenLabsVoices } = await import('./integrations/elevenlabs.js');
+    return { voices: await listElevenLabsVoices() };
   });
 
   app.post(route(prefix, '/integrations/elevenlabs/tts'), async (request) => {
     const body = (request.body ?? {}) as { text?: string; voiceId?: string; episodeId?: string };
-    const { synthesizeSpeech } = await import('./integrations/elevenlabs.js');
+    const { synthesizeEpisodeSpeech } = await import('./integrations/tts.js');
     let saveDir: string | undefined;
     if (body.episodeId) {
       const episode = await storage.getEpisode(body.episodeId);
       if (episode) {
-        const path = await import('node:path');
-        saveDir = path.join(resolveStoragePath(), episode.workspacePath, '05-audio');
+        const pathMod = await import('node:path');
+        saveDir = pathMod.join(resolveStoragePath(), episode.workspacePath, '05-audio');
       }
     }
-    const result = await synthesizeSpeech(body.text ?? '', body.voiceId, { saveDir });
+    const result = await synthesizeEpisodeSpeech({
+      text: body.text ?? '',
+      voiceId: body.voiceId,
+      saveDir,
+    });
     if (body.episodeId && result.audioUrl && !result.isDemo) {
       const episode = await storage.getEpisode(body.episodeId);
       if (episode) {
@@ -290,6 +337,151 @@ function registerRoutes(
       }
     }
     return result;
+  });
+
+  app.post(route(prefix, '/episodes/:id/render'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await storage.getEpisode(id);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'episodio archivado — restáuralo desde Drive para editar' };
+    }
+    const { renderEpisodeVideo } = await import('./media/render.js');
+    const sceneUrls = episode.content.scenes.map(s => s.imageUrl).filter(Boolean);
+    const result = await renderEpisodeVideo(dir, {
+      sceneImageUrls: sceneUrls,
+      thumbnailUrl: episode.content.thumbnailUrl,
+    });
+    if (result.ok) {
+      await storage.updateEpisode(id, {
+        content: { videoUrl: '/api/episodes/media/video' },
+      });
+    }
+    return result;
+  });
+
+  app.post(route(prefix, '/episodes/:id/shorts'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'episodio no disponible en disco local' };
+    }
+    const { renderShortVideo } = await import('./media/render.js');
+    const result = await renderShortVideo(dir);
+    if (result.ok) {
+      await storage.updateEpisode(id, {
+        content: { shortsUrl: '/api/episodes/media/short' },
+      });
+    }
+    return result;
+  });
+
+  app.post(route(prefix, '/episodes/:id/confirm-publish'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await storage.getEpisode(id);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const updated = await storage.updateEpisode(id, {
+      content: { publishConfirmed: true },
+      status: 'published',
+    });
+    const settings = await getSettings();
+    if (settings.autoArchiveOnPublish) {
+      const { createJob } = await import('./jobs/store.js');
+      const { enqueueJob } = await import('./jobs/queue.js');
+      const job = await createJob(id, { type: 'archive' });
+      await enqueueJob(job);
+    }
+    return updated;
+  });
+
+  app.post(route(prefix, '/episodes/:id/archive'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await storage.getEpisode(id);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'ya archivado o no está en disco' };
+    }
+    const { archiveEpisodeWorkspace } = await import('./archive/drive.js');
+    const result = await archiveEpisodeWorkspace(resolveStoragePath(), episode.workspacePath);
+    if (result.ok && result.drivePath) {
+      await storage.markArchived(episode, result.drivePath, episode.workspacePath);
+    }
+    return result;
+  });
+
+  app.post(route(prefix, '/episodes/:id/restore'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await storage.getEpisode(id);
+    if (!episode || episode.archiveStatus !== 'archived') {
+      reply.code(400);
+      return { error: 'episodio no está archivado' };
+    }
+    const activeCount = await storage.countActiveLocalEpisodes();
+    const settings = await getSettings();
+    if (activeCount >= settings.maxActiveEpisodes) {
+      reply.code(409);
+      return { error: 'libera espacio archivando otro episodio activo primero' };
+    }
+    const workspace = episode.localWorkspace ?? `${episode.id}-${episode.slug}`;
+    const { restoreEpisodeWorkspace } = await import('./archive/drive.js');
+    const result = await restoreEpisodeWorkspace(resolveStoragePath(), workspace);
+    if (result.ok) {
+      await storage.removeFromArchivedIndex(id);
+    }
+    return result;
+  });
+
+  app.post(route(prefix, '/episodes/:id/thumbnail'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await storage.getEpisode(id);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'episodio no en disco local' };
+    }
+    const { withProvider } = await import('./ai/router.js');
+    const imageUrl = await withProvider('image', p =>
+      p.generateImage(`Miniatura YouTube: ${episode.title}`, { aspectRatio: '16:9' }),
+    );
+    const { saveThumbnailToDisk } = await import('./media/render.js');
+    await saveThumbnailToDisk(dir, imageUrl);
+    await storage.updateEpisode(id, {
+      content: { thumbnailUrl: imageUrl },
+    });
+    return { imageUrl, saved: true };
+  });
+
+  app.post(route(prefix, '/episodes/:id/pipeline'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await storage.getEpisode(id);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const { createJob } = await import('./jobs/store.js');
+    const { enqueueJob } = await import('./jobs/queue.js');
+    const job = await createJob(id, { type: 'pipeline' });
+    await enqueueJob(job);
+    reply.code(201);
+    return job;
   });
 
   app.post(route(prefix, '/calendar/events'), async (request, reply) => {

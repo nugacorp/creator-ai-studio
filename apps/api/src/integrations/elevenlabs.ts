@@ -1,5 +1,12 @@
 import { getSecret } from '../secrets/resolver.js';
 
+export interface ElevenLabsVoice {
+  voiceId: string;
+  name: string;
+  category?: string;
+  previewUrl?: string;
+}
+
 export interface ElevenLabsResult {
   audioUrl: string;
   isDemo: boolean;
@@ -54,4 +61,31 @@ export async function synthesizeSpeech(
 
   const b64 = buffer.toString('base64');
   return { audioUrl: `data:audio/mpeg;base64,${b64}`, isDemo: false };
+}
+
+/** List voices from the connected ElevenLabs account (for CAS narration picker). */
+export async function listElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
+  const apiKey = await getSecret('ELEVENLABS_API_KEY');
+  if (!apiKey) return [];
+
+  const response = await fetch('https://api.elevenlabs.io/v1/voices', {
+    headers: { 'xi-api-key': apiKey },
+  });
+  if (!response.ok) return [];
+
+  const data = (await response.json()) as {
+    voices?: Array<{
+      voice_id: string;
+      name: string;
+      category?: string;
+      preview_url?: string;
+    }>;
+  };
+
+  return (data.voices ?? []).map(v => ({
+    voiceId: v.voice_id,
+    name: v.name,
+    category: v.category,
+    previewUrl: v.preview_url,
+  }));
 }
