@@ -164,7 +164,12 @@ export default function SettingsView() {
   const handleSaveSecretsOnly = async () => {
     setSaveError(null);
     setSecretsSaveMessage(null);
-    if (Object.keys(draftSecrets).length === 0) {
+    const patch = Object.fromEntries(
+      Object.entries(draftSecrets)
+        .map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value] as const)
+        .filter(([, value]) => typeof value === 'string' && value.length > 0),
+    ) as SecretsPatch;
+    if (Object.keys(patch).length === 0) {
       setSaveError('Escribe al menos una API key antes de guardar.');
       return;
     }
@@ -175,9 +180,9 @@ export default function SettingsView() {
       return;
     }
     setSecretsSaving(true);
-    const savedLabels = savedFieldLabels(draftSecrets);
+    const savedLabels = savedFieldLabels(patch);
     try {
-      const res = await updateSecrets(draftSecrets);
+      const res = await updateSecrets(patch);
       setSecretItems(res.items);
       setDraftSecrets({});
       loadSecrets();
