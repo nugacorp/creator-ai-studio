@@ -9,6 +9,10 @@ build/
 # Local episode storage (runtime-generated content)
 episodes/
 
+# Local job queue storage (runtime-generated content)
+jobs/
+apps/api/jobs/
+
 # Test artifacts
 coverage/
 
