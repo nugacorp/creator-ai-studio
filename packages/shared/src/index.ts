@@ -21,10 +21,20 @@ export type EpisodeStatus = (typeof EPISODE_STATUSES)[number];
 export interface EpisodeSummary {
   /** Stable unique identifier. */
   id: string;
+  /** URL-friendly identifier derived from the title. */
+  slug: string;
   /** Human-readable episode title. */
   title: string;
   /** Current lifecycle status. */
   status: EpisodeStatus;
   /** ISO-8601 timestamp of when the episode was created. */
   createdAt: string;
+  /** ISO-8601 timestamp of the last update. */
+  updatedAt: string;
+}
+
+/** Input accepted when creating a new episode. */
+export interface CreateEpisodeInput {
+  /** Human-readable episode title. The slug is derived from it. */
+  title: string;
 }

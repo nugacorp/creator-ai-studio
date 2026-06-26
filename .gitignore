@@ -6,6 +6,9 @@ dist/
 build/
 .vite/
 
+# Local episode storage (runtime-generated content)
+episodes/
+
 # Test artifacts
 coverage/
 

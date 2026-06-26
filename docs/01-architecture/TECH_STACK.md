@@ -8,7 +8,7 @@ Technology Stack and Deployment Strategy
 
 ## Version
 
-0.1.0
+0.2.0
 
 ## Status
 
@@ -70,6 +70,30 @@ Promotion flow:
 - **Coolify** is the recommended deployment platform for the `staging` environment, providing a self-hosted PaaS layer on the VPS for testing and integration.
 - `main` represents the stable production state and is deployed only after validation in `staging`.
 
+### Technology Stack
+
+The executable MVP is an npm workspaces monorepo:
+
+| Area | Technology | Location |
+|---|---|---|
+| Shared types | TypeScript | `packages/shared` |
+| API | Fastify (Node.js, ESM) | `apps/api` |
+| Web dashboard | React + Vite | `apps/web` |
+| Production worker | Node.js (placeholder) | `workers/production` |
+| Tests | Vitest | per workspace |
+| Build / typecheck | TypeScript (`tsc`) + Vite | per workspace |
+
+### Local Storage
+
+The first functional flow persists episodes to the local filesystem; no external
+services (OpenAI, Claude, ElevenLabs, YouTube) are called.
+
+- Storage module: `apps/api/src/storage`.
+- Root directory: `LOCAL_STORAGE_PATH` if set, otherwise `episodes/` (git-ignored).
+- `POST /episodes` creates `episodes/<id>-<slug>/` with `episode.json`,
+  `00-control/status.json`, and stage folders `01-research` … `12-review`
+  (each preserved with a `.gitkeep`).
+
 ### Operational Rules
 
 - No force push to shared branches (`main`, `staging`).
@@ -89,3 +113,4 @@ README.md, DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json
 | Date | Version | Author | Change |
 |---|---:|---|---|
 | 2026-06-25 | 0.1.0 | Claude Code | Initial technology stack and deployment strategy document created. |
+| 2026-06-25 | 0.2.0 | Claude Code | Documented MVP technology stack and local episode storage. |

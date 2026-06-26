@@ -8,7 +8,7 @@ Creator AI Studio Repository Entry Point
 
 ## Version
 
-0.2.0
+0.3.0
 
 ## Status
 
@@ -32,7 +32,7 @@ Provide the initial repository entry point for Creator AI Studio during Phase 0:
 
 ## Scope
 
-This repository currently contains the CAS OS documentation infrastructure only.
+This repository contains the CAS OS documentation infrastructure and the executable MVP (an npm workspaces monorepo: `apps/api`, `apps/web`, `workers/production`, `packages/shared`).
 
 Official entry points:
 
@@ -77,6 +77,56 @@ Operational rules:
 
 For the full rationale and platform details, see [docs/01-architecture/TECH_STACK.md](docs/01-architecture/TECH_STACK.md).
 
+### Local Development
+
+Requirements: Node.js >= 20 and npm.
+
+Install dependencies (from the repository root):
+
+```bash
+npm install
+```
+
+If `npm install` fails behind a corporate proxy with a TLS error such as
+`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, make Node use the system certificate store:
+
+```bash
+NODE_OPTIONS=--use-system-ca npm install
+```
+
+Run the API (Fastify, defaults to `http://localhost:3000`):
+
+```bash
+npm run start --workspace @creator-ai-studio/api
+```
+
+Endpoints: `GET /health`, `GET /episodes`, `POST /episodes` (body `{ "title": "..." }`).
+
+Run the web dashboard (Vite dev server, defaults to `http://localhost:5173`):
+
+```bash
+npm run dev --workspace @creator-ai-studio/web
+```
+
+Set `VITE_API_BASE_URL` (see [.env.example](.env.example)) so the dashboard can reach the API.
+
+Run the production worker (placeholder):
+
+```bash
+npm run start --workspace @creator-ai-studio/production-worker
+```
+
+Quality gates (run from the root):
+
+```bash
+npm run test
+npm run typecheck
+npm run build
+```
+
+Episodes are stored on the local filesystem under `LOCAL_STORAGE_PATH` (default
+`episodes/`, which is git-ignored). No external services are called.
+
 ## Dependencies
 
 None
@@ -92,3 +142,4 @@ MASTER_INDEX.md, PROJECT_STATE.md, docs/01-architecture/TECH_STACK.md
 | 2026-06-25 | 0.1.0 | Hermes | Initial repository entry point created. |
 | 2026-06-25 | 0.1.0 | Hermes | Normalized document to official documentation standard. |
 | 2026-06-25 | 0.2.0 | Claude Code | Added branching and deployment strategy (main / staging / feature). |
+| 2026-06-25 | 0.3.0 | Claude Code | Added Local Development instructions (install, API, web, worker, CA note). |
