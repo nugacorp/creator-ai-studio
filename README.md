@@ -8,7 +8,7 @@ Creator AI Studio Repository Entry Point
 
 ## Version
 
-0.6.0
+0.7.0
 
 ## Status
 
@@ -100,13 +100,14 @@ Run the API (Fastify, defaults to `http://localhost:3000`):
 npm run start --workspace @creator-ai-studio/api
 ```
 
-Endpoints:
+Endpoints are available under `/api` for same-origin staging traffic and remain
+available without the prefix for local/backward compatibility:
 
-- `GET /health` — service status.
-- `GET /episodes` — list episodes.
-- `POST /episodes` — create an episode (body `{ "title": "..." }`).
-- `GET /episodes/:id` — episode detail (metadata, workspace path and stages); `404` if not found.
-- `PATCH /episodes/:id/stages/:stage` — update a stage's status (body `{ "status": "in_progress" }`); `404` if the episode is missing, `400` if the stage or status is invalid.
+- `GET /api/health` and `GET /health` — service status.
+- `GET /api/episodes` and `GET /episodes` — list episodes.
+- `POST /api/episodes` and `POST /episodes` — create an episode (body `{ "title": "..." }`).
+- `GET /api/episodes/:id` and `GET /episodes/:id` — episode detail (metadata, workspace path and stages); `404` if not found.
+- `PATCH /api/episodes/:id/stages/:stage` and `PATCH /episodes/:id/stages/:stage` — update a stage's status (body `{ "status": "in_progress" }`); `404` if the episode is missing, `400` if the stage or status is invalid.
 
 Run the web dashboard (Vite dev server, defaults to `http://localhost:5173`):
 
@@ -114,7 +115,9 @@ Run the web dashboard (Vite dev server, defaults to `http://localhost:5173`):
 npm run dev --workspace @creator-ai-studio/web
 ```
 
-Set `VITE_API_BASE_URL` (see [.env.example](.env.example)) so the dashboard can reach the API.
+By default the dashboard calls the same-origin API base path `/api`. Set
+`VITE_API_BASE_URL` (see [.env.example](.env.example)) only when a local or
+non-staging environment needs to override that base URL.
 
 The dashboard's visual design (dark "Creator OS" theme, sidebar/header layout,
 cards and navigation) was integrated from the Google AI Studio UI/UX reference
@@ -159,3 +162,4 @@ MASTER_INDEX.md, PROJECT_STATE.md, docs/01-architecture/TECH_STACK.md
 | 2026-06-25 | 0.4.0 | Claude Code | Documented GET /episodes/:id (episode detail with stages). |
 | 2026-06-25 | 0.5.0 | Claude Code | Documented PATCH /episodes/:id/stages/:stage (manual stage transitions). |
 | 2026-06-25 | 0.6.0 | Claude Code | Integrated Google AI Studio UI/UX dashboard design (Tailwind v4, sidebar/header layout). |
+| 2026-06-25 | 0.7.0 | Hermes | Documented same-origin `/api` dashboard/API routing for staging. |

@@ -30,10 +30,13 @@ describe('api routes', () => {
     await rm(storageDir, { recursive: true, force: true });
   });
 
-  async function createEpisode(title: string): Promise<EpisodeSummary> {
+  async function createEpisode(
+    title: string,
+    basePath = '',
+  ): Promise<EpisodeSummary> {
     const response = await app.inject({
       method: 'POST',
-      url: '/episodes',
+      url: `${basePath}/episodes`,
       payload: { title },
     });
     return response.json() as EpisodeSummary;
@@ -49,8 +52,25 @@ describe('api routes', () => {
     });
   });
 
+  it('GET /api/health returns the service status', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/health' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      status: 'ok',
+      service: 'creator-ai-studio-api',
+    });
+  });
+
   it('GET /episodes returns an empty list when none exist', async () => {
     const response = await app.inject({ method: 'GET', url: '/episodes' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([]);
+  });
+
+  it('GET /api/episodes returns an empty list when none exist', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/episodes' });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual([]);
@@ -73,6 +93,22 @@ describe('api routes', () => {
     expect(episode.id).toBeTruthy();
     expect(episode.createdAt).toBeTruthy();
     expect(episode.updatedAt).toBeTruthy();
+  });
+
+  it('POST /api/episodes creates an episode', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/episodes',
+      payload: { title: 'Episodio API' },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const episode = response.json() as EpisodeSummary;
+    expect(episode).toMatchObject({
+      title: 'Episodio API',
+      slug: 'episodio-api',
+      status: 'draft',
+    });
   });
 
   it('GET /episodes returns the created episode', async () => {
@@ -143,6 +179,21 @@ describe('api routes', () => {
     expect(detail.stages[0]?.status).toBe('completed');
   });
 
+  it('GET /api/episodes/:id returns the episode detail with stages', async () => {
+    const episode = await createEpisode('Episodio API', '/api');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/episodes/${episode.id}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const detail = response.json() as EpisodeDetail;
+    expect(detail.id).toBe(episode.id);
+    expect(detail.workspacePath).toBe(`${episode.id}-${episode.slug}`);
+    expect(detail.stages).toHaveLength(EPISODE_STAGES.length);
+  });
+
   it('GET /episodes/:id returns 404 for a missing episode', async () => {
     const response = await app.inject({
       method: 'GET',
@@ -168,6 +219,22 @@ describe('api routes', () => {
     const response = await app.inject({
       method: 'PATCH',
       url: `/episodes/${episode.id}/stages/research`,
+      payload: { status: 'in_progress' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const detail = response.json() as EpisodeDetail;
+    expect(
+      detail.stages.find((stage) => stage.stage === 'research')?.status,
+    ).toBe('in_progress');
+  });
+
+  it('PATCH /api/episodes/:id/stages/:stage moves a stage to in_progress', async () => {
+    const episode = await createEpisode('Episodio API', '/api');
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/episodes/${episode.id}/stages/research`,
       payload: { status: 'in_progress' },
     });
 

@@ -8,7 +8,7 @@ Technology Stack and Deployment Strategy
 
 ## Version
 
-0.5.0
+0.6.0
 
 ## Status
 
@@ -70,6 +70,22 @@ Promotion flow:
 - **Coolify** is the recommended deployment platform for the `staging` environment, providing a self-hosted PaaS layer on the VPS for testing and integration.
 - `main` represents the stable production state and is deployed only after validation in `staging`.
 
+### Staging Web/API Routing
+
+Staging uses one public web domain. The dashboard frontend calls the API through
+the same-origin base path `/api`; it does not require a separate public API
+domain by default.
+
+- Default frontend API base path: `/api`.
+- Optional override: `VITE_API_BASE_URL` for non-standard local environments.
+- Web container: nginx serves static Vite assets and proxies `/api` to
+  `http://api:3000/api` on the internal Compose network.
+- API container: Fastify serves canonical `/api/*` endpoints and keeps
+  unprefixed `/health` and `/episodes` endpoints for local/backward
+  compatibility.
+- CORS is not the primary staging strategy because browser traffic stays
+  same-origin through nginx.
+
 ### Technology Stack
 
 The executable MVP is an npm workspaces monorepo:
@@ -90,12 +106,14 @@ services (OpenAI, Claude, ElevenLabs, YouTube) are called.
 
 - Storage module: `apps/api/src/storage`.
 - Root directory: `LOCAL_STORAGE_PATH` if set, otherwise `episodes/` (git-ignored).
-- `POST /episodes` creates `episodes/<id>-<slug>/` with `episode.json`,
+- `POST /api/episodes` creates `episodes/<id>-<slug>/` with `episode.json`,
   `00-control/status.json`, `00-control/stages.json`, and stage folders
-  `01-research` … `12-review` (each preserved with a `.gitkeep`).
-- `GET /episodes/:id` returns the episode detail: summary metadata, the
+  `01-research` … `12-review` (each preserved with a `.gitkeep`). The
+  unprefixed `POST /episodes` endpoint remains available for compatibility.
+- `GET /api/episodes/:id` returns the episode detail: summary metadata, the
   workspace path (relative to the storage root), and the production stages with
   their status (and expected files where applicable). Returns `404` if missing.
+  The unprefixed `GET /episodes/:id` endpoint remains available for compatibility.
 
 ### Production Stages
 
@@ -108,9 +126,11 @@ stage model lives in `packages/shared`; stage state is persisted per episode in
 `00-control/stages.json`.
 
 Stages are advanced manually (before real agents are connected) via
-`PATCH /episodes/:id/stages/:stage` with a body of `{ "status": "..." }`. Simple
-MVP transition rules (`canTransitionStage` in `packages/shared`) allow moving to
-any other allowed status but reject a no-op transition to the current status.
+`PATCH /api/episodes/:id/stages/:stage` with a body of `{ "status": "..." }`.
+The unprefixed `PATCH /episodes/:id/stages/:stage` endpoint remains available
+for compatibility. Simple MVP transition rules (`canTransitionStage` in
+`packages/shared`) allow moving to any other allowed status but reject a no-op
+transition to the current status.
 
 ### Dashboard UI/UX
 
@@ -151,3 +171,4 @@ README.md, DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json
 | 2026-06-25 | 0.3.0 | Claude Code | Documented production stages model and GET /episodes/:id. |
 | 2026-06-25 | 0.4.0 | Claude Code | Documented manual stage transitions (PATCH /episodes/:id/stages/:stage). |
 | 2026-06-25 | 0.5.0 | Claude Code | Documented Google AI Studio UI/UX dashboard integration (visual reference). |
+| 2026-06-25 | 0.6.0 | Hermes | Documented same-origin `/api` nginx proxy routing for staging. |

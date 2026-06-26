@@ -26,15 +26,32 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
   const storage = options.storage ?? new EpisodeStorage(resolveStoragePath());
 
-  app.get('/health', async () => {
+  const prefixes = ['', '/api'] as const;
+  for (const prefix of prefixes) {
+    registerRoutes(app, storage, prefix);
+  }
+
+  return app;
+}
+
+function route(prefix: string, path: string): string {
+  return `${prefix}${path}`;
+}
+
+function registerRoutes(
+  app: FastifyInstance,
+  storage: EpisodeStorage,
+  prefix: '' | '/api',
+): void {
+  app.get(route(prefix, '/health'), async () => {
     return { status: 'ok', service: 'creator-ai-studio-api' };
   });
 
-  app.get('/episodes', async (): Promise<EpisodeSummary[]> => {
+  app.get(route(prefix, '/episodes'), async (): Promise<EpisodeSummary[]> => {
     return storage.listEpisodes();
   });
 
-  app.get('/episodes/:id', async (request, reply) => {
+  app.get(route(prefix, '/episodes/:id'), async (request, reply) => {
     const { id } = request.params as { id: string };
     const detail = await storage.getEpisode(id);
 
@@ -46,7 +63,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return detail;
   });
 
-  app.post('/episodes', async (request, reply) => {
+  app.post(route(prefix, '/episodes'), async (request, reply) => {
     const body = (request.body ?? {}) as Partial<CreateEpisodeInput>;
     const title = typeof body.title === 'string' ? body.title.trim() : '';
 
@@ -60,7 +77,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return episode;
   });
 
-  app.patch('/episodes/:id/stages/:stage', async (request, reply) => {
+  app.patch(route(prefix, '/episodes/:id/stages/:stage'), async (request, reply) => {
     const { id, stage } = request.params as { id: string; stage: string };
     const body = (request.body ?? {}) as Partial<UpdateStageInput>;
     const status = body.status;
@@ -91,6 +108,4 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
     return storage.setStageStatus(id, stage, status);
   });
-
-  return app;
 }
