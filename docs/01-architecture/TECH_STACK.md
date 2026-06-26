@@ -8,7 +8,7 @@ Technology Stack and Deployment Strategy
 
 ## Version
 
-0.4.0
+0.5.0
 
 ## Status
 
@@ -78,7 +78,7 @@ The executable MVP is an npm workspaces monorepo:
 |---|---|---|
 | Shared types | TypeScript | `packages/shared` |
 | API | Fastify (Node.js, ESM) | `apps/api` |
-| Web dashboard | React + Vite | `apps/web` |
+| Web dashboard | React + Vite + Tailwind CSS v4 + lucide-react | `apps/web` |
 | Production worker | Node.js (placeholder) | `workers/production` |
 | Tests | Vitest | per workspace |
 | Build / typecheck | TypeScript (`tsc`) + Vite | per workspace |
@@ -112,6 +112,22 @@ Stages are advanced manually (before real agents are connected) via
 MVP transition rules (`canTransitionStage` in `packages/shared`) allow moving to
 any other allowed status but reject a no-op transition to the current status.
 
+### Dashboard UI/UX
+
+The `apps/web` dashboard's visual design — dark "Creator OS" theme, sidebar +
+header layout, card components, navigation and styling — was integrated from the
+Google AI Studio UI/UX reference repository
+([nugacorp/Creator-AI-Studio-ui-ux](https://github.com/nugacorp/Creator-AI-Studio-ui-ux))
+as a **visual reference only**.
+
+- Adopted: layout shell (`Sidebar`, `Header`), the dark theme and typography
+  (Tailwind CSS v4 `@theme`), card/pill/button styling, `lucide-react` icons.
+- Discarded: the Gemini Express server (`server.ts`, `@google/genai`), all
+  `GEMINI_API_KEY` runtime config, mock data, and views that depend on external
+  AI calls (Copilot, Library image generation, Analytics charts, etc.).
+- The dashboard talks exclusively to the local API; no external services are
+  called and no secrets are required.
+
 ### Operational Rules
 
 - No force push to shared branches (`main`, `staging`).
@@ -134,3 +150,4 @@ README.md, DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json
 | 2026-06-25 | 0.2.0 | Claude Code | Documented MVP technology stack and local episode storage. |
 | 2026-06-25 | 0.3.0 | Claude Code | Documented production stages model and GET /episodes/:id. |
 | 2026-06-25 | 0.4.0 | Claude Code | Documented manual stage transitions (PATCH /episodes/:id/stages/:stage). |
+| 2026-06-25 | 0.5.0 | Claude Code | Documented Google AI Studio UI/UX dashboard integration (visual reference). |

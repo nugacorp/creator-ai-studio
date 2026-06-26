@@ -170,4 +170,35 @@ describe('App', () => {
       expect(screen.getByText('research: in_progress')).toBeInTheDocument(),
     );
   });
+
+  it('renders the sidebar navigation', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse([]));
+
+    render(<App />);
+
+    const nav = screen.getByRole('navigation', { name: /main navigation/i });
+    expect(
+      within(nav).getByRole('button', { name: 'Episodes' }),
+    ).toBeInTheDocument();
+    expect(
+      within(nav).getByRole('button', { name: 'Analytics' }),
+    ).toBeInTheDocument();
+    expect(
+      within(nav).getByRole('button', { name: 'Settings' }),
+    ).toBeInTheDocument();
+  });
+
+  it('navigates to the Analytics placeholder view', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse([]));
+
+    render(<App />);
+
+    const nav = screen.getByRole('navigation', { name: /main navigation/i });
+    fireEvent.click(within(nav).getByRole('button', { name: 'Analytics' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Analytics' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No episode selected')).not.toBeInTheDocument();
+  });
 });

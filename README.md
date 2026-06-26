@@ -8,7 +8,7 @@ Creator AI Studio Repository Entry Point
 
 ## Version
 
-0.5.0
+0.6.0
 
 ## Status
 
@@ -116,6 +116,13 @@ npm run dev --workspace @creator-ai-studio/web
 
 Set `VITE_API_BASE_URL` (see [.env.example](.env.example)) so the dashboard can reach the API.
 
+The dashboard's visual design (dark "Creator OS" theme, sidebar/header layout,
+cards and navigation) was integrated from the Google AI Studio UI/UX reference
+([nugacorp/Creator-AI-Studio-ui-ux](https://github.com/nugacorp/Creator-AI-Studio-ui-ux))
+as a visual reference only. Its Gemini server, secrets and mock data were **not**
+imported — the dashboard talks exclusively to the local API above. Styling uses
+Tailwind CSS v4 and `lucide-react` icons.
+
 Run the production worker (placeholder):
 
 ```bash
@@ -151,3 +158,4 @@ MASTER_INDEX.md, PROJECT_STATE.md, docs/01-architecture/TECH_STACK.md
 | 2026-06-25 | 0.3.0 | Claude Code | Added Local Development instructions (install, API, web, worker, CA note). |
 | 2026-06-25 | 0.4.0 | Claude Code | Documented GET /episodes/:id (episode detail with stages). |
 | 2026-06-25 | 0.5.0 | Claude Code | Documented PATCH /episodes/:id/stages/:stage (manual stage transitions). |
+| 2026-06-25 | 0.6.0 | Claude Code | Integrated Google AI Studio UI/UX dashboard design (Tailwind v4, sidebar/header layout). |
