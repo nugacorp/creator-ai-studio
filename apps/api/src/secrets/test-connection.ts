@@ -1,5 +1,5 @@
 import type { SecretProvider, SecretTestResult } from '@creator-ai-studio/shared';
-import { getGeminiAuth, getValidGoogleAccessToken } from './google-auth.js';
+import { getGeminiAuth, getValidGoogleAccessToken, googleOAuthHeaders, formatGoogleApiTestError, hasYoutubeOAuthScope } from './google-auth.js';
 import { getSecret, getSecretByField } from './resolver.js';
 
 export async function testSecretProvider(provider: SecretProvider): Promise<SecretTestResult> {
@@ -14,17 +14,18 @@ export async function testSecretProvider(provider: SecretProvider): Promise<Secr
         const url =
           auth.mode === 'api_key'
             ? `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(auth.value)}`
-            : 'https://generativelanguage.googleapis.com/v1beta/models';
+            : 'https://generativelanguage.googleapis.com/v1/models';
         if (auth.mode === 'oauth') {
-          headers.Authorization = `Bearer ${auth.accessToken}`;
+          Object.assign(headers, await googleOAuthHeaders(auth.accessToken));
         }
         const res = await fetch(url, { headers });
+        const body = await res.text().catch(() => '');
         return {
           provider,
           ok: res.ok,
           message: res.ok
             ? `Conexión con Gemini OK (${auth.mode === 'oauth' ? 'OAuth' : 'API key'})`
-            : `Gemini respondió ${res.status}`,
+            : formatGoogleApiTestError('Gemini', res.status, body),
         };
       }
       case 'openai': {
@@ -74,19 +75,28 @@ export async function testSecretProvider(provider: SecretProvider): Promise<Secr
         };
       }
       case 'youtube': {
-        const token =
-          (await getSecretByField('youtubeAccessToken')) ?? (await getValidGoogleAccessToken());
+        const dedicated = await getSecretByField('youtubeAccessToken');
+        const token = dedicated ?? (await getValidGoogleAccessToken());
         if (!token) {
           return { provider, ok: false, message: 'YouTube no conectado (OAuth o access token)' };
+        }
+        if (!dedicated && !(await hasYoutubeOAuthScope())) {
+          return {
+            provider,
+            ok: false,
+            message:
+              'OAuth sin permisos YouTube. Abre la tarjeta YouTube y pulsa Reconectar (no uses solo Gemini).',
+          };
         }
         const res = await fetch(
           'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
           { headers: { Authorization: `Bearer ${token}` } },
         );
+        const body = await res.text().catch(() => '');
         return {
           provider,
           ok: res.ok,
-          message: res.ok ? 'Token de YouTube válido' : `YouTube respondió ${res.status}`,
+          message: res.ok ? 'Token de YouTube válido' : formatGoogleApiTestError('YouTube', res.status, body),
         };
       }
       case 'webhook': {

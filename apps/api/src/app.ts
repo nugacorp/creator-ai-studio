@@ -269,9 +269,10 @@ function registerRoutes(
         views: yt.views,
         subscribers: yt.subscribers,
         watchTimeHours: yt.watchTimeHours,
-        engagement: '4.2%',
+        engagement: yt.engagement,
       },
-      chartData: [120, 180, 150, 220, 280, 310, 290],
+      chartData: yt.chartData,
+      channelDistribution: yt.channelDistribution,
     };
   });
 

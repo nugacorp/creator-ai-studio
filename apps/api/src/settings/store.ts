@@ -9,13 +9,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   ttsAccent: 'es-ES',
   aiProviderDefault: 'gemini',
   ttsProvider: 'elevenlabs',
-  autoArchiveOnPublish: true,
+  autoArchiveOnPublish: false,
   maxActiveEpisodes: 1,
   diskWarningThresholdGb: 5,
 };
 
 function settingsPath(): string {
-  return path.join(resolveStoragePath(), '..', 'settings.json');
+  return path.join(resolveStoragePath(), 'settings.json');
 }
 
 export async function getSettings(): Promise<AppSettings> {

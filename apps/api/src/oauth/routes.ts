@@ -4,6 +4,7 @@ import {
   exchangeGoogleCode,
   getGoogleOAuthClient,
   googleOAuthRedirectUri,
+  hasGoogleOAuthRefreshToken,
   persistGoogleTokens,
   resolvePublicBaseUrl,
   type GoogleOAuthPurpose,
@@ -23,7 +24,7 @@ export function registerOAuthRoutes(app: FastifyInstance, prefix: '' | '/api'): 
   const base = prefix === '/api' ? '/api/oauth' : '/oauth';
 
   app.get(`${base}/google/start`, async (request, reply) => {
-    const query = request.query as { purpose?: string; returnUrl?: string };
+    const query = request.query as { purpose?: string; returnUrl?: string; forceConsent?: string };
     const purpose = query.purpose ?? 'gemini';
     if (!isGoogleOAuthPurpose(purpose)) {
       reply.code(400);
@@ -45,12 +46,15 @@ export function registerOAuthRoutes(app: FastifyInstance, prefix: '' | '/api'): 
     const returnUrl = query.returnUrl?.trim() || settingsReturnUrl(publicBaseUrl, { oauth: purpose });
 
     try {
+      const forceConsent = query.forceConsent === 'true';
+      const hasRefresh = await hasGoogleOAuthRefreshToken();
       const state = await signOAuthState({ purpose, returnUrl });
       const authorizeUrl = buildGoogleAuthorizeUrl({
         clientId: client.clientId,
         redirectUri,
         state,
         purpose,
+        promptConsent: forceConsent || !hasRefresh,
       });
       return { authorizeUrl, redirectUri };
     } catch (err) {

@@ -43,4 +43,11 @@ describe('secrets store', () => {
     const listed = await listSecretStatuses();
     expect(listed.find(i => i.provider === 'gemini')?.configured).toBe(true);
   });
+
+  it('stores secrets under the persistent episodes volume', async () => {
+    await patchSecrets({ geminiApiKey: 'AIza-test-key-1234' });
+    const secretsPath = path.join(tempDir, 'episodes', '.secrets', 'secrets.enc');
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(secretsPath)).toBe(true);
+  });
 });

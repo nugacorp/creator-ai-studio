@@ -68,3 +68,67 @@ export async function getGeminiAuth(): Promise<GeminiAuth | undefined> {
 export async function hasGeminiOAuth(): Promise<boolean> {
   return Boolean(await getSecret('GOOGLE_OAUTH_REFRESH_TOKEN') ?? await getSecret('GOOGLE_OAUTH_ACCESS_TOKEN'));
 }
+
+/** Project id/number for x-goog-user-project (required for Gemini OAuth REST calls). */
+export async function getGoogleCloudProjectId(): Promise<string | undefined> {
+  const fromEnv = process.env.GOOGLE_CLOUD_PROJECT ?? process.env.GOOGLE_CLOUD_PROJECT_NUMBER;
+  if (fromEnv?.trim()) {
+    return fromEnv.trim();
+  }
+
+  const clientId =
+    (await getSecret('GOOGLE_OAUTH_CLIENT_ID')) ??
+    (await getSecret('YOUTUBE_CLIENT_ID')) ??
+    process.env.GOOGLE_OAUTH_CLIENT_ID ??
+    process.env.YOUTUBE_CLIENT_ID;
+
+  if (!clientId) {
+    return undefined;
+  }
+
+  const numericPrefix = clientId.match(/^(\d+)-/);
+  if (numericPrefix) {
+    return numericPrefix[1];
+  }
+
+  return undefined;
+}
+
+export async function googleOAuthHeaders(accessToken: string): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+  };
+  const projectId = await getGoogleCloudProjectId();
+  if (projectId) {
+    headers['x-goog-user-project'] = projectId;
+  }
+  return headers;
+}
+
+export async function getGoogleOAuthScopes(): Promise<string> {
+  return (await getSecret('GOOGLE_OAUTH_SCOPES')) ?? '';
+}
+
+export async function hasYoutubeOAuthScope(): Promise<boolean> {
+  const scopes = await getGoogleOAuthScopes();
+  return scopes.includes('youtube');
+}
+
+export function formatGoogleApiTestError(
+  service: 'Gemini' | 'YouTube',
+  status: number,
+  body: string,
+): string {
+  if (status === 403) {
+    if (body.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
+      return service === 'YouTube'
+        ? 'Faltan permisos de YouTube. Pulsa Reconectar en la tarjeta YouTube (no solo Gemini).'
+        : 'Faltan permisos de Gemini. Pulsa Reconectar en Google Gemini.';
+    }
+    if (service === 'Gemini') {
+      return 'Gemini 403: habilita Generative Language API en Google Cloud y verifica OAuth (Reconectar).';
+    }
+    return 'YouTube 403: habilita YouTube Data API v3 en Google Cloud y reconecta OAuth en la tarjeta YouTube.';
+  }
+  return `${service} respondió ${status}`;
+}

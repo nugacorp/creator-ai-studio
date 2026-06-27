@@ -84,6 +84,7 @@ export default function SettingsView() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [secretItems, setSecretItems] = useState<SecretStatus[]>([]);
   const [encryptionAvailable, setEncryptionAvailable] = useState(false);
+  const [googleOAuthClientConfigured, setGoogleOAuthClientConfigured] = useState(false);
   const [draftSecrets, setDraftSecrets] = useState<SecretsPatch>({});
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [secretsSaved, setSecretsSaved] = useState(false);
@@ -99,6 +100,7 @@ export default function SettingsView() {
       .then(data => {
         setSecretItems(data.items);
         setEncryptionAvailable(data.encryptionAvailable);
+        setGoogleOAuthClientConfigured(Boolean(data.googleOAuthClientConfigured));
       })
       .catch(() => setSecretItems([]));
   };
@@ -214,15 +216,49 @@ export default function SettingsView() {
     }
   };
 
-  const handleGoogleOAuth = async (purpose: 'gemini' | 'youtube') => {
+  const handleGoogleOAuth = async (purpose: 'gemini' | 'youtube', forceConsent = false) => {
     setSaveError(null);
     setOauthConnecting(purpose);
     try {
-      const { authorizeUrl } = await startGoogleOAuth(purpose);
+      const clientId = draftSecrets.googleOAuthClientId?.trim() ?? '';
+      const clientSecret = draftSecrets.googleOAuthClientSecret?.trim() ?? '';
+      const hasDraftClient = Boolean(clientId || clientSecret);
+
+      if (hasDraftClient) {
+        if (!clientId || !clientSecret) {
+          setSaveError('Completa Client ID y Client Secret de Google Cloud antes de conectar.');
+          setOauthConnecting(null);
+          return;
+        }
+        if (!encryptionAvailable) {
+          setSaveError('Falta CAS_SECRETS_KEY en el servidor. Recarga esta página e intenta de nuevo.');
+          setOauthConnecting(null);
+          return;
+        }
+        await updateSecrets({ googleOAuthClientId: clientId, googleOAuthClientSecret: clientSecret });
+        setDraftSecrets(s => {
+          const next = { ...s };
+          delete next.googleOAuthClientId;
+          delete next.googleOAuthClientSecret;
+          return next;
+        });
+        setGoogleOAuthClientConfigured(true);
+        loadSecrets();
+      } else if (!googleOAuthClientConfigured) {
+        setSaveError(
+          'Pega tu Client ID y Client Secret reales de Google Cloud arriba (no uses los ejemplos grises) y pulsa Conectar de nuevo.',
+        );
+        setOauthConnecting(null);
+        return;
+      }
+
+      const { authorizeUrl } = await startGoogleOAuth(purpose, forceConsent);
       window.location.href = authorizeUrl;
-    } catch {
+    } catch (err) {
       setSaveError(
-        'No se pudo iniciar OAuth. Guarda primero el Client ID y Client Secret de Google Cloud, y añade la URL de callback en la consola de Google.',
+        err instanceof Error
+          ? err.message
+          : 'No se pudo iniciar OAuth. Guarda el Client ID y Client Secret, y añade la URL de callback en Google Cloud.',
       );
       setOauthConnecting(null);
     }
@@ -278,7 +314,12 @@ export default function SettingsView() {
           )}
 
           <div className="bg-[#0B0F14] border border-white/5 rounded-2xl p-4 space-y-3">
-            <h5 className="text-sm font-bold text-white">Google Cloud OAuth (Gemini + YouTube)</h5>
+            <div className="flex items-center justify-between gap-2">
+              <h5 className="text-sm font-bold text-white">Google Cloud OAuth (Gemini + YouTube)</h5>
+              <span className="text-[10px] font-mono text-slate-500">
+                {googleOAuthClientConfigured ? 'App OAuth guardada' : 'Pendiente de credenciales'}
+              </span>
+            </div>
             <p className="text-[10px] text-slate-500">
               Crea credenciales OAuth 2.0 en{' '}
               <a
@@ -293,6 +334,23 @@ export default function SettingsView() {
               <code className="font-mono text-slate-400">
                 {`${window.location.origin}/api/oauth/google/callback`}
               </code>
+            </p>
+            <p className="text-[10px] text-slate-500">
+              Para tokens de larga duración (sin reconectar cada 7 días), publica la app OAuth en{' '}
+              <strong className="text-slate-400">In production</strong> en Google Cloud.{' '}
+              <a
+                href="https://console.cloud.google.com/apis/credentials/consent"
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-400 hover:text-indigo-300"
+              >
+                OAuth consent screen
+              </a>
+              . Guía: <code className="font-mono text-slate-500">docs/02-operations/GOOGLE_OAUTH_PRODUCTION.md</code>
+            </p>
+            <p className="text-[10px] text-amber-300/80">
+              Los textos grises en los campos son solo ejemplos. Pega tus credenciales reales; se guardan
+              automáticamente al pulsar Conectar con Google.
             </p>
             {GOOGLE_OAUTH_SETUP.map(field => (
               <div key={field.key} className="space-y-1">
@@ -342,24 +400,41 @@ export default function SettingsView() {
                   </div>
 
                   {group.oauthPurpose && (
-                    <button
-                      type="button"
-                      disabled={oauthConnecting === group.oauthPurpose}
-                      onClick={() => void handleGoogleOAuth(group.oauthPurpose!)}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white text-[#0B0F14] hover:bg-slate-100 disabled:opacity-60 text-xs font-bold transition-colors"
-                    >
-                      {oauthConnecting === group.oauthPurpose ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Redirigiendo a Google…
-                        </>
-                      ) : (
-                        <>
-                          <LogIn className="w-4 h-4" />
-                          Conectar con Google (OAuth)
-                        </>
-                      )}
-                    </button>
+                    status?.authMethod === 'oauth' && status?.configured ? (
+                      <div className="flex items-center justify-between gap-3 rounded-xl bg-emerald-950/30 border border-emerald-800/40 px-3 py-2">
+                        <div className="flex items-center gap-2 text-xs text-emerald-300">
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          <span>Conectado · sesión guardada en el servidor</span>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={oauthConnecting === group.oauthPurpose}
+                          onClick={() => void handleGoogleOAuth(group.oauthPurpose!, true)}
+                          className="text-[10px] font-bold text-indigo-300 hover:text-indigo-200 disabled:opacity-60"
+                        >
+                          {oauthConnecting === group.oauthPurpose ? 'Redirigiendo…' : 'Reconectar'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={oauthConnecting === group.oauthPurpose}
+                        onClick={() => void handleGoogleOAuth(group.oauthPurpose!)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white text-[#0B0F14] hover:bg-slate-100 disabled:opacity-60 text-xs font-bold transition-colors"
+                      >
+                        {oauthConnecting === group.oauthPurpose ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Redirigiendo a Google…
+                          </>
+                        ) : (
+                          <>
+                            <LogIn className="w-4 h-4" />
+                            Conectar con Google (OAuth)
+                          </>
+                        )}
+                      </button>
+                    )
                   )}
 
                   {group.openAiGuided && (

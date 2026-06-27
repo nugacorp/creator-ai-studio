@@ -10,9 +10,12 @@ services:
       LOCAL_STORAGE_PATH: /data/episodes
       CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:-https://creator-ai-studio.217.76.56.66.sslip.io}
       CAS_SECRETS_KEY: ${CAS_SECRETS_KEY:?Set CAS_SECRETS_KEY in Coolify (32+ chars) to enable UI API key storage}
-      REDIS_URL: ${REDIS_URL:-}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       RCLONE_REMOTE: ${RCLONE_REMOTE:-}
       RCLONE_CONFIG: ${RCLONE_CONFIG:-/config/rclone/rclone.conf}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      PIPER_BIN: ${PIPER_BIN:-}
+      PIPER_MODEL: ${PIPER_MODEL:-}
     volumes:
       - creator-ai-studio-staging-episodes:/data/episodes
       - ${RCLONE_CONFIG_VOLUME:-creator-ai-studio-rclone-config}:/config/rclone:ro
@@ -49,8 +52,6 @@ services:
     restart: unless-stopped
 
   worker:
-    profiles:
-      - worker
     build:
       context: .
       dockerfile: Dockerfile.worker
@@ -65,11 +66,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      redis:
+        condition: service_started
     restart: unless-stopped
 
   redis:
-    profiles:
-      - worker
     image: redis:7-alpine
     expose:
       - "6379"

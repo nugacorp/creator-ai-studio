@@ -7,6 +7,7 @@ import type {
   TTSResult,
 } from './types.js';
 import type { GeminiAuth } from '../secrets/google-auth.js';
+import { googleOAuthHeaders } from '../secrets/google-auth.js';
 
 async function geminiGenerate(
   auth: GeminiAuth,
@@ -26,7 +27,7 @@ async function geminiGenerate(
   const requestUrl =
     auth.mode === 'api_key' ? `${url}?key=${encodeURIComponent(auth.value)}` : url;
   if (auth.mode === 'oauth') {
-    headers.Authorization = `Bearer ${auth.accessToken}`;
+    Object.assign(headers, await googleOAuthHeaders(auth.accessToken));
   }
 
   const response = await fetch(requestUrl, {
@@ -100,7 +101,7 @@ export class GeminiAIProvider implements AIProvider {
         ? `${url}?key=${encodeURIComponent(this.auth.value)}`
         : url;
     if (this.auth.mode === 'oauth') {
-      headers.Authorization = `Bearer ${this.auth.accessToken}`;
+      Object.assign(headers, await googleOAuthHeaders(this.auth.accessToken));
     }
 
     const response = await fetch(requestUrl, {

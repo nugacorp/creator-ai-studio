@@ -14,8 +14,8 @@ const PURPOSE_SCOPES: Record<GoogleOAuthPurpose, string[]> = {
     'openid',
     'email',
     'profile',
-    'https://www.googleapis.com/auth/generative-language',
     'https://www.googleapis.com/auth/cloud-platform',
+    'https://www.googleapis.com/auth/generative-language.retriever',
   ],
   youtube: [
     'openid',
@@ -23,6 +23,7 @@ const PURPOSE_SCOPES: Record<GoogleOAuthPurpose, string[]> = {
     'profile',
     'https://www.googleapis.com/auth/youtube.upload',
     'https://www.googleapis.com/auth/youtube.readonly',
+    'https://www.googleapis.com/auth/yt-analytics.readonly',
   ],
 };
 
@@ -66,6 +67,7 @@ export function buildGoogleAuthorizeUrl(input: {
   redirectUri: string;
   state: string;
   purpose: GoogleOAuthPurpose;
+  promptConsent?: boolean;
 }): string {
   const params = new URLSearchParams({
     client_id: input.clientId,
@@ -74,9 +76,15 @@ export function buildGoogleAuthorizeUrl(input: {
     scope: PURPOSE_SCOPES[input.purpose].join(' '),
     state: input.state,
     access_type: 'offline',
-    prompt: 'consent',
   });
+  if (input.promptConsent) {
+    params.set('prompt', 'consent');
+  }
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
+}
+
+export async function hasGoogleOAuthRefreshToken(): Promise<boolean> {
+  return Boolean(await getSecret('GOOGLE_OAUTH_REFRESH_TOKEN'));
 }
 
 interface GoogleTokenResponse {

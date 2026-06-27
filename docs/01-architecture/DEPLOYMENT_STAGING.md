@@ -46,7 +46,8 @@ This document covers deployment of the `staging` branch only. It does not define
 |---|---|---|---|---|
 | API | `apps/api` | Node.js Fastify | Yes | Exposes `/api/health`, `/api/episodes`, and backward-compatible unprefixed endpoints. |
 | Web | `apps/web` | Vite static build served by nginx | Yes | Public entrypoint. Proxies same-origin `/api` traffic to the internal API service. |
-| Worker | `workers/production` | Node.js | Optional | Placeholder process in the current MVP; enable later with the Compose `worker` profile if needed. |
+| Worker | `workers/production` | Node.js | Yes | Polls `/api/jobs/pending` and runs the production pipeline (script → TTS → render → publish). Requires Redis. |
+| Redis | `redis:7-alpine` | Redis | Yes | Job queue backend for worker and optional BullMQ in API. |
 
 ### Deployment Strategy
 
@@ -58,8 +59,8 @@ Recommended Coolify strategy for staging:
 4. Deploy with `docker-compose.staging.yml` from the repository root.
 5. Expose only the web service publicly on port `8080`.
 6. Keep the API service internal to the Compose network; nginx in the web service proxies `/api` to `http://api:3000/api`.
-7. Mount a persistent volume for the API at `/data/episodes`.
-8. Keep the worker disabled until a Work Order explicitly enables it.
+7. Mount a persistent volume for the API at `/data/episodes` (secrets and settings persist under that path).
+8. Worker and Redis start by default with `docker-compose.staging.yml`.
 
 ### Staging URL
 
@@ -89,13 +90,17 @@ Reference copy: [deploy/staging.env.example](../../deploy/staging.env.example).
 
 Google OAuth in **production** mode requires `https://` URLs. Enable Let's Encrypt in Coolify before configuring Google OAuth. Steps: [deploy/HTTPS_COOLIFY.md](../../deploy/HTTPS_COOLIFY.md).
 
-No OpenAI, Claude, ElevenLabs, YouTube, or other real external-service secrets are required for this staging MVP deployment.
+For long-lived refresh tokens (avoid re-login every 7 days): [docs/02-operations/GOOGLE_OAUTH_PRODUCTION.md](../02-operations/GOOGLE_OAUTH_PRODUCTION.md).
+
+Configure TTS for real narration: set `ELEVENLABS_API_KEY` in Coolify or configure Piper (`PIPER_BIN`, `PIPER_MODEL`) on the API container. See [deploy/staging.env.example](../../deploy/staging.env.example).
+
+Archive to Google Drive is optional. Set `RCLONE_REMOTE` when ready; `autoArchiveOnPublish` defaults to `false` until configured.
 
 ### Volúmenes
 
 | Volume | Mount | Service | Purpose |
 |---|---|---|---|
-| `creator-ai-studio-staging-episodes` | `/data/episodes` | API, optional Worker | Persistent local episode workspaces. |
+| `creator-ai-studio-staging-episodes` | `/data/episodes` | API, Worker | Persistent episode workspaces, encrypted secrets (`.secrets/secrets.enc`), and `settings.json`. |
 
 The API resolves episode storage from `LOCAL_STORAGE_PATH`; in staging this must be `/data/episodes` so data survives container restarts and redeploys.
 

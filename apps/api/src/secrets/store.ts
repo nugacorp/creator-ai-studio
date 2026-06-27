@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import type { SecretProvider, SecretSource, SecretStatus, SecretsPatch } from '@creator-ai-studio/shared';
@@ -38,8 +38,25 @@ const PROVIDER_FIELDS: Record<SecretProvider, SecretStoreField[]> = {
   webhook: ['webhookUrl'],
 };
 
+function secretsDir(): string {
+  return path.join(resolveStoragePath(), '.secrets');
+}
+
 function secretsFilePath(): string {
+  return path.join(secretsDir(), 'secrets.enc');
+}
+
+function legacySecretsFilePath(): string {
   return path.join(resolveStoragePath(), '..', 'secrets.enc');
+}
+
+async function ensureSecretsMigrated(): Promise<void> {
+  const current = secretsFilePath();
+  const legacy = legacySecretsFilePath();
+  if (!existsSync(current) && existsSync(legacy)) {
+    await mkdir(secretsDir(), { recursive: true });
+    await copyFile(legacy, current);
+  }
 }
 
 function deriveKey(master: string): Buffer {
@@ -73,6 +90,8 @@ async function readStore(): Promise<Record<string, string>> {
   const master = process.env.CAS_SECRETS_KEY;
   if (!master) return {};
 
+  await ensureSecretsMigrated();
+
   const file = secretsFilePath();
   if (!existsSync(file)) return {};
 
@@ -90,8 +109,10 @@ async function writeStore(data: Record<string, string>): Promise<void> {
     throw new Error('CAS_SECRETS_KEY is not configured on the server');
   }
 
+  await ensureSecretsMigrated();
+
   const file = secretsFilePath();
-  await mkdir(path.dirname(file), { recursive: true });
+  await mkdir(secretsDir(), { recursive: true });
   await writeFile(file, encryptPayload(data, master));
 }
 
@@ -238,4 +259,14 @@ function statusForYoutube(stored: Record<string, string>): SecretStatus {
   }
 
   return { provider: 'youtube', configured: false, source: 'none', authMethod: 'none' };
+}
+
+export async function isGoogleOAuthClientConfigured(): Promise<boolean> {
+  const stored = await readStore();
+  const clientId =
+    readStoredOrEnv(stored, 'GOOGLE_OAUTH_CLIENT_ID') ?? readStoredOrEnv(stored, 'YOUTUBE_CLIENT_ID');
+  const clientSecret =
+    readStoredOrEnv(stored, 'GOOGLE_OAUTH_CLIENT_SECRET') ??
+    readStoredOrEnv(stored, 'YOUTUBE_CLIENT_SECRET');
+  return Boolean(clientId?.trim() && clientSecret?.trim());
 }

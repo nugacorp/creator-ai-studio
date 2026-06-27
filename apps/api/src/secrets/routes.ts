@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { SecretProvider, SecretsPatch } from '@creator-ai-studio/shared';
 import {
+  isGoogleOAuthClientConfigured,
   isSecretsEncryptionAvailable,
   listSecretStatuses,
   patchSecrets,
@@ -28,6 +29,7 @@ export function registerSecretRoutes(app: FastifyInstance, prefix: '' | '/api'):
     const items = await listSecretStatuses();
     return {
       encryptionAvailable: isSecretsEncryptionAvailable(),
+      googleOAuthClientConfigured: await isGoogleOAuthClientConfigured(),
       items,
     };
   });

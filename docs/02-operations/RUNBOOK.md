@@ -32,7 +32,7 @@ Operational procedures for deploying, monitoring, and recovering Creator AI Stud
 | Variable | Purpose |
 |---|---|
 | `LOCAL_STORAGE_PATH` | Episode filesystem storage (mount persistent volume) |
-| `CAS_SECRETS_KEY` | Master key for encrypted API keys saved from Settings UI (32+ chars) |
+| `CAS_SECRETS_KEY` | Master key for encrypted API keys from Settings UI (32+ chars). Required to type and save keys in Configuración. |
 | `GEMINI_API_KEY` | Primary AI provider (or configure via Settings UI when `CAS_SECRETS_KEY` is set) |
 | `CAS_API_KEY` | Optional API authentication (worker should use same key) |
 | `REDIS_URL` | Optional BullMQ queue (`redis://redis:6379` with worker profile) |
@@ -52,7 +52,11 @@ Operational procedures for deploying, monitoring, and recovering Creator AI Stud
 ## Enable Worker
 
 ```bash
-docker compose -f docker-compose.staging.yml --profile worker up -d
+Worker and Redis are included by default in `docker-compose.staging.yml`. On an existing Coolify deployment, run:
+
+```bash
+bash scripts/enable-worker-staging.sh
+bash scripts/vps-redeploy.sh <tag>
 ```
 
 ## CI

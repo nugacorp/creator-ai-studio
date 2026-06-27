@@ -1,10 +1,26 @@
 #!/bin/bash
 set -euo pipefail
 
-COMMIT="${1:-21758c5}"
+COMMIT="${1:-plan-implement}"
 SRC_DIR="/root/creator-ai-studio"
 APP_DIR="/data/coolify/applications/z7b1ieqp66a7e43cywaz816w"
 DOMAIN="creator-ai-studio.217.76.56.66.sslip.io"
+
+echo "=== Migrating secrets to persistent volume ==="
+API_CONTAINER=$(docker ps -q -f name=api-z7b1ieqp66a7e43cywaz816w | head -1 || true)
+if [ -n "$API_CONTAINER" ]; then
+  docker exec "$API_CONTAINER" sh -c '
+    if [ -f /data/secrets.enc ] && [ ! -f /data/episodes/.secrets/secrets.enc ]; then
+      mkdir -p /data/episodes/.secrets
+      cp /data/secrets.enc /data/episodes/.secrets/secrets.enc
+      echo "Migrated /data/secrets.enc -> /data/episodes/.secrets/secrets.enc"
+    fi
+    if [ -f /data/settings.json ] && [ ! -f /data/episodes/settings.json ]; then
+      cp /data/settings.json /data/episodes/settings.json
+      echo "Migrated settings.json into episodes volume"
+    fi
+  ' || true
+fi
 
 echo "=== Building API image (${COMMIT}) ==="
 docker build -f "$SRC_DIR/Dockerfile.api" -t "z7b1ieqp66a7e43cywaz816w_api:${COMMIT}" "$SRC_DIR"
@@ -14,6 +30,9 @@ docker build -f "$SRC_DIR/Dockerfile.web" \
   --build-arg VITE_API_BASE_URL=/api \
   -t "z7b1ieqp66a7e43cywaz816w_web:${COMMIT}" \
   "$SRC_DIR"
+
+echo "=== Building Worker image (${COMMIT}) ==="
+docker build -f "$SRC_DIR/Dockerfile.worker" -t "z7b1ieqp66a7e43cywaz816w_worker:${COMMIT}" "$SRC_DIR"
 
 COMPOSE="$APP_DIR/docker-compose.yaml"
 cp "$COMPOSE" "${COMPOSE}.bak-redeploy-${COMMIT}"
@@ -25,10 +44,18 @@ p = Path("$COMPOSE")
 text = p.read_text()
 text = re.sub(r"image: 'z7b1ieqp66a7e43cywaz816w_api:[^']+'", "image: 'z7b1ieqp66a7e43cywaz816w_api:${COMMIT}'", text)
 text = re.sub(r"image: 'z7b1ieqp66a7e43cywaz816w_web:[^']+'", "image: 'z7b1ieqp66a7e43cywaz816w_web:${COMMIT}'", text)
+if "z7b1ieqp66a7e43cywaz816w_worker:" in text:
+    text = re.sub(r"image: 'z7b1ieqp66a7e43cywaz816w_worker:[^']+'", "image: 'z7b1ieqp66a7e43cywaz816w_worker:${COMMIT}'", text)
 if "CAS_PUBLIC_URL" not in text:
     text = text.replace(
         "LOCAL_STORAGE_PATH: /data/episodes",
         "LOCAL_STORAGE_PATH: /data/episodes\n            CAS_PUBLIC_URL: 'https://${DOMAIN}'",
+        1,
+    )
+if "REDIS_URL" not in text and "environment:" in text:
+    text = text.replace(
+        "CAS_SECRETS_KEY:",
+        "REDIS_URL: 'redis://redis:6379'\n            CAS_SECRETS_KEY:",
         1,
     )
 p.write_text(text)
@@ -36,7 +63,8 @@ print("compose images updated")
 PY
 
 cd "$APP_DIR"
-docker compose -f docker-compose.yaml up -d api web --no-build
+docker compose -f docker-compose.yaml up -d redis worker api web --no-build 2>/dev/null || \
+  docker compose -f docker-compose.yaml up -d api web --no-build
 
 echo "=== Waiting for API health ==="
 for i in $(seq 1 30); do
@@ -44,7 +72,8 @@ for i in $(seq 1 30); do
     echo "OK: https://${DOMAIN}/api/health"
     curl -fsS "https://${DOMAIN}/api/health"
     echo
-  exit 0
+    docker ps --format 'table {{.Names}}\t{{.Status}}' | grep z7b1ieqp66a7e43cywaz816w || true
+    exit 0
   fi
   sleep 2
 done

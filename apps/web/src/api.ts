@@ -124,6 +124,7 @@ export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
 export interface AnalyticsData {
   kpis: { views: number; subscribers: number; watchTimeHours: number; engagement: string };
   chartData: number[];
+  channelDistribution?: Array<{ name: string; views: number; percentage: number }>;
 }
 
 export async function fetchAnalytics(): Promise<AnalyticsData> {
@@ -145,6 +146,7 @@ export async function fetchChannels(): Promise<ChannelData[]> {
 
 export interface SecretsResponse {
   encryptionAvailable: boolean;
+  googleOAuthClientConfigured?: boolean;
   items: SecretStatus[];
 }
 
@@ -164,10 +166,22 @@ export async function testSecret(provider: SecretProvider): Promise<SecretTestRe
   return apiFetch<SecretTestResult>(`/secrets/test/${provider}`, { method: 'POST' });
 }
 
-export async function startGoogleOAuth(purpose: 'gemini' | 'youtube'): Promise<{ authorizeUrl: string }> {
+export async function startGoogleOAuth(
+  purpose: 'gemini' | 'youtube',
+  forceConsent = false,
+): Promise<{ authorizeUrl: string }> {
   const returnUrl = `${window.location.origin}${window.location.pathname}?view=settings`;
-  const query = new URLSearchParams({ purpose, returnUrl });
-  return apiFetch<{ authorizeUrl: string }>(`/oauth/google/start?${query.toString()}`);
+  const query = new URLSearchParams({
+    purpose,
+    returnUrl,
+    forceConsent: forceConsent ? 'true' : 'false',
+  });
+  const response = await fetch(`${API_BASE_URL}/oauth/google/start?${query.toString()}`);
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { message?: string; error?: string };
+    throw new Error(body.message ?? body.error ?? `API error (${response.status})`);
+  }
+  return (await response.json()) as { authorizeUrl: string };
 }
 
 export interface SystemMode {
