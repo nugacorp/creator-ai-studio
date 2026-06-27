@@ -94,12 +94,24 @@ if cas_api_key and "CAS_API_KEY" not in text:
         f"CAS_API_KEY: '{cas_api_key}'\n            CAS_SECRETS_KEY:",
         1,
     )
-if cas_api_key and "worker:" in text and "CAS_API_KEY" not in text.split("worker:")[1][:800]:
-    text = text.replace(
-        "API_BASE_URL: 'http://api:3000/api'",
-        f"API_BASE_URL: 'http://api:3000/api'\n            CAS_API_KEY: '{cas_api_key}'",
-        1,
-    )
+worker_block = text.split("worker:", 1)
+if cas_api_key and len(worker_block) > 1:
+    worker_env = worker_block[1].split("redis:", 1)[0]
+    if "CAS_API_KEY" not in worker_env:
+        for old, new in [
+            (
+                "API_BASE_URL: 'http://api:3000/api'",
+                f"API_BASE_URL: 'http://api:3000/api'\n            CAS_API_KEY: '{cas_api_key}'",
+            ),
+            (
+                "API_BASE_URL: http://api:3000/api",
+                f"API_BASE_URL: http://api:3000/api\n            CAS_API_KEY: '{cas_api_key}'",
+            ),
+        ]:
+            if old in worker_env:
+                worker_env = worker_env.replace(old, new, 1)
+                break
+        text = worker_block[0] + "worker:" + worker_env + "redis:" + worker_block[1].split("redis:", 1)[1]
 p.write_text(text)
 print("compose images updated")
 PY
