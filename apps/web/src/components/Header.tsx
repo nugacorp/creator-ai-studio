@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Bell, ChevronDown, Check, RefreshCw, AlertTriangle, Sparkles, Menu, LogOut } from 'lucide-react';
+import { Bell, ChevronDown, Check, AlertTriangle, Sparkles, Menu, LogOut } from 'lucide-react';
 import { Channel, Notification } from '../types';
 import { useAuth } from '../context/AuthContext';
+import ProfileEditor from './ProfileEditor';
 
 interface HeaderProps {
   channels: Channel[];
@@ -23,6 +24,7 @@ export default function Header({
   const { authEnabled, user, profile, signOut } = useAuth();
   const [showChannelsDropdown, setShowChannelsDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -189,7 +191,7 @@ export default function Header({
         </div>
 
         {/* User profile info */}
-        <div className="flex items-center gap-2.5 pl-2 border-l border-white/5">
+        <div className="relative flex items-center gap-2.5 pl-2 border-l border-white/5">
           <div className="text-right hidden md:block">
             <div className="text-sm font-medium text-[#E6EDF2]">
               {authEnabled
@@ -210,13 +212,30 @@ export default function Header({
               <LogOut className="w-4 h-4" />
             </button>
           )}
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-sm text-white border border-white/10 overflow-hidden">
+          <button
+            type="button"
+            id="profile-avatar-btn"
+            onClick={() => authEnabled && setShowProfileMenu(!showProfileMenu)}
+            title={authEnabled ? 'Mi perfil' : undefined}
+            className={`w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-sm text-white border border-white/10 overflow-hidden shrink-0 ${
+              authEnabled ? 'hover:ring-2 hover:ring-indigo-500/40 transition-all cursor-pointer' : ''
+            }`}
+          >
             {authEnabled && profile?.avatar_url ? (
               <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
             ) : (
               'R'
             )}
-          </div>
+          </button>
+
+          {showProfileMenu && authEnabled && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowProfileMenu(false)} />
+              <div className="fixed sm:absolute top-16 sm:top-auto left-4 right-4 sm:left-auto sm:right-0 mt-2 sm:w-[min(24rem,calc(100vw-2rem))] z-20 animate-in fade-in slide-in-from-top-2 duration-150 max-h-[calc(100vh-5rem)] overflow-y-auto">
+                <ProfileEditor />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </header>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Sliders, ShieldCheck, HelpCircle, ExternalLink, KeyRound, PlugZap, CheckCircle2, Loader2, LogIn } from 'lucide-react';
 import type { SecretAuthMethod, SecretProvider, SecretStatus } from '@creator-ai-studio/shared';
-import ProfileEditor from './ProfileEditor';
 import {
   fetchSecrets,
   fetchSettings,
@@ -284,8 +283,6 @@ export default function SettingsView() {
       </div>
 
       <div className="max-w-3xl space-y-6">
-        <ProfileEditor />
-
         <div className="bg-[#15191E] border border-white/10 rounded-3xl p-6 space-y-6 shadow-xl">
           <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1">
             <KeyRound className="w-4 h-4 text-indigo-400" />
