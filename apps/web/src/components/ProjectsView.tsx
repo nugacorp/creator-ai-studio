@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, Video, Calendar, Search, Sparkles, SlidersHorizontal, Layers, CheckCircle2 } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Plus, ArrowLeft, ArrowRight, Video, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { VideoProject, ProjectStatus } from '../types';
 import Sparkline from './Sparkline';
 
@@ -41,6 +41,9 @@ export default function ProjectsView({
   const [newSeries, setNewSeries] = useState(seriesList[0]);
   const [newStatus, setNewStatus] = useState<ProjectStatus>('Ideas');
   const [newDuration, setNewDuration] = useState('08:00');
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   // Filtered projects
   const filteredProjects = projects.filter(proj => {
@@ -48,6 +51,36 @@ export default function ProjectsView({
     const matchesSearch = proj.title.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSeries && matchesSearch;
   });
+
+  const updateBoardScrollState = useCallback(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < maxScroll - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+
+    updateBoardScrollState();
+    el.addEventListener('scroll', updateBoardScrollState, { passive: true });
+    const observer = new ResizeObserver(updateBoardScrollState);
+    observer.observe(el);
+
+    return () => {
+      el.removeEventListener('scroll', updateBoardScrollState);
+      observer.disconnect();
+    };
+  }, [updateBoardScrollState, filteredProjects.length]);
+
+  const scrollBoard = (direction: 'left' | 'right') => {
+    boardRef.current?.scrollBy({
+      left: direction === 'left' ? -304 : 304,
+      behavior: 'smooth',
+    });
+  };
 
   const handleMoveCard = (id: string, direction: 'left' | 'right') => {
     const project = projects.find(p => p.id === id);
@@ -90,9 +123,9 @@ export default function ProjectsView({
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Top action bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#15191E] p-4 rounded-2xl border border-white/5">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center bg-[#15191E] p-4 rounded-2xl border border-white/5">
         {/* Series Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-1 lg:pb-0">
           <button
             onClick={() => setSelectedSeries('Todos')}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
@@ -119,20 +152,20 @@ export default function ProjectsView({
         </div>
 
         {/* Search & Add New */}
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+        <div className="flex items-center justify-end gap-3 shrink-0">
+          <div className="relative w-full sm:w-auto">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Buscar proyecto..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="bg-[#0B0F14] border border-white/10 rounded-xl pl-9 pr-4 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 w-48 transition-all"
+              className="bg-[#0B0F14] border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/50 w-full sm:w-52 transition-all"
             />
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-lg shadow-indigo-500/15"
+            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer shrink-0 shadow-lg shadow-indigo-500/15 whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
             <span>Nuevo Proyecto</span>
@@ -141,8 +174,34 @@ export default function ProjectsView({
       </div>
 
       {/* Trello Board columns */}
-      <div className="overflow-x-auto pb-4 scrollbar-none">
-        <div className="flex gap-4 min-w-[1200px] h-[calc(100vh-270px)]">
+      <div className="relative">
+        {canScrollLeft && (
+          <button
+            type="button"
+            onClick={() => scrollBoard('left')}
+            aria-label="Ver columnas anteriores"
+            className="absolute left-0 top-1/2 z-10 -translate-y-1/2 ml-1 p-2 rounded-xl bg-[#15191E]/95 border border-white/10 text-white shadow-lg hover:bg-[#1c2128] transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
+        {canScrollRight && (
+          <button
+            type="button"
+            onClick={() => scrollBoard('right')}
+            aria-label="Ver más columnas"
+            className="absolute right-0 top-1/2 z-10 -translate-y-1/2 mr-1 p-2 rounded-xl bg-[#15191E]/95 border border-white/10 text-white shadow-lg hover:bg-[#1c2128] transition-colors cursor-pointer"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        )}
+
+        <div
+          ref={boardRef}
+          className="overflow-x-auto pb-3 scroll-smooth"
+          style={{ scrollbarGutter: 'stable' }}
+        >
+          <div className="flex gap-4 min-w-max h-[calc(100vh-270px)] px-1">
           {PIPELINE_COLUMNS.map(columnStatus => {
             const columnProjects = filteredProjects.filter(p => p.status === columnStatus);
             return (
@@ -254,6 +313,7 @@ export default function ProjectsView({
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 
