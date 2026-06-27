@@ -269,6 +269,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
               setProjects={setProjects}
               onAddNotification={handleAddNotification}
               onCreateEpisode={handleCreateEpisode}
+              onAddNewScript={handleAddNewScript}
             />
           )}
 

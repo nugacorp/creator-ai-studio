@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, ChevronDown, Check, RefreshCw, AlertTriangle, Sparkles, Wifi, Menu, LogOut } from 'lucide-react';
+import { Bell, ChevronDown, Check, RefreshCw, AlertTriangle, Sparkles, Menu, LogOut } from 'lucide-react';
 import { Channel, Notification } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -118,12 +118,6 @@ export default function Header({
 
       {/* Right side controls */}
       <div className="flex items-center gap-4">
-        {/* Sync Indicator */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/20 border border-emerald-900/30 text-emerald-400 text-xs font-medium">
-          <Wifi className="w-3.5 h-3.5 animate-pulse" />
-          <span>Creator OS Activo y Conectado</span>
-        </div>
-
         {/* Notifications */}
         <div className="relative">
           <button

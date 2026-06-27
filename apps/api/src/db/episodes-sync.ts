@@ -23,6 +23,7 @@ export async function syncEpisodeToSupabase(detail: EpisodeDetail): Promise<void
         workspace_path: detail.workspacePath,
         content: detail.content,
         stages: detail.stages,
+        user_id: detail.userId ?? null,
         updated_at: detail.updatedAt,
         created_at: detail.createdAt,
       }),

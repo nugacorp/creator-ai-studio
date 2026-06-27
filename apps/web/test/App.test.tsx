@@ -65,7 +65,7 @@ describe('Official dashboard shell', () => {
 
     renderApp('home');
 
-    expect(screen.getByText(/Buenos días, Ramiro/)).toBeInTheDocument();
+    expect(screen.getByText(/Buenos días|Buenas tardes|Buenas noches/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Abrir proyecto/i })).toBeInTheDocument();
   });
 

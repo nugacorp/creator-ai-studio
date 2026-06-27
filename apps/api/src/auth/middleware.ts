@@ -33,33 +33,29 @@ export function registerAuthHook(app: FastifyInstance): void {
 
     const authHeader = request.headers.authorization;
     const headerKey = request.headers['x-api-key'];
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+    const token =
+      bearerToken ?? (typeof headerKey === 'string' ? headerKey : undefined);
 
-    if (apiKey) {
-      const token = authHeader?.startsWith('Bearer ')
-        ? authHeader.slice(7)
-        : typeof headerKey === 'string'
-          ? headerKey
-          : undefined;
-
-      if (token !== apiKey) {
-        reply.code(401);
-        return reply.send({ error: 'unauthorized' });
-      }
+    if (apiKey && token === apiKey) {
       return;
     }
 
-    if (supabaseAuth && authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
-      const verified = await verifySupabaseAccessToken(token);
+    if (supabaseAuth && bearerToken) {
+      const verified = await verifySupabaseAccessToken(bearerToken);
       if (verified) {
         request.userId = verified.userId;
         return;
       }
-      reply.code(401);
-      return reply.send({ error: 'invalid_token' });
+      if (!apiKey) {
+        reply.code(401);
+        return reply.send({ error: 'invalid_token' });
+      }
     }
 
-    reply.code(401);
-    return reply.send({ error: 'unauthorized' });
+    if (apiKey || supabaseAuth) {
+      reply.code(401);
+      return reply.send({ error: 'unauthorized' });
+    }
   });
 }

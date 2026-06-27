@@ -42,6 +42,8 @@ export interface EpisodeSummary {
   drivePath?: string;
   /** Original VPS folder name (`{id}-{slug}`) for restore from Drive. */
   localWorkspace?: string;
+  /** Supabase auth user id when episode was created while logged in. */
+  userId?: string;
 }
 
 /** Input accepted when creating a new episode. */

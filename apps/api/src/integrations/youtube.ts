@@ -35,11 +35,9 @@ export async function uploadToYouTube(
   const accessToken = await resolveYouTubeAccessToken();
 
   if (!accessToken) {
-    return {
-      videoId: `demo_${Date.now()}`,
-      url: 'https://youtube.com/watch?v=demo',
-      status: 'demo',
-    };
+    throw new Error(
+      'YouTube OAuth no conectado. Ve a Configuración → Integraciones y conecta Google/YouTube.',
+    );
   }
 
   if (!videoPath) {

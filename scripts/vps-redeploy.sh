@@ -75,6 +75,7 @@ if "REDIS_URL" not in text and "environment:" in text:
     )
 supabase_url = os.environ.get("SUPABASE_URL", "https://iiokqyedkylwhonbrrvo.supabase.co")
 service_role = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+cas_api_key = os.environ.get("CAS_API_KEY", "")
 if "SUPABASE_URL" not in text:
     text = text.replace(
         "CAS_PUBLIC_URL:",
@@ -85,6 +86,18 @@ if service_role and "SUPABASE_SERVICE_ROLE_KEY" not in text:
     text = text.replace(
         f"SUPABASE_URL: '{supabase_url}'",
         f"SUPABASE_URL: '{supabase_url}'\n            SUPABASE_SERVICE_ROLE_KEY: '{service_role}'",
+        1,
+    )
+if cas_api_key and "CAS_API_KEY" not in text:
+    text = text.replace(
+        "CAS_SECRETS_KEY:",
+        f"CAS_API_KEY: '{cas_api_key}'\n            CAS_SECRETS_KEY:",
+        1,
+    )
+if cas_api_key and "worker:" in text and "CAS_API_KEY" not in text.split("worker:")[1][:800]:
+    text = text.replace(
+        "API_BASE_URL: 'http://api:3000/api'",
+        f"API_BASE_URL: 'http://api:3000/api'\n            CAS_API_KEY: '{cas_api_key}'",
         1,
     )
 p.write_text(text)

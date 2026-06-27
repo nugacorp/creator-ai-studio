@@ -20,6 +20,7 @@ import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
 import { createChannel, deleteChannel, listChannels, updateChannel } from './channels/store.js';
 import { EpisodeStorage, resolveStoragePath } from './storage/index.js';
+import { getEpisodeForUser } from './storage/access.js';
 import { getGeminiAuth } from './secrets/google-auth.js';
 import { getSecret } from './secrets/resolver.js';
 import { resolveProvider } from './ai/router.js';
@@ -69,13 +70,13 @@ function registerRoutes(
     };
   });
 
-  app.get(route(prefix, '/episodes'), async (): Promise<EpisodeSummary[]> => {
-    return storage.listEpisodes();
+  app.get(route(prefix, '/episodes'), async (request): Promise<EpisodeSummary[]> => {
+    return storage.listEpisodes(request.userId);
   });
 
   app.get(route(prefix, '/episodes/:id'), async (request, reply) => {
     const { id } = request.params as { id: string };
-    const detail = await storage.getEpisode(id);
+    const detail = await getEpisodeForUser(storage, id, request.userId);
     if (detail === null) {
       reply.code(404);
       return { error: 'episode not found' };
@@ -92,7 +93,7 @@ function registerRoutes(
     }
 
     const settings = await getSettings();
-    const activeCount = await storage.countActiveLocalEpisodes();
+    const activeCount = await storage.countActiveLocalEpisodes(request.userId);
     if (activeCount >= settings.maxActiveEpisodes) {
       reply.code(409);
       return {
@@ -102,7 +103,7 @@ function registerRoutes(
       };
     }
 
-    const episode = await storage.createEpisode({ title });
+    const episode = await storage.createEpisode({ title }, request.userId);
     const detail = await storage.getEpisode(episode.id);
     if (detail) {
       const { syncEpisodeToSupabase } = await import('./db/episodes-sync.js');
@@ -119,6 +120,12 @@ function registerRoutes(
     if (body.status !== undefined && !isEpisodeStatus(body.status)) {
       reply.code(400);
       return { error: 'invalid status' };
+    }
+
+    const existing = await getEpisodeForUser(storage, id, request.userId);
+    if (existing === null) {
+      reply.code(404);
+      return { error: 'episode not found' };
     }
 
     const detail = await storage.updateEpisode(id, body);
@@ -276,8 +283,8 @@ function registerRoutes(
     };
   });
 
-  app.get(route(prefix, '/calendar/events'), async () => {
-    const episodes = await storage.listEpisodes();
+  app.get(route(prefix, '/calendar/events'), async (request) => {
+    const episodes = await storage.listEpisodes(request.userId);
     return episodes
       .filter(e => e.status === 'review' || e.status === 'published')
       .map(e => ({
@@ -288,11 +295,17 @@ function registerRoutes(
       }));
   });
 
-  app.post(route(prefix, '/integrations/youtube/upload'), async (request) => {
+  app.post(route(prefix, '/integrations/youtube/upload'), async (request, reply) => {
     const body = (request.body ?? {}) as { episodeId?: string };
-    const episode = body.episodeId ? await storage.getEpisode(body.episodeId) : null;
+    let episode = body.episodeId
+      ? await getEpisodeForUser(storage, body.episodeId, request.userId)
+      : null;
+    if (body.episodeId && !episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
     const title = episode?.title ?? 'Untitled';
-    const description = episode?.content?.seoDescription ?? '';
+    const description = episode?.content?.seoDescription ?? episode?.title ?? '';
     let videoPath = '';
     if (body.episodeId) {
       const dir = await storage.getEpisodeDirectory(body.episodeId);
@@ -303,15 +316,22 @@ function registerRoutes(
         if (existsSync(candidate)) videoPath = candidate;
       }
     }
-    const { uploadToYouTube } = await import('./integrations/youtube.js');
-    const result = await uploadToYouTube(title, description, videoPath);
-    if (body.episodeId && episode && result.videoId) {
-      await storage.updateEpisode(body.episodeId, {
-        status: 'published',
-        content: { youtubeVideoId: result.videoId },
-      });
+    try {
+      const { uploadToYouTube } = await import('./integrations/youtube.js');
+      const result = await uploadToYouTube(title, description, videoPath);
+      if (body.episodeId && episode && result.videoId) {
+        await storage.updateEpisode(body.episodeId, {
+          status: 'review',
+          content: { youtubeVideoId: result.videoId },
+        });
+      }
+      return result;
+    } catch (err) {
+      reply.code(502);
+      return {
+        error: err instanceof Error ? err.message : 'YouTube upload failed',
+      };
     }
-    return result;
   });
 
   app.get(route(prefix, '/integrations/elevenlabs/voices'), async () => {
@@ -391,7 +411,7 @@ function registerRoutes(
 
   app.post(route(prefix, '/episodes/:id/confirm-publish'), async (request, reply) => {
     const { id } = request.params as { id: string };
-    const episode = await storage.getEpisode(id);
+    const episode = await getEpisodeForUser(storage, id, request.userId);
     if (!episode) {
       reply.code(404);
       return { error: 'episode not found' };
@@ -478,7 +498,7 @@ function registerRoutes(
 
   app.post(route(prefix, '/episodes/:id/pipeline'), async (request, reply) => {
     const { id } = request.params as { id: string };
-    const episode = await storage.getEpisode(id);
+    const episode = await getEpisodeForUser(storage, id, request.userId);
     if (!episode) {
       reply.code(404);
       return { error: 'episode not found' };

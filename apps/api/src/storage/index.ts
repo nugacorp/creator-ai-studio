@@ -95,7 +95,7 @@ export class EpisodeStorage {
   constructor(private readonly basePath: string) {}
 
   /** Create a new episode and its full stage folder structure on disk. */
-  async createEpisode(input: CreateEpisodeInput): Promise<EpisodeSummary> {
+  async createEpisode(input: CreateEpisodeInput, userId?: string): Promise<EpisodeSummary> {
     const id = randomUUID();
     const slug = slugify(input.title);
     const now = new Date().toISOString();
@@ -108,6 +108,7 @@ export class EpisodeStorage {
       createdAt: now,
       updatedAt: now,
       archiveStatus: 'local',
+      ...(userId ? { userId } : {}),
     };
 
     const episodeDir = path.join(this.basePath, `${id}-${slug}`);
@@ -136,9 +137,11 @@ export class EpisodeStorage {
   }
 
   /** Count episodes still stored on local disk (not archived). */
-  async countActiveLocalEpisodes(): Promise<number> {
+  async countActiveLocalEpisodes(userId?: string): Promise<number> {
     const onDisk = await this.listLocalEpisodes();
-    return onDisk.filter(e => e.archiveStatus !== 'archived').length;
+    const active = onDisk.filter(e => e.archiveStatus !== 'archived');
+    if (!userId) return active.length;
+    return active.filter(e => !e.userId || e.userId === userId).length;
   }
 
   /** Absolute path to an episode workspace directory. */
@@ -169,13 +172,14 @@ export class EpisodeStorage {
   }
 
   /** List every stored episode, sorted by creation time (oldest first). */
-  async listEpisodes(): Promise<EpisodeSummary[]> {
+  async listEpisodes(userId?: string): Promise<EpisodeSummary[]> {
     const local = await this.listLocalEpisodes();
     const archived = await this.readArchivedIndex();
     const localIds = new Set(local.map(e => e.id));
     const merged = [...local, ...archived.filter(e => !localIds.has(e.id))];
     merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    return merged;
+    if (!userId) return merged;
+    return merged.filter(e => !e.userId || e.userId === userId);
   }
 
   /** Episodes with workspace folders on disk. */

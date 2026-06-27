@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clapperboard, CloudUpload, Loader2, Play, CheckCircle2, HardDrive } from 'lucide-react';
+import { Clapperboard, CloudUpload, Loader2, Play, CheckCircle2, HardDrive, ExternalLink } from 'lucide-react';
 import {
   confirmPublish,
   fetchStorageStats,
@@ -14,6 +14,17 @@ interface PipelinePanelProps {
   onPipelineComplete?: () => void;
 }
 
+const STEP_LABELS: Record<string, string> = {
+  script: 'Guion IA',
+  seo: 'Metadatos SEO',
+  tts: 'Narración',
+  thumbnail: 'Miniatura',
+  render: 'Render de video',
+  shorts: 'Short vertical',
+  publish: 'Subida a YouTube',
+  confirm: 'Confirmar publicación',
+};
+
 export default function PipelinePanel({
   episodeId,
   episodeTitle,
@@ -22,6 +33,8 @@ export default function PipelinePanel({
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [storage, setStorage] = useState<StorageStats | null>(null);
 
   useEffect(() => {
@@ -32,6 +45,8 @@ export default function PipelinePanel({
 
   const handleFullPipeline = async () => {
     setRunning(true);
+    setError(null);
+    setYoutubeUrl(null);
     setMessage('Iniciando producción completa…');
     setProgress(5);
     try {
@@ -40,40 +55,62 @@ export default function PipelinePanel({
         try {
           const updated = await fetchJob(job.id);
           setProgress(updated.progress);
-          setMessage(`Paso en curso: ${updated.type} — ${updated.status}`);
+          const step =
+            (updated.result?.step as string | undefined) ??
+            STEP_LABELS[(updated.result?.stepKey as string | undefined) ?? ''] ??
+            updated.type;
+          setMessage(`${step} — ${updated.progress}%`);
+
           if (updated.status === 'completed') {
             clearInterval(poll);
             setRunning(false);
-            setMessage('✓ Video producido, publicado y archivado en Drive (si está configurado).');
+            const url = updated.result?.youtubeUrl as string | undefined;
+            if (url) setYoutubeUrl(url);
+            setMessage(
+              url
+                ? '✓ Video subido a YouTube (privado). Revisa en Studio y confirma visibilidad.'
+                : '✓ Pipeline completado.',
+            );
             onPipelineComplete?.();
             void fetchStorageStats().then(setStorage);
           }
           if (updated.status === 'failed') {
             clearInterval(poll);
             setRunning(false);
-            setMessage(updated.error ?? 'El pipeline falló');
+            const errMsg = updated.error ?? 'El pipeline falló';
+            setError(errMsg);
+            setMessage(null);
           }
         } catch {
           clearInterval(poll);
           setRunning(false);
-          setMessage('Error al consultar el progreso del job');
+          setError('Error al consultar el progreso del job');
+          setMessage(null);
         }
       }, 2000);
-    } catch {
+    } catch (err) {
       setRunning(false);
-      setMessage('No se pudo iniciar el pipeline. ¿Hay otro episodio activo en el VPS?');
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'No se pudo iniciar el pipeline. ¿Hay otro episodio activo en el VPS?',
+      );
     }
   };
 
   const handleConfirmPublish = async () => {
     setRunning(true);
-    setMessage('Confirmando publicación y archivando…');
+    setError(null);
+    setMessage('Confirmando publicación…');
     try {
       await confirmPublish(episodeId);
-      setMessage('✓ Publicación confirmada. Archivo movido a Drive si está configurado.');
+      setMessage(
+        '✓ Publicación confirmada. Si autoArchiveOnPublish está activo en Configuración, el workspace se archivará en Drive.',
+      );
       void fetchStorageStats().then(setStorage);
     } catch {
-      setMessage('Error al confirmar publicación');
+      setError('Error al confirmar publicación');
+      setMessage(null);
     } finally {
       setRunning(false);
     }
@@ -88,7 +125,7 @@ export default function PipelinePanel({
         <div>
           <h2 className="font-display font-bold text-base text-white">Producción automática</h2>
           <p className="text-[11px] text-slate-400">
-            Todo desde CAS: guion → voz → miniatura → video → short → YouTube → Drive
+            Guion → SEO → voz → miniatura → video → short → YouTube (privado) → confirmar
           </p>
         </div>
       </div>
@@ -116,6 +153,24 @@ export default function PipelinePanel({
         <p className="text-xs rounded-xl border border-white/10 bg-[#0B0F14] px-3 py-2 text-slate-300">
           {message}
         </p>
+      )}
+
+      {error && (
+        <p className="text-xs rounded-xl border border-rose-500/30 bg-rose-950/20 px-3 py-2 text-rose-300">
+          {error}
+        </p>
+      )}
+
+      {youtubeUrl && (
+        <a
+          href={youtubeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-xs text-emerald-400 hover:text-emerald-300"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Ver video en YouTube
+        </a>
       )}
 
       {running && (
@@ -148,7 +203,7 @@ export default function PipelinePanel({
         </button>
         <span className="flex items-center gap-1 text-[10px] text-slate-500 self-center">
           <CloudUpload className="w-3 h-3" />
-          ElevenLabs, Gemini y YouTube se controlan desde Configuración
+          Requiere OAuth YouTube conectado en Configuración
         </span>
       </div>
     </section>

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, CheckCircle2, Clock, Volume2, Image as ImageIcon, Calendar, ArrowRight, Activity, Sparkles, Plus, Zap, X, FileText, Sliders, RefreshCw } from 'lucide-react';
 import { VideoProject, ProjectStatus } from '../types';
 import { aiGenerateImage, aiGenerateScript } from '../api';
+import { useAuth } from '../context/AuthContext';
+import { getTimeGreeting, resolveDisplayName } from '../lib/greeting';
 
 interface HomeViewProps {
   onContinueWorking: (projectId: string) => void;
@@ -10,9 +12,18 @@ interface HomeViewProps {
   setProjects: React.Dispatch<React.SetStateAction<VideoProject[]>>;
   onAddNotification: (message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
   onCreateEpisode?: (title: string) => Promise<void>;
+  onAddNewScript?: (title: string, script: string, outline: string[]) => void;
 }
 
-export default function HomeView({ onContinueWorking, projects, setProjects, onAddNotification, onCreateEpisode }: HomeViewProps) {
+export default function HomeView({ onContinueWorking, projects, setProjects, onAddNotification, onCreateEpisode, onAddNewScript }: HomeViewProps) {
+  const { user, profile } = useAuth();
+  const greetingName = resolveDisplayName({
+    displayName: profile?.display_name,
+    email: user?.email,
+    fallback: 'Ramiro',
+  });
+  const greeting = `${getTimeGreeting()}, ${greetingName}`;
+
   const continueProject =
     projects.find(p => p.id === 'ansiedad_biblia' && p.progress < 100) ??
     projects.find(p => p.progress < 100) ??
@@ -112,8 +123,22 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
       clearInterval(interval);
       setAiLogs(prev => [...prev, '✓ Compilación de guion finalizada.']);
 
-      const newId = `proj_${Date.now()}`;
       const title = `AI: ${aiScriptPrompt.substring(0, 30)}${aiScriptPrompt.length > 30 ? '...' : ''}`;
+      const outline = ['Gancho emocional', 'Desglose del Mensaje', 'Llamado a la Acción'];
+      const scriptText = data.text || 'Guion fallido';
+
+      if (onAddNewScript) {
+        onAddNewScript(title, scriptText, outline);
+        onAddNotification(`✓ Guion de IA "${title}" generado y episodio creado`, 'success');
+        setTimeout(() => {
+          setAiScriptPrompt('');
+          setAiGenerating(false);
+          setActiveModal(null);
+        }, 800);
+        return;
+      }
+
+      const newId = `proj_${Date.now()}`;
       
       const newProj: VideoProject = {
         id: newId,
@@ -122,8 +147,8 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
         status: 'Guion',
         progress: 35,
         duration: '05:00',
-        outline: ['Gancho emocional', 'Desglose del Mensaje', 'Llamado a la Acción'],
-        script: data.text || 'Guion fallido',
+        outline,
+        script: scriptText,
         scenes: [
           {
             id: `sc_init_${Date.now()}`,
@@ -201,21 +226,30 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
     }
   };
 
-  const stats = [
-    { label: 'Videos pendientes', count: '2', icon: Play, color: 'text-sky-400 bg-sky-500/10' },
-    { label: 'Shorts pendientes', count: '6', icon: Sparkles, color: 'text-indigo-400 bg-indigo-500/10' },
-    { label: 'Voz IA generándose', count: '1', icon: Volume2, color: 'text-amber-400 bg-amber-500/10' },
-    { label: 'Miniaturas listas', count: '3', icon: ImageIcon, color: 'text-emerald-400 bg-emerald-500/10' },
-    { label: 'Publicación programada', count: '1', icon: Calendar, color: 'text-indigo-400 bg-indigo-500/10' }
-  ];
+  const stats = useMemo(() => {
+    const inProgress = projects.filter(p => p.progress > 0 && p.progress < 100).length;
+    const withThumbnail = projects.filter(p => p.thumbnailUrl && p.status !== 'Ideas').length;
+    const scheduled = projects.filter(p => p.status === 'Programado').length;
+    const published = projects.filter(p => p.status === 'Publicado').length;
+    const withScript = projects.filter(p => p.script && p.script.length > 20).length;
 
-  const recentActivity = [
-    { text: 'Miniatura creada', desc: 'Para "¿Qué dice la Biblia sobre la ansiedad?"', time: 'Hace 5 min', done: true },
-    { text: 'Voz terminada', desc: 'Narración de Kore (24kHz) generada con éxito', time: 'Hace 15 min', done: true },
-    { text: 'Guion aprobado', desc: 'Estructura emocional validada por Ramiro', time: 'Hace 1 hora', done: true },
-    { text: 'Video exportado', desc: 'Moisés renderizado en 1080p con subtítulos', time: 'Hace 4 horas', done: true },
-    { text: 'Publicado en YouTube', desc: 'Proverbios 3 ya está activo en tu canal principal', time: 'Hace 12 horas', done: true }
-  ];
+    return [
+      { label: 'Episodios activos', count: String(inProgress || projects.length), icon: Play, color: 'text-sky-400 bg-sky-500/10' },
+      { label: 'Con guion', count: String(withScript), icon: Sparkles, color: 'text-indigo-400 bg-indigo-500/10' },
+      { label: 'En producción', count: String(inProgress), icon: Volume2, color: 'text-amber-400 bg-amber-500/10' },
+      { label: 'Miniaturas listas', count: String(withThumbnail), icon: ImageIcon, color: 'text-emerald-400 bg-emerald-500/10' },
+      { label: published > 0 ? 'Publicados' : 'Programados', count: String(published > 0 ? published : scheduled), icon: Calendar, color: 'text-indigo-400 bg-indigo-500/10' },
+    ];
+  }, [projects]);
+
+  const recentActivity = useMemo(() => {
+    return projects.slice(0, 5).map(p => ({
+      text: p.status,
+      desc: p.title,
+      time: 'Reciente',
+      done: p.status === 'Publicado',
+    }));
+  }, [projects]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -227,9 +261,11 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
         
         <div className="relative z-10 space-y-2">
           <div className="text-xs text-indigo-400 font-bold uppercase tracking-wider font-mono">Panel del Creador</div>
-          <h1 className="font-display font-bold text-3xl text-white tracking-tight">Buenos días, Ramiro</h1>
+          <h1 className="font-display font-bold text-3xl text-white tracking-tight">{greeting}</h1>
           <p className="text-sm text-slate-400 max-w-2xl">
-            Tu pipeline hoy está corriendo eficientemente. Los agentes de inteligencia artificial han avanzado en las transcripciones, renderizados y análisis de miniaturas.
+            {projects.length > 0
+              ? `Tienes ${projects.length} episodio(s) en el pipeline. Continúa donde lo dejaste o crea uno nuevo.`
+              : 'Crea tu primer episodio y ejecuta el pipeline completo hasta YouTube desde el workspace.'}
           </p>
         </div>
       </div>
