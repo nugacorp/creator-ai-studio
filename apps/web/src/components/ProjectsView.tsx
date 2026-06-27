@@ -174,34 +174,38 @@ export default function ProjectsView({
       </div>
 
       {/* Trello Board columns */}
-      <div className="relative">
-        {canScrollLeft && (
-          <button
-            type="button"
-            onClick={() => scrollBoard('left')}
-            aria-label="Ver columnas anteriores"
-            className="absolute left-0 top-1/2 z-10 -translate-y-1/2 ml-1 p-2 rounded-xl bg-[#15191E]/95 border border-white/10 text-white shadow-lg hover:bg-[#1c2128] transition-colors cursor-pointer"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-        )}
-        {canScrollRight && (
-          <button
-            type="button"
-            onClick={() => scrollBoard('right')}
-            aria-label="Ver más columnas"
-            className="absolute right-0 top-1/2 z-10 -translate-y-1/2 mr-1 p-2 rounded-xl bg-[#15191E]/95 border border-white/10 text-white shadow-lg hover:bg-[#1c2128] transition-colors cursor-pointer"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        )}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <p className="text-[10px] text-slate-500 hidden sm:block">
+            8 etapas del pipeline — usa las flechas para ver todas las columnas
+          </p>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <button
+              type="button"
+              onClick={() => scrollBoard('left')}
+              disabled={!canScrollLeft}
+              aria-label="Ver columnas anteriores"
+              className="p-2 rounded-xl bg-[#15191E] border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollBoard('right')}
+              disabled={!canScrollRight}
+              aria-label="Ver más columnas"
+              className="p-2 rounded-xl bg-[#15191E] border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
         <div
           ref={boardRef}
-          className="overflow-x-auto pb-3 scroll-smooth"
-          style={{ scrollbarGutter: 'stable' }}
+          className="overflow-x-auto overflow-y-hidden scroll-smooth scrollbar-none overscroll-x-contain"
         >
-          <div className="flex gap-4 min-w-max h-[calc(100vh-270px)] px-1">
+          <div className="flex gap-4 min-w-max h-[calc(100vh-300px)]">
           {PIPELINE_COLUMNS.map(columnStatus => {
             const columnProjects = filteredProjects.filter(p => p.status === columnStatus);
             return (
