@@ -20,7 +20,7 @@ export default function Header({
   setNotifications,
   onMenuClick
 }: HeaderProps) {
-  const { authEnabled, user, signOut } = useAuth();
+  const { authEnabled, user, profile, signOut } = useAuth();
   const [showChannelsDropdown, setShowChannelsDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -198,7 +198,9 @@ export default function Header({
         <div className="flex items-center gap-2.5 pl-2 border-l border-white/5">
           <div className="text-right hidden md:block">
             <div className="text-sm font-medium text-[#E6EDF2]">
-              {authEnabled ? (user?.email?.split('@')[0] ?? 'Usuario') : 'Ramiro OS'}
+              {authEnabled
+                ? (profile?.display_name ?? user?.email?.split('@')[0] ?? 'Usuario')
+                : 'Ramiro OS'}
             </div>
             <div className="text-[10px] text-indigo-400 font-semibold tracking-wide uppercase">
               {authEnabled ? 'Sesión activa' : 'Plan Enterprise'}
@@ -214,8 +216,12 @@ export default function Header({
               <LogOut className="w-4 h-4" />
             </button>
           )}
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-sm text-white border border-white/10">
-            R
+          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-sm text-white border border-white/10 overflow-hidden">
+            {authEnabled && profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+            ) : (
+              'R'
+            )}
           </div>
         </div>
       </div>

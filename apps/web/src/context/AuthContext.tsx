@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { getSupabaseClient, isSupabaseAuthEnabled } from '../lib/supabase';
+import { fetchUserProfile, saveUserProfile, type UserProfile } from '../lib/profile';
 import { setApiAccessToken } from '../api';
 
 interface AuthContextValue {
@@ -16,6 +17,12 @@ interface AuthContextValue {
   loading: boolean;
   session: Session | null;
   user: User | null;
+  profile: UserProfile | null;
+  profileLoading: boolean;
+  refreshProfile: () => Promise<void>;
+  updateProfile: (
+    patch: Pick<UserProfile, 'display_name' | 'avatar_url'>,
+  ) => Promise<{ error?: string }>;
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
@@ -28,10 +35,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = getSupabaseClient();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(authEnabled);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  const refreshProfile = useCallback(async () => {
+    const userId = session?.user?.id;
+    if (!authEnabled || !userId) {
+      setProfile(null);
+      return;
+    }
+    setProfileLoading(true);
+    try {
+      const row = await fetchUserProfile(userId);
+      setProfile(row);
+    } catch {
+      setProfile(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [authEnabled, session?.user?.id]);
 
   useEffect(() => {
     if (!authEnabled || !supabase) {
       setApiAccessToken(null);
+      setProfile(null);
       setLoading(false);
       return;
     }
@@ -49,6 +76,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession);
       setApiAccessToken(nextSession?.access_token ?? null);
       setLoading(false);
+      if (!nextSession) {
+        setProfile(null);
+      }
     });
 
     return () => {
@@ -56,6 +86,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.subscription.unsubscribe();
     };
   }, [authEnabled, supabase]);
+
+  useEffect(() => {
+    void refreshProfile();
+  }, [refreshProfile]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -78,7 +112,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
+    setProfile(null);
   }, [supabase]);
+
+  const updateProfile = useCallback(
+    async (patch: Pick<UserProfile, 'display_name' | 'avatar_url'>) => {
+      const userId = session?.user?.id;
+      if (!userId) return { error: 'Sin sesión activa' };
+
+      const result = await saveUserProfile(userId, session?.user?.email ?? null, patch);
+      if (!result.error) {
+        setProfile(prev =>
+          prev
+            ? { ...prev, ...patch }
+            : {
+                id: userId,
+                email: session?.user?.email ?? null,
+                display_name: patch.display_name,
+                avatar_url: patch.avatar_url,
+              },
+        );
+      }
+      return result;
+    },
+    [session?.user?.email, session?.user?.id],
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -86,11 +144,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       session,
       user: session?.user ?? null,
+      profile,
+      profileLoading,
+      refreshProfile,
+      updateProfile,
       signIn,
       signUp,
       signOut,
     }),
-    [authEnabled, loading, session, signIn, signUp, signOut],
+    [
+      authEnabled,
+      loading,
+      session,
+      profile,
+      profileLoading,
+      refreshProfile,
+      updateProfile,
+      signIn,
+      signUp,
+      signOut,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -103,3 +176,5 @@ export function useAuth(): AuthContextValue {
   }
   return ctx;
 }
+
+export type { UserProfile };
