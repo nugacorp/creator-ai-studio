@@ -50,7 +50,7 @@ export default function Header({
   };
 
   return (
-    <header className="h-16 border-b border-white/5 bg-[#0B0F14] px-4 md:px-6 flex items-center justify-between sticky top-0 z-40 select-none">
+    <header className="h-16 border-b border-white/5 bg-[#0B0F14] px-4 md:px-6 flex items-center justify-between sticky top-0 z-40 select-none overflow-visible">
       {/* Channel selector and Menu Button */}
       <div className="flex items-center gap-3">
         {onMenuClick && (
@@ -212,30 +212,32 @@ export default function Header({
               <LogOut className="w-4 h-4" />
             </button>
           )}
-          <button
-            type="button"
-            id="profile-avatar-btn"
-            onClick={() => authEnabled && setShowProfileMenu(!showProfileMenu)}
-            title={authEnabled ? 'Mi perfil' : undefined}
-            className={`w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-sm text-white border border-white/10 overflow-hidden shrink-0 ${
-              authEnabled ? 'hover:ring-2 hover:ring-indigo-500/40 transition-all cursor-pointer' : ''
-            }`}
-          >
-            {authEnabled && profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              'R'
-            )}
-          </button>
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              id="profile-avatar-btn"
+              onClick={() => authEnabled && setShowProfileMenu(!showProfileMenu)}
+              title={authEnabled ? 'Mi perfil' : undefined}
+              className={`w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-sm text-white border border-white/10 overflow-hidden ${
+                authEnabled ? 'hover:ring-2 hover:ring-indigo-500/40 transition-all cursor-pointer' : ''
+              }`}
+            >
+              {authEnabled && profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                'R'
+              )}
+            </button>
 
-          {showProfileMenu && authEnabled && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowProfileMenu(false)} />
-              <div className="fixed sm:absolute top-16 sm:top-auto left-4 right-4 sm:left-auto sm:right-0 mt-2 sm:w-[min(24rem,calc(100vw-2rem))] z-20 animate-in fade-in slide-in-from-top-2 duration-150 max-h-[calc(100vh-5rem)] overflow-y-auto">
-                <ProfileEditor />
-              </div>
-            </>
-          )}
+            {showProfileMenu && authEnabled && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowProfileMenu(false)} />
+                <div className="absolute right-0 top-full mt-2 z-50 w-[min(24rem,calc(100vw-1.5rem))] max-h-[min(32rem,calc(100vh-5rem))] overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150 shadow-2xl">
+                  <ProfileEditor />
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </header>
