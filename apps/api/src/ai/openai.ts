@@ -6,10 +6,13 @@ import type {
   SEOResult,
   TTSResult,
 } from './types.js';
+import { providerErrorFromResponse } from './provider-error.js';
+import { getOpenAIImageModel, getOpenAIModel } from './models.js';
 
 async function openaiChat(
   apiKey: string,
   messages: Array<{ role: string; content: string }>,
+  operation: string,
 ): Promise<string> {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -18,13 +21,13 @@ async function openaiChat(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: getOpenAIModel(),
       messages,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.status}`);
+    throw await providerErrorFromResponse('openai', operation, response);
   }
 
   const data = (await response.json()) as {
@@ -46,7 +49,7 @@ export class OpenAIProvider implements AIProvider {
           'Eres el copiloto de Creator AI Studio para producción de videos cristianos. Responde en español.',
       },
       ...messages.map(m => ({ role: m.role, content: m.content })),
-    ]);
+    ], 'chat');
   }
 
   async generateScript(prompt: string, options?: ScriptOptions): Promise<string> {
@@ -58,13 +61,13 @@ export class OpenAIProvider implements AIProvider {
         role: 'user',
         content: `Escribe un guion para video cristiano de YouTube.\nPrompt: ${prompt}\nContexto: ${context}`,
       },
-    ]);
+    ], 'script');
   }
 
   async rewrite(script: string, instruction: string): Promise<string> {
     return openaiChat(this.apiKey, [
       { role: 'user', content: `Reescribe este guion: "${instruction}"\n\n${script}` },
-    ]);
+    ], 'rewrite');
   }
 
   async generateImage(prompt: string, _options?: ImageOptions): Promise<string> {
@@ -75,7 +78,7 @@ export class OpenAIProvider implements AIProvider {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
-        model: 'dall-e-3',
+        model: getOpenAIImageModel(),
         prompt,
         n: 1,
         size: '1024x1024',
@@ -83,7 +86,7 @@ export class OpenAIProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI image error: ${response.status}`);
+      throw await providerErrorFromResponse('openai', 'image', response);
     }
 
     const data = (await response.json()) as { data?: Array<{ url?: string }> };
@@ -105,7 +108,7 @@ export class OpenAIProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      return { isDemo: true };
+      throw await providerErrorFromResponse('openai', 'tts', response);
     }
 
     const buffer = await response.arrayBuffer();
@@ -119,7 +122,7 @@ export class OpenAIProvider implements AIProvider {
         role: 'user',
         content: `SEO para YouTube. Título: ${title}. Guion: ${script.substring(0, 1500)}. JSON: {"titles":[],"description":"","tags":[]}`,
       },
-    ]);
+    ], 'seo');
     try {
       const match = raw.match(/\{[\s\S]*\}/);
       if (match) return JSON.parse(match[0]) as SEOResult;

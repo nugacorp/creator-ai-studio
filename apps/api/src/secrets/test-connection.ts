@@ -1,4 +1,5 @@
 import type { SecretProvider, SecretTestResult } from '@creator-ai-studio/shared';
+import { getAnthropicModel } from '../ai/models.js';
 import { getGeminiAuth, getValidGoogleAccessToken, googleOAuthHeaders, formatGoogleApiTestError, hasYoutubeOAuthScope } from './google-auth.js';
 import { getSecret, getSecretByField } from './resolver.js';
 
@@ -51,7 +52,7 @@ export async function testSecretProvider(provider: SecretProvider): Promise<Secr
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
+            model: getAnthropicModel(),
             max_tokens: 1,
             messages: [{ role: 'user', content: 'ping' }],
           }),
