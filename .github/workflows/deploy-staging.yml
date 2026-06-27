@@ -14,6 +14,11 @@ name: Deploy Staging
 on:
   push:
     branches: [staging]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -33,6 +38,9 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER || 'root' }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
         run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "${VPS_USER}@${VPS_HOST}" \
+            "git config --global --add safe.directory /root/creator-ai-studio 2>/dev/null || true"
           rsync -avz \
             --exclude node_modules \
             --exclude .git \

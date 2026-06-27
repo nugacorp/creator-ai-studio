@@ -4,7 +4,57 @@ set -euo pipefail
 COMMIT="${1:-plan-implement}"
 SRC_DIR="/root/creator-ai-studio"
 APP_DIR="/data/coolify/applications/z7b1ieqp66a7e43cywaz816w"
+APP_ID="z7b1ieqp66a7e43cywaz816w"
 DOMAIN="creator-ai-studio.217.76.56.66.sslip.io"
+LOCK_FILE="${APP_DIR}/.deploy.lock"
+COMPOSE_FILE="${APP_DIR}/docker-compose.yaml"
+SERVICES=(api web worker redis)
+
+# Serialize deploys so concurrent pushes cannot race on container names (Conflict: name already in use).
+exec 9>"${LOCK_FILE}"
+if ! flock -w 600 9; then
+  echo "Another deploy is already running (lock timeout after 600s)" >&2
+  exit 1
+fi
+
+cleanup_stale_containers() {
+  echo "=== Cleaning stale Coolify app containers ==="
+  cd "$APP_DIR"
+  docker compose -f docker-compose.yaml down --remove-orphans 2>/dev/null || true
+  for svc in "${SERVICES[@]}"; do
+    ids=$(docker ps -aq --filter "name=${svc}-${APP_ID}" 2>/dev/null || true)
+    if [ -n "$ids" ]; then
+      echo "Removing stale ${svc} containers: $ids"
+      echo "$ids" | xargs -r docker rm -f 2>/dev/null || true
+    fi
+  done
+}
+
+compose_up() {
+  local attempt
+  cd "$APP_DIR"
+  local services=()
+  for svc in "${SERVICES[@]}"; do
+    if grep -qE "^[[:space:]]${svc}:" "$COMPOSE_FILE" 2>/dev/null; then
+      services+=("$svc")
+    fi
+  done
+  if [ "${#services[@]}" -eq 0 ]; then
+    services=(api web)
+  fi
+
+  for attempt in 1 2 3; do
+    echo "=== Starting stack (attempt ${attempt}): ${services[*]} ==="
+    if docker compose -f docker-compose.yaml up -d --force-recreate --remove-orphans "${services[@]}" --no-build; then
+      return 0
+    fi
+    echo "docker compose up failed (attempt ${attempt}), cleaning conflicting containers..." >&2
+    cleanup_stale_containers
+    sleep 2
+  done
+  echo "docker compose up failed after 3 attempts" >&2
+  return 1
+}
 
 if [ -f "$SRC_DIR/.env.supabase.local" ]; then
   set -a
@@ -116,9 +166,8 @@ p.write_text(text)
 print("compose images updated")
 PY
 
-cd "$APP_DIR"
-docker compose -f docker-compose.yaml up -d redis worker api web --no-build 2>/dev/null || \
-  docker compose -f docker-compose.yaml up -d api web --no-build
+cleanup_stale_containers
+compose_up
 
 echo "=== Waiting for API health ==="
 for i in $(seq 1 30); do
