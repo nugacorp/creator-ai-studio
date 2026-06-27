@@ -9,7 +9,7 @@ DOMAIN="creator-ai-studio.217.76.56.66.sslip.io"
 if [ -f "$SRC_DIR/.env.supabase.local" ]; then
   set -a
   # shellcheck disable=SC1091
-  source "$SRC_DIR/.env.supabase.local"
+  source <(sed 's/\r$//' "$SRC_DIR/.env.supabase.local")
   set +a
 fi
 
