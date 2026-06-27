@@ -16,6 +16,9 @@ services:
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       PIPER_BIN: ${PIPER_BIN:-}
       PIPER_MODEL: ${PIPER_MODEL:-}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
     volumes:
       - creator-ai-studio-staging-episodes:/data/episodes
       - ${RCLONE_CONFIG_VOLUME:-creator-ai-studio-rclone-config}:/config/rclone:ro
@@ -41,6 +44,8 @@ services:
       dockerfile: Dockerfile.web
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
     expose:
       - "8080"
     labels:

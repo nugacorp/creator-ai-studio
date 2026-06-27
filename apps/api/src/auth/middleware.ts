@@ -1,5 +1,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import process from 'node:process';
+import { isSupabaseAuthConfigured, verifySupabaseAccessToken } from './supabase-jwt.js';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    userId?: string;
+  }
+}
 
 const PUBLIC_PATHS = new Set(['/health', '/api/health']);
 const PUBLIC_PATH_PREFIXES = ['/oauth/', '/api/oauth/'];
@@ -13,9 +20,9 @@ function isPublicPath(pathname: string): boolean {
 
 export function registerAuthHook(app: FastifyInstance): void {
   const apiKey = process.env.CAS_API_KEY;
-  const supabaseJwtSecret = process.env.SUPABASE_JWT_SECRET;
+  const supabaseAuth = isSupabaseAuthConfigured();
 
-  if (!apiKey && !supabaseJwtSecret) {
+  if (!apiKey && !supabaseAuth) {
     return;
   }
 
@@ -41,16 +48,15 @@ export function registerAuthHook(app: FastifyInstance): void {
       return;
     }
 
-    if (supabaseJwtSecret && authHeader?.startsWith('Bearer ')) {
+    if (supabaseAuth && authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7);
-      try {
-        const { jwtVerify } = await import('jose');
-        await jwtVerify(token, new TextEncoder().encode(supabaseJwtSecret));
+      const verified = await verifySupabaseAccessToken(token);
+      if (verified) {
+        request.userId = verified.userId;
         return;
-      } catch {
-        reply.code(401);
-        return reply.send({ error: 'invalid_token' });
       }
+      reply.code(401);
+      return reply.send({ error: 'invalid_token' });
     }
 
     reply.code(401);

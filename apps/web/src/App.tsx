@@ -17,6 +17,8 @@ import MultichannelView from './components/MultichannelView';
 import TeamsView from './components/TeamsView';
 import SettingsView from './components/SettingsView';
 import DemoModeBanner from './components/DemoModeBanner';
+import LoginView from './components/LoginView';
+import { useAuth } from './context/AuthContext';
 
 import {
   INITIAL_CHANNELS,
@@ -66,6 +68,7 @@ interface AppProps {
 }
 
 export function App({ initialView = 'home' }: AppProps = {}) {
+  const { authEnabled, loading, session } = useAuth();
   const [currentView, setCurrentView] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('view') ?? initialView;
@@ -225,6 +228,18 @@ export function App({ initialView = 'home' }: AppProps = {}) {
       handleAddNotification('No se pudo importar el guion', 'error');
     }
   };
+
+  if (authEnabled && loading) {
+    return (
+      <div className="min-h-screen bg-[#0B0F14] flex items-center justify-center text-sm text-[#8B949E]">
+        Cargando sesión…
+      </div>
+    );
+  }
+
+  if (authEnabled && !session) {
+    return <LoginView />;
+  }
 
   return (
     <div className="flex bg-[#0B0F14] text-[#E6EDF2] min-h-screen font-sans antialiased selection:bg-indigo-600/30 selection:text-indigo-300">

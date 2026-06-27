@@ -20,8 +20,23 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
+let apiAccessToken: string | null = null;
+
+export function setApiAccessToken(token: string | null): void {
+  apiAccessToken = token;
+}
+
+function authHeaders(extra?: HeadersInit): Headers {
+  const headers = new Headers(extra);
+  if (apiAccessToken) {
+    headers.set('Authorization', `Bearer ${apiAccessToken}`);
+  }
+  return headers;
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  const headers = authHeaders(init?.headers);
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   if (!response.ok) {
     throw new Error(`API error (${response.status})`);
   }
@@ -176,7 +191,9 @@ export async function startGoogleOAuth(
     returnUrl,
     forceConsent: forceConsent ? 'true' : 'false',
   });
-  const response = await fetch(`${API_BASE_URL}/oauth/google/start?${query.toString()}`);
+  const response = await fetch(`${API_BASE_URL}/oauth/google/start?${query.toString()}`, {
+    headers: authHeaders(),
+  });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { message?: string; error?: string };
     throw new Error(body.message ?? body.error ?? `API error (${response.status})`);

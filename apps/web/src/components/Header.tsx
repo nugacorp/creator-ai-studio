@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Bell, ChevronDown, Check, RefreshCw, AlertTriangle, Sparkles, Wifi, Menu } from 'lucide-react';
+import { Bell, ChevronDown, Check, RefreshCw, AlertTriangle, Sparkles, Wifi, Menu, LogOut } from 'lucide-react';
 import { Channel, Notification } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   channels: Channel[];
@@ -19,6 +20,7 @@ export default function Header({
   setNotifications,
   onMenuClick
 }: HeaderProps) {
+  const { authEnabled, user, signOut } = useAuth();
   const [showChannelsDropdown, setShowChannelsDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -195,9 +197,23 @@ export default function Header({
         {/* User profile info */}
         <div className="flex items-center gap-2.5 pl-2 border-l border-white/5">
           <div className="text-right hidden md:block">
-            <div className="text-sm font-medium text-[#E6EDF2]">Ramiro OS</div>
-            <div className="text-[10px] text-indigo-400 font-semibold tracking-wide uppercase">Plan Enterprise</div>
+            <div className="text-sm font-medium text-[#E6EDF2]">
+              {authEnabled ? (user?.email?.split('@')[0] ?? 'Usuario') : 'Ramiro OS'}
+            </div>
+            <div className="text-[10px] text-indigo-400 font-semibold tracking-wide uppercase">
+              {authEnabled ? 'Sesión activa' : 'Plan Enterprise'}
+            </div>
           </div>
+          {authEnabled && (
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              title="Cerrar sesión"
+              className="p-2 rounded-xl text-[#8B949E] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
           <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-sm text-white border border-white/10">
             R
           </div>

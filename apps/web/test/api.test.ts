@@ -20,6 +20,8 @@ describe('web API client', () => {
 
     await fetchEpisodes();
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/episodes', undefined);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/episodes');
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual({ headers: expect.any(Headers) });
   });
 });

@@ -2,6 +2,15 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import type { EpisodeSummary } from '@creator-ai-studio/shared';
 import { App } from '../src/App';
+import { AuthProvider } from '../src/context/AuthContext';
+
+function renderApp(initialView?: string) {
+  return render(
+    <AuthProvider>
+      <App initialView={initialView} />
+    </AuthProvider>,
+  );
+}
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -43,7 +52,7 @@ describe('Official dashboard shell', () => {
   it('renders the full official sidebar navigation', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse([]));
 
-    render(<App initialView="projects" />);
+    renderApp('projects');
 
     const nav = screen.getByRole('navigation');
     for (const label of SIDEBAR_ITEMS) {
@@ -54,7 +63,7 @@ describe('Official dashboard shell', () => {
   it('renders home dashboard without crashing before episodes load', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
 
-    render(<App initialView="home" />);
+    renderApp('home');
 
     expect(screen.getByText(/Buenos días, Ramiro/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Abrir proyecto/i })).toBeInTheDocument();
@@ -89,7 +98,7 @@ describe('Official dashboard shell', () => {
       return jsonResponse([]);
     });
 
-    render(<App initialView="projects" />);
+    renderApp('projects');
 
     await waitFor(() =>
       expect(screen.getByText(/Episodio Real Demo/)).toBeInTheDocument(),
