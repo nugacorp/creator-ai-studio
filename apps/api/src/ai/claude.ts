@@ -6,8 +6,15 @@ import type {
   SEOResult,
   TTSResult,
 } from './types.js';
+import { providerErrorFromResponse } from './provider-error.js';
+import { getAnthropicModel } from './models.js';
 
-async function claudeMessage(apiKey: string, prompt: string, system?: string): Promise<string> {
+async function claudeMessage(
+  apiKey: string,
+  prompt: string,
+  operation: string,
+  system?: string,
+): Promise<string> {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -16,7 +23,7 @@ async function claudeMessage(apiKey: string, prompt: string, system?: string): P
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: getAnthropicModel(),
       max_tokens: 4096,
       system: system ?? 'Eres un asistente de Creator AI Studio para videos cristianos. Responde en español.',
       messages: [{ role: 'user', content: prompt }],
@@ -24,7 +31,7 @@ async function claudeMessage(apiKey: string, prompt: string, system?: string): P
   });
 
   if (!response.ok) {
-    throw new Error(`Claude API error: ${response.status}`);
+    throw await providerErrorFromResponse('claude', operation, response);
   }
 
   const data = (await response.json()) as {
@@ -40,7 +47,7 @@ export class ClaudeAIProvider implements AIProvider {
 
   async chat(messages: ChatMessage[]): Promise<string> {
     const history = messages.map(m => `${m.role}: ${m.content}`).join('\n');
-    return claudeMessage(this.apiKey, history);
+    return claudeMessage(this.apiKey, history, 'chat');
   }
 
   async generateScript(prompt: string, options?: ScriptOptions): Promise<string> {
@@ -48,12 +55,13 @@ export class ClaudeAIProvider implements AIProvider {
     return claudeMessage(
       this.apiKey,
       `Guion para video cristiano de YouTube.\nPrompt: ${prompt}\nOpciones: ${ctx}`,
+      'script',
       'Eres un guionista experto en contenido cristiano.',
     );
   }
 
   async rewrite(script: string, instruction: string): Promise<string> {
-    return claudeMessage(this.apiKey, `Reescribe aplicando "${instruction}":\n\n${script}`);
+    return claudeMessage(this.apiKey, `Reescribe aplicando "${instruction}":\n\n${script}`, 'rewrite');
   }
 
   async generateImage(prompt: string, _options?: ImageOptions): Promise<string> {
@@ -68,6 +76,7 @@ export class ClaudeAIProvider implements AIProvider {
     const raw = await claudeMessage(
       this.apiKey,
       `SEO JSON para "${title}": ${script.substring(0, 1500)}. Formato: {"titles":[],"description":"","tags":[]}`,
+      'seo',
     );
     try {
       const match = raw.match(/\{[\s\S]*\}/);

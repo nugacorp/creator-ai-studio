@@ -40,6 +40,7 @@ Recorded changes:
 | 2026-06-25 | Hermes | CAS-WO-0004 | Initialized official documentation standard. |
 | 2026-06-25 | Hermes | CAS-WO-0005 | Normalized existing Markdown documents to the official documentation standard. |
 | 2026-06-25 | Hermes | CAS-HERMES-DEPLOY-0023 | Prepared Coolify staging deployment configuration and documentation. |
+| 2026-06-27 | Cursor | CAS-CURSOR-WO-0033 | AI provider diagnostics, structured ProviderError, fallback gateway, status/smoke-test endpoints. |
 
 ## Dependencies
 
@@ -56,3 +57,4 @@ MASTER_INDEX.md, PROJECT_STATE.md, DOCUMENTATION_STANDARD.md
 | 2026-06-25 | 0.1.0 | Hermes | Initial changelog created. |
 | 2026-06-25 | 0.1.0 | Hermes | Normalized document to official documentation standard and recorded CAS-WO-0005. |
 | 2026-06-25 | 0.1.0 | Hermes | Recorded CAS-HERMES-DEPLOY-0023 staging deployment preparation. |
+| 2026-06-27 | 0.1.0 | Cursor | CAS-CURSOR-WO-0033: AI provider diagnostics and safe fallback. |
