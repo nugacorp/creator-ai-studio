@@ -59,8 +59,17 @@ async function ensureSecretsMigrated(): Promise<void> {
   }
 }
 
+// scrypt is intentionally expensive; cache the derived key so we don't block
+// the event loop on every secrets read (the master key never changes at runtime).
+let derivedKeyCache: { master: string; key: Buffer } | null = null;
+
 function deriveKey(master: string): Buffer {
-  return scryptSync(master, 'creator-ai-studio-secrets-v1', 32);
+  if (derivedKeyCache?.master === master) {
+    return derivedKeyCache.key;
+  }
+  const key = scryptSync(master, 'creator-ai-studio-secrets-v1', 32);
+  derivedKeyCache = { master, key };
+  return key;
 }
 
 function encryptPayload(data: Record<string, string>, masterKey: string): Buffer {

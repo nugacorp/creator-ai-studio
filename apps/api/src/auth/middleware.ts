@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { timingSafeEqual } from 'node:crypto';
 import process from 'node:process';
 import { isSupabaseAuthConfigured, verifySupabaseAccessToken } from './supabase-jwt.js';
 
@@ -18,11 +19,31 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PREFIXES.some(prefix => pathname.startsWith(prefix));
 }
 
+/** Constant-time string comparison to avoid timing attacks on the API key. */
+function safeEquals(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
+
 export function registerAuthHook(app: FastifyInstance): void {
   const apiKey = process.env.CAS_API_KEY;
   const supabaseAuth = isSupabaseAuthConfigured();
 
   if (!apiKey && !supabaseAuth) {
+    // Fail closed in production: never expose the API without authentication.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'Refusing to start without authentication in production. ' +
+          'Set CAS_API_KEY and/or SUPABASE_URL (Supabase JWT auth) before deploying.',
+      );
+    }
+    app.log?.warn?.(
+      'API running WITHOUT authentication (no CAS_API_KEY / SUPABASE_URL). Dev mode only.',
+    );
     return;
   }
 
@@ -37,7 +58,7 @@ export function registerAuthHook(app: FastifyInstance): void {
     const token =
       bearerToken ?? (typeof headerKey === 'string' ? headerKey : undefined);
 
-    if (apiKey && token === apiKey) {
+    if (apiKey && token && safeEquals(token, apiKey)) {
       return;
     }
 

@@ -1,4 +1,6 @@
-import { readFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import { getSecret } from '../secrets/resolver.js';
 import { getValidGoogleAccessToken } from '../secrets/google-auth.js';
 
@@ -13,18 +15,13 @@ async function resolveYouTubeAccessToken(): Promise<string | undefined> {
   if (dedicated) {
     return dedicated;
   }
+  return getValidGoogleAccessToken();
+}
 
-  const oauthToken = await getValidGoogleAccessToken();
-  if (!oauthToken) {
-    return undefined;
-  }
-
+/** True when the shared Google OAuth token was granted YouTube scopes. */
+export async function hasYouTubeScopes(): Promise<boolean> {
   const scopes = (await getSecret('GOOGLE_OAUTH_SCOPES')) ?? '';
-  if (scopes.includes('youtube')) {
-    return oauthToken;
-  }
-
-  return oauthToken;
+  return scopes.includes('youtube');
 }
 
 export async function uploadToYouTube(
@@ -45,7 +42,6 @@ export async function uploadToYouTube(
   }
 
   const fileInfo = await stat(videoPath);
-  const videoBytes = await readFile(videoPath);
 
   const initResponse = await fetch(
     'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
@@ -74,6 +70,8 @@ export async function uploadToYouTube(
     throw new Error('YouTube no devolvió URL de upload resumible');
   }
 
+  // Stream the file instead of buffering it in memory (episode videos can be
+  // hundreds of MB; readFile would OOM a small VPS).
   const uploadResponse = await fetch(location, {
     method: 'PUT',
     headers: {
@@ -81,8 +79,10 @@ export async function uploadToYouTube(
       'Content-Type': 'video/mp4',
       'Content-Length': String(fileInfo.size),
     },
-    body: videoBytes,
-  });
+    body: Readable.toWeb(createReadStream(videoPath)) as unknown as NonNullable<RequestInit['body']>,
+    // Required by Node's fetch (undici) when sending a streamed request body.
+    duplex: 'half',
+  } as RequestInit & { duplex: 'half' });
 
   if (!uploadResponse.ok) {
     const errText = await uploadResponse.text().catch(() => '');

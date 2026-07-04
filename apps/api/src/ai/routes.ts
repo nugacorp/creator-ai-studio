@@ -7,6 +7,7 @@ import {
 } from './router.js';
 import type { AIProviderName, ScriptOptions } from './types.js';
 import { AIOperationFailedError, ProviderError } from './provider-error.js';
+import { aiBody } from '../http/schemas.js';
 
 function sendAIError(reply: FastifyReply, error: unknown): void {
   if (error instanceof AIOperationFailedError) {
@@ -146,10 +147,10 @@ function registerAIRoutes(app: FastifyInstance, prefix: '' | '/api'): void {
     ['/tts', '/tts', handlers.tts],
     ['/seo', '/seo', handlers.seo],
   ] as const) {
-    app.post(`${geminiBase}${geminiPath}`, async (request, reply) => {
+    app.post(`${geminiBase}${geminiPath}`, { schema: { body: aiBody } }, async (request, reply) => {
       return handler(request.body as Parameters<typeof handler>[0], reply);
     });
-    app.post(`${base}${canonicalPath}`, async (request, reply) => {
+    app.post(`${base}${canonicalPath}`, { schema: { body: aiBody } }, async (request, reply) => {
       return handler(request.body as Parameters<typeof handler>[0], reply);
     });
   }
