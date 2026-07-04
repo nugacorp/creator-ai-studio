@@ -20,6 +20,23 @@ function settingsReturnUrl(publicBaseUrl: string, params: Record<string, string>
   return `${publicBaseUrl}/?view=settings&${query.toString()}`;
 }
 
+/**
+ * Only allow relative paths or absolute URLs on our own origin as OAuth
+ * return targets (prevents open redirects via ?returnUrl=https://evil).
+ */
+function sanitizeReturnUrl(raw: string | undefined, publicBaseUrl: string): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  try {
+    const resolved = new URL(value, publicBaseUrl);
+    const allowed = new URL(publicBaseUrl);
+    if (resolved.origin !== allowed.origin) return null;
+    return resolved.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function registerOAuthRoutes(app: FastifyInstance, prefix: '' | '/api'): void {
   const base = prefix === '/api' ? '/api/oauth' : '/oauth';
 
@@ -43,7 +60,9 @@ export function registerOAuthRoutes(app: FastifyInstance, prefix: '' | '/api'): 
 
     const publicBaseUrl = resolvePublicBaseUrl(request.protocol, request.hostname);
     const redirectUri = googleOAuthRedirectUri(publicBaseUrl);
-    const returnUrl = query.returnUrl?.trim() || settingsReturnUrl(publicBaseUrl, { oauth: purpose });
+    const returnUrl =
+      sanitizeReturnUrl(query.returnUrl, publicBaseUrl) ??
+      settingsReturnUrl(publicBaseUrl, { oauth: purpose });
 
     try {
       const forceConsent = query.forceConsent === 'true';
@@ -126,7 +145,11 @@ export function registerOAuthRoutes(app: FastifyInstance, prefix: '' | '/api'): 
       });
       await persistGoogleTokens(tokens, purpose);
 
-      const successUrl = new URL(returnUrl, publicBaseUrl);
+      // Defense in depth: re-validate the (signed) returnUrl before redirecting.
+      const safeReturnUrl =
+        sanitizeReturnUrl(returnUrl, publicBaseUrl) ??
+        settingsReturnUrl(publicBaseUrl, { oauth: purpose });
+      const successUrl = new URL(safeReturnUrl, publicBaseUrl);
       successUrl.searchParams.set('oauth', purpose);
       successUrl.searchParams.set('oauth_status', 'success');
       return reply.redirect(successUrl.toString());

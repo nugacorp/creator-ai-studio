@@ -32,6 +32,10 @@ export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSett
   const merged = { ...current, ...patch };
   const file = settingsPath();
   await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
+  // Atomic write so a crash mid-write never corrupts settings.json.
+  const tmp = `${file}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
+  const { rename } = await import('node:fs/promises');
+  await rename(tmp, file);
   return merged;
 }
