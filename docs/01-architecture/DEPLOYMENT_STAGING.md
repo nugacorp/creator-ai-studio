@@ -60,7 +60,7 @@ Recommended Coolify strategy for staging:
 5. Expose only the web service publicly on port `8080`.
 6. Keep the API service internal to the Compose network; nginx in the web service proxies `/api` to `http://api:3000/api`.
 7. Mount a persistent volume for the API at `/data/episodes` (secrets and settings persist under that path).
-8. Worker and Redis start by default with `docker-compose.staging.yml`.
+8. Worker and Redis start by default with `docker-compose.staging.yml`. The VPS redeploy script (`scripts/vps-redeploy.sh`) resolves the service list with `docker compose config --services` and starts every service present — `api`, `web`, `redis`, `worker` — so redeploys bring the full stack up automatically (see [docs/02-operations/RUNBOOK.md](../02-operations/RUNBOOK.md) → Redeploy → Service startup).
 
 ### Staging URL
 
@@ -235,3 +235,4 @@ DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json, docs/01-architecture/TECH_STACK.md
 | 2026-06-25 | 0.1.0 | Hermes | Initial Coolify staging deployment document created for CAS-HERMES-DEPLOY-0023. |
 | 2026-06-25 | 0.2.0 | Hermes | Documented same-origin `/api` nginx proxy strategy for staging. |
 | 2026-06-26 | 0.3.0 | Cursor | Documented staging URL `creator-ai-studio.217.76.56.66.sslip.io`. |
+| 2026-07-04 | 0.4.0 | Cursor | Noted VPS redeploy resolves services via `docker compose config --services` and auto-starts api/web/redis/worker (CAS-CURSOR-WO-0038). |

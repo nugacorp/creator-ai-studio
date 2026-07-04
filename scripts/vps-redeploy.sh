@@ -7,8 +7,8 @@ APP_DIR="/data/coolify/applications/z7b1ieqp66a7e43cywaz816w"
 APP_ID="z7b1ieqp66a7e43cywaz816w"
 DOMAIN="creator-ai-studio.217.76.56.66.sslip.io"
 LOCK_FILE="${APP_DIR}/.deploy.lock"
-COMPOSE_FILE="${APP_DIR}/docker-compose.yaml"
 SERVICES=(api web worker redis)
+STARTED_SERVICES=()
 
 # Serialize deploys so concurrent pushes cannot race on container names (Conflict: name already in use).
 exec 9>"${LOCK_FILE}"
@@ -30,22 +30,34 @@ cleanup_stale_containers() {
   done
 }
 
+resolve_services() {
+  # Ask compose which services actually exist, so redis/worker come up when
+  # present and are skipped when absent. `config --services` is indentation-proof;
+  # the previous `grep "^[[:space:]]svc:"` required exactly one leading space and
+  # never matched the Coolify runtime compose, so the stack fell back to api+web
+  # only and left redis/worker down (CAS-CURSOR-WO-0038).
+  local present svc
+  present=$(cd "$APP_DIR" && docker compose -f docker-compose.yaml config --services 2>/dev/null || true)
+  STARTED_SERVICES=()
+  for svc in "${SERVICES[@]}"; do
+    if printf '%s\n' "$present" | grep -qxF "$svc"; then
+      STARTED_SERVICES+=("$svc")
+    fi
+  done
+  if [ "${#STARTED_SERVICES[@]}" -eq 0 ]; then
+    echo "WARN: could not enumerate compose services; falling back to api web" >&2
+    STARTED_SERVICES=(api web)
+  fi
+}
+
 compose_up() {
   local attempt
   cd "$APP_DIR"
-  local services=()
-  for svc in "${SERVICES[@]}"; do
-    if grep -qE "^[[:space:]]${svc}:" "$COMPOSE_FILE" 2>/dev/null; then
-      services+=("$svc")
-    fi
-  done
-  if [ "${#services[@]}" -eq 0 ]; then
-    services=(api web)
-  fi
+  resolve_services
 
   for attempt in 1 2 3; do
-    echo "=== Starting stack (attempt ${attempt}): ${services[*]} ==="
-    if docker compose -f docker-compose.yaml up -d --force-recreate --remove-orphans "${services[@]}" --no-build; then
+    echo "=== Starting stack (attempt ${attempt}): ${STARTED_SERVICES[*]} ==="
+    if docker compose -f docker-compose.yaml up -d --force-recreate --remove-orphans "${STARTED_SERVICES[@]}" --no-build; then
       return 0
     fi
     echo "docker compose up failed (attempt ${attempt}), cleaning conflicting containers..." >&2
@@ -54,6 +66,36 @@ compose_up() {
   done
   echo "docker compose up failed after 3 attempts" >&2
   return 1
+}
+
+verify_services() {
+  # Sanitized post-up check: report each started service's container state (and
+  # health when defined). Prints only service name/state/health -- never env or
+  # secrets. Returns non-zero if any started service is not running.
+  echo "=== Service status ==="
+  local svc cid state health tries rc=0
+  cd "$APP_DIR"
+  for svc in "${STARTED_SERVICES[@]}"; do
+    cid=""
+    for tries in 1 2 3 4 5; do
+      cid=$(docker compose -f docker-compose.yaml ps -q "$svc" 2>/dev/null | head -1 || true)
+      if [ -n "$cid" ]; then
+        state=$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo unknown)
+        [ "$state" = "running" ] && break
+      fi
+      sleep 2
+    done
+    if [ -z "$cid" ]; then
+      printf '  %-8s %s\n' "$svc" "MISSING (no container)"
+      rc=1
+      continue
+    fi
+    state=$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo unknown)
+    health=$(docker inspect -f '{{if .State.Health}} health={{.State.Health.Status}}{{end}}' "$cid" 2>/dev/null || true)
+    printf '  %-8s %s%s\n' "$svc" "$state" "$health"
+    [ "$state" = "running" ] || rc=1
+  done
+  return $rc
 }
 
 if [ -f "$SRC_DIR/.env.supabase.local" ]; then
@@ -231,12 +273,14 @@ for i in $(seq 1 30); do
     echo "OK: https://${DOMAIN}/api/health"
     curl -fsS "https://${DOMAIN}/api/health"
     echo
-    docker ps --format 'table {{.Names}}\t{{.Status}}' | grep z7b1ieqp66a7e43cywaz816w || true
+    # api is healthy (deploy gate). Report every started service; a lagging
+    # redis/worker is surfaced as a warning but does not fail a healthy deploy.
+    verify_services || echo "WARN: not all services are running yet; see status above" >&2
     exit 0
   fi
   sleep 2
 done
 
 echo "Health check failed" >&2
-docker ps --filter name=z7b1ieqp66a7e43cywaz816w
+verify_services || true
 exit 1

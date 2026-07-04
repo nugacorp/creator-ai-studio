@@ -86,6 +86,25 @@ That compose file is shared and survives across redeploys, so injection is
 Re-running `scripts/vps-redeploy.sh` (or the helper
 `scripts/patch-worker-cas-key.sh`) on an already-patched compose is a safe no-op.
 
+### Service startup
+
+The redeploy must bring up **every service defined in the compose** — `api`,
+`web`, `redis`, and `worker` — automatically. The service list is resolved with
+`docker compose -f docker-compose.yaml config --services` (indentation-proof) and
+intersected with the expected set, so:
+
+- when `redis`/`worker` exist they are started along with `api`/`web`;
+- when a service is absent (e.g. an `api`+`web`-only compose) it is skipped;
+- compose service order does not matter.
+
+The earlier `grep "^[[:space:]]<svc>:"` detection required exactly one leading
+space, never matched the Coolify runtime compose, and silently fell back to
+`api web` — leaving `redis`/`worker` down (CAS-CURSOR-WO-0038). `docker compose
+config` remains the mandatory gate before containers start. After `up`, the
+script prints a sanitized per-service status (name / state / health only, no
+secrets); a lagging `redis`/`worker` is surfaced as a warning but does not fail a
+deploy whose `api` is already healthy.
+
 ## CI
 
 GitHub Actions runs on push/PR to `main`, `staging`, and `feature/*`:
