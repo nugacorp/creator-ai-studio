@@ -59,6 +59,33 @@ bash scripts/enable-worker-staging.sh
 bash scripts/vps-redeploy.sh <tag>
 ```
 
+## Redeploy (VPS) — Idempotent Env Injection
+
+`scripts/vps-redeploy.sh` rebuilds the images and patches the Coolify-generated
+runtime compose (`/data/coolify/applications/<app>/docker-compose.yaml`) with the
+runtime env each service needs (`CAS_API_KEY`, `CAS_PUBLIC_URL`, `REDIS_URL`,
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
+
+That compose file is shared and survives across redeploys, so injection is
+**idempotent and scoped per service**:
+
+- A key is added to a service only when that service block does not already
+  declare it. The check scans the full service block (located by indentation),
+  so a key declared after `REDIS_URL` is detected correctly. The previous
+  `split("redis:")` logic truncated the worker block at the `redis:` inside
+  `REDIS_URL: redis://redis:6379`, missed the existing `CAS_API_KEY`, and
+  duplicated it — producing an invalid YAML (CAS-HERMES-VAL-0034 /
+  CAS-CURSOR-WO-0036).
+- The worker shares the API's `CAS_API_KEY`; it is inserted exactly once, after
+  `API_BASE_URL`.
+- Before writing, the script refuses to save a compose that declares any managed
+  key twice in the same service, then runs `docker compose config` as a final
+  YAML gate (restoring the pre-deploy backup and aborting on failure). Secret
+  values are never printed to the deploy log.
+
+Re-running `scripts/vps-redeploy.sh` (or the helper
+`scripts/patch-worker-cas-key.sh`) on an already-patched compose is a safe no-op.
+
 ## CI
 
 GitHub Actions runs on push/PR to `main`, `staging`, and `feature/*`:
