@@ -8,11 +8,14 @@ import type {
 } from './types.js';
 import type { GeminiAuth } from '../secrets/google-auth.js';
 import { googleOAuthHeaders } from '../secrets/google-auth.js';
+import { providerErrorFromResponse } from './provider-error.js';
+import { getGeminiImageModel, getGeminiTextModel } from './models.js';
 
 async function geminiGenerate(
   auth: GeminiAuth,
   model: string,
   contents: string,
+  operation: string,
   systemInstruction?: string,
 ): Promise<string> {
   const body: Record<string, unknown> = {
@@ -37,7 +40,7 @@ async function geminiGenerate(
   });
 
   if (!response.ok) {
-    throw new Error(`Gemini API error: ${response.status}`);
+    throw await providerErrorFromResponse('gemini', operation, response);
   }
 
   const data = (await response.json()) as {
@@ -57,8 +60,9 @@ export class GeminiAIProvider implements AIProvider {
       .join('\n');
     return geminiGenerate(
       this.auth,
-      'gemini-2.0-flash',
+      getGeminiTextModel(),
       history,
+      'chat',
       'Eres el copiloto de Creator AI Studio, un asistente para producción de videos cristianos en YouTube. Responde en español, de forma clara y práctica.',
     );
   }
@@ -77,8 +81,9 @@ export class GeminiAIProvider implements AIProvider {
 
     return geminiGenerate(
       this.auth,
-      'gemini-2.0-flash',
+      getGeminiTextModel(),
       `Genera un guion completo para video de YouTube cristiano.\n\nPrompt: ${prompt}\n\n${opts}`,
+      'script',
       'Eres un guionista experto en contenido cristiano para YouTube. Escribe en español con estructura clara: gancho, desarrollo y conclusión.',
     );
   }
@@ -86,15 +91,16 @@ export class GeminiAIProvider implements AIProvider {
   async rewrite(script: string, instruction: string): Promise<string> {
     return geminiGenerate(
       this.auth,
-      'gemini-2.0-flash',
+      getGeminiTextModel(),
       `Reescribe el siguiente guion aplicando esta instrucción: "${instruction}"\n\nGuion:\n${script}`,
+      'rewrite',
     );
   }
 
   async generateImage(prompt: string, options?: ImageOptions): Promise<string> {
     const aspect = options?.aspectRatio ?? '16:9';
-    const url =
-      'https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict';
+    const model = getGeminiImageModel();
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const requestUrl =
       this.auth.mode === 'api_key'
@@ -114,7 +120,7 @@ export class GeminiAIProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      return `https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=800`;
+      throw await providerErrorFromResponse('gemini', 'image', response);
     }
 
     const data = (await response.json()) as {
@@ -131,8 +137,9 @@ export class GeminiAIProvider implements AIProvider {
     try {
       const response = await geminiGenerate(
         this.auth,
-        'gemini-2.0-flash',
+        getGeminiTextModel(),
         `Convierte a fonética legible para TTS (voz ${voice}): ${text.substring(0, 500)}`,
+        'tts',
       );
       if (response) {
         return { isDemo: true };
@@ -146,8 +153,9 @@ export class GeminiAIProvider implements AIProvider {
   async optimizeSEO(title: string, script: string): Promise<SEOResult> {
     const raw = await geminiGenerate(
       this.auth,
-      'gemini-2.0-flash',
+      getGeminiTextModel(),
       `Optimiza SEO para YouTube.\nTítulo: ${title}\nGuion: ${script.substring(0, 2000)}\n\nResponde SOLO con JSON válido: {"titles":["..."],"description":"...","tags":["..."]}`,
+      'seo',
     );
 
     try {

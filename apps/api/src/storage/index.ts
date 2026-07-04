@@ -255,7 +255,7 @@ export class EpisodeStorage {
       workspacePath: archived.drivePath ?? archived.slug,
       stages: EPISODE_STAGES.map(stage => ({
         stage,
-        status: stage === 'analytics' ? 'completed' : 'completed',
+        status: 'completed' as const,
         expectedFiles: STAGE_EXPECTED_FILES[stage],
       })),
       content: createDefaultContent(),

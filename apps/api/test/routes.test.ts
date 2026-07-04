@@ -21,11 +21,13 @@ describe('api routes', () => {
 
   beforeEach(async () => {
     storageDir = await mkdtemp(path.join(tmpdir(), 'cas-episodes-'));
+    process.env.AI_ALLOW_DEMO_FALLBACK = 'true';
     app = buildApp({ storage: new EpisodeStorage(storageDir) });
     await app.ready();
   });
 
   afterEach(async () => {
+    delete process.env.AI_ALLOW_DEMO_FALLBACK;
     await app.close();
     await rm(storageDir, { recursive: true, force: true });
   });

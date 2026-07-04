@@ -6,14 +6,6 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-export function isFfmpegAvailable(): boolean {
-  try {
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function checkFfmpeg(): Promise<boolean> {
   try {
     await execFileAsync('ffmpeg', ['-version'], { timeout: 5000 });

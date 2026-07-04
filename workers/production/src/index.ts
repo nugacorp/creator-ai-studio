@@ -53,7 +53,7 @@ async function fetchPendingJobs(): Promise<ProductionJob[]> {
 
 async function patchJob(
   id: string,
-  patch: { status: string; progress: number; result?: Record<string, unknown>; error?: string },
+  patch: { status?: string; progress: number; result?: Record<string, unknown>; error?: string },
 ): Promise<void> {
   const res = await apiFetch(`/jobs/${id}`, {
     method: 'PATCH',
@@ -63,6 +63,27 @@ async function patchJob(
     const text = await res.text().catch(() => '');
     console.error(`Failed to patch job ${id} (${res.status}): ${text.slice(0, 200)}`);
   }
+}
+
+/**
+ * Claim a pending job by moving it to `active`. The API returns 409 when the
+ * job was already claimed (e.g. by an overlapping poll or another worker).
+ */
+async function claimJob(id: string): Promise<boolean> {
+  const res = await apiFetch(`/jobs/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'active', progress: 5 }),
+  });
+  if (res.status === 409) {
+    console.log(`Job ${id} already claimed elsewhere, skipping`);
+    return false;
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error(`Failed to claim job ${id} (${res.status}): ${text.slice(0, 200)}`);
+    return false;
+  }
+  return true;
 }
 
 async function assertOk(res: Response, step: string): Promise<void> {
@@ -210,7 +231,6 @@ async function runPipelineJob(job: ProductionJob): Promise<Record<string, unknow
     const step = steps[i];
     const progress = Math.round(((i + 1) / steps.length) * 90);
     await patchJob(job.id, {
-      status: 'active',
       progress,
       result: {
         step: PIPELINE_STEP_LABELS[step.key] ?? step.key,
@@ -231,7 +251,9 @@ async function runPipelineJob(job: ProductionJob): Promise<Record<string, unknow
 
 export async function processJob(job: ProductionJob): Promise<void> {
   console.log(`Processing job ${job.id} (${job.type}) for episode ${job.episodeId}`);
-  await patchJob(job.id, { status: 'active', progress: 5 });
+  if (!(await claimJob(job.id))) {
+    return;
+  }
 
   try {
     let result: Record<string, unknown> = { ok: true };
@@ -274,10 +296,20 @@ export async function processJob(job: ProductionJob): Promise<void> {
   }
 }
 
+let polling = false;
+
 export async function pollLoop(): Promise<void> {
-  const jobs = await fetchPendingJobs();
-  for (const job of jobs) {
-    await processJob(job);
+  // Overlap guard: if a long render is still running when the next interval
+  // fires, skip instead of processing the same queue concurrently.
+  if (polling) return;
+  polling = true;
+  try {
+    const jobs = await fetchPendingJobs();
+    for (const job of jobs) {
+      await processJob(job);
+    }
+  } finally {
+    polling = false;
   }
 }
 
@@ -305,7 +337,12 @@ export function main(): void {
   }
 
   if (REDIS_URL) {
+    // BullMQ is the single consumer when Redis is available; the claim
+    // endpoint (409) protects against double processing either way.
     void startBullMQWorker();
+    // One reconciliation pass for jobs enqueued while Redis was down.
+    void pollLoop();
+    return;
   }
 
   console.log(`Polling ${API_BASE}/jobs/pending every ${POLL_MS}ms`);

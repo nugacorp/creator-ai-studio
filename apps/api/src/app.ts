@@ -12,6 +12,16 @@ import {
   type UpdateStageInput,
 } from '@creator-ai-studio/shared';
 import { registerAuthHook } from './auth/middleware.js';
+import { registerHardening } from './http/hardening.js';
+import {
+  channelBody,
+  channelPatchBody,
+  createEpisodeBody,
+  settingsBody,
+  updateEpisodeBody,
+  updateEpisodeStatusBody,
+  updateStageBody,
+} from './http/schemas.js';
 import { registerSecretRoutes } from './secrets/routes.js';
 import { registerOAuthRoutes } from './oauth/routes.js';
 import { registerAIRoutes } from './ai/routes.js';
@@ -37,6 +47,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
   const storage = options.storage ?? new EpisodeStorage(resolveStoragePath());
 
+  registerHardening(app);
   registerAuthHook(app);
 
   const prefixes = ['', '/api'] as const;
@@ -84,7 +95,7 @@ function registerRoutes(
     return detail;
   });
 
-  app.post(route(prefix, '/episodes'), async (request, reply) => {
+  app.post(route(prefix, '/episodes'), { schema: { body: createEpisodeBody } }, async (request, reply) => {
     const body = (request.body ?? {}) as Partial<CreateEpisodeInput>;
     const title = typeof body.title === 'string' ? body.title.trim() : '';
     if (title.length === 0) {
@@ -113,7 +124,7 @@ function registerRoutes(
     return episode;
   });
 
-  app.patch(route(prefix, '/episodes/:id'), async (request, reply) => {
+  app.patch(route(prefix, '/episodes/:id'), { schema: { body: updateEpisodeBody } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as UpdateEpisodeInput;
 
@@ -138,7 +149,7 @@ function registerRoutes(
     return detail;
   });
 
-  app.patch(route(prefix, '/episodes/:id/status'), async (request, reply) => {
+  app.patch(route(prefix, '/episodes/:id/status'), { schema: { body: updateEpisodeStatusBody } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as { projectStatus?: string };
 
@@ -158,7 +169,7 @@ function registerRoutes(
     return detail;
   });
 
-  app.patch(route(prefix, '/episodes/:id/stages/:stage'), async (request, reply) => {
+  app.patch(route(prefix, '/episodes/:id/stages/:stage'), { schema: { body: updateStageBody } }, async (request, reply) => {
     const { id, stage } = request.params as { id: string; stage: string };
     const body = (request.body ?? {}) as Partial<UpdateStageInput>;
     const status = body.status;
@@ -196,14 +207,14 @@ function registerRoutes(
 
   app.get(route(prefix, '/settings'), async () => getSettings());
 
-  app.patch(route(prefix, '/settings'), async (request) => {
+  app.patch(route(prefix, '/settings'), { schema: { body: settingsBody } }, async (request) => {
     const body = (request.body ?? {}) as Partial<import('@creator-ai-studio/shared').AppSettings>;
     return saveSettings(body);
   });
 
   app.get(route(prefix, '/channels'), async () => listChannels());
 
-  app.post(route(prefix, '/channels'), async (request, reply) => {
+  app.post(route(prefix, '/channels'), { schema: { body: channelBody } }, async (request, reply) => {
     const body = (request.body ?? {}) as {
       name?: string;
       type?: string;
@@ -226,7 +237,7 @@ function registerRoutes(
     return channel;
   });
 
-  app.patch(route(prefix, '/channels/:id'), async (request, reply) => {
+  app.patch(route(prefix, '/channels/:id'), { schema: { body: channelPatchBody } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as Record<string, unknown>;
     const updated = await updateChannel(id, body as Parameters<typeof updateChannel>[1]);

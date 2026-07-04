@@ -7,8 +7,8 @@ APP_DIR="/data/coolify/applications/z7b1ieqp66a7e43cywaz816w"
 APP_ID="z7b1ieqp66a7e43cywaz816w"
 DOMAIN="creator-ai-studio.217.76.56.66.sslip.io"
 LOCK_FILE="${APP_DIR}/.deploy.lock"
-COMPOSE_FILE="${APP_DIR}/docker-compose.yaml"
 SERVICES=(api web worker redis)
+STARTED_SERVICES=()
 
 # Serialize deploys so concurrent pushes cannot race on container names (Conflict: name already in use).
 exec 9>"${LOCK_FILE}"
@@ -30,22 +30,34 @@ cleanup_stale_containers() {
   done
 }
 
+resolve_services() {
+  # Ask compose which services actually exist, so redis/worker come up when
+  # present and are skipped when absent. `config --services` is indentation-proof;
+  # the previous `grep "^[[:space:]]svc:"` required exactly one leading space and
+  # never matched the Coolify runtime compose, so the stack fell back to api+web
+  # only and left redis/worker down (CAS-CURSOR-WO-0038).
+  local present svc
+  present=$(cd "$APP_DIR" && docker compose -f docker-compose.yaml config --services 2>/dev/null || true)
+  STARTED_SERVICES=()
+  for svc in "${SERVICES[@]}"; do
+    if printf '%s\n' "$present" | grep -qxF "$svc"; then
+      STARTED_SERVICES+=("$svc")
+    fi
+  done
+  if [ "${#STARTED_SERVICES[@]}" -eq 0 ]; then
+    echo "WARN: could not enumerate compose services; falling back to api web" >&2
+    STARTED_SERVICES=(api web)
+  fi
+}
+
 compose_up() {
   local attempt
   cd "$APP_DIR"
-  local services=()
-  for svc in "${SERVICES[@]}"; do
-    if grep -qE "^[[:space:]]${svc}:" "$COMPOSE_FILE" 2>/dev/null; then
-      services+=("$svc")
-    fi
-  done
-  if [ "${#services[@]}" -eq 0 ]; then
-    services=(api web)
-  fi
+  resolve_services
 
   for attempt in 1 2 3; do
-    echo "=== Starting stack (attempt ${attempt}): ${services[*]} ==="
-    if docker compose -f docker-compose.yaml up -d --force-recreate --remove-orphans "${services[@]}" --no-build; then
+    echo "=== Starting stack (attempt ${attempt}): ${STARTED_SERVICES[*]} ==="
+    if docker compose -f docker-compose.yaml up -d --force-recreate --remove-orphans "${STARTED_SERVICES[@]}" --no-build; then
       return 0
     fi
     echo "docker compose up failed (attempt ${attempt}), cleaning conflicting containers..." >&2
@@ -54,6 +66,36 @@ compose_up() {
   done
   echo "docker compose up failed after 3 attempts" >&2
   return 1
+}
+
+verify_services() {
+  # Sanitized post-up check: report each started service's container state (and
+  # health when defined). Prints only service name/state/health -- never env or
+  # secrets. Returns non-zero if any started service is not running.
+  echo "=== Service status ==="
+  local svc cid state health tries rc=0
+  cd "$APP_DIR"
+  for svc in "${STARTED_SERVICES[@]}"; do
+    cid=""
+    for tries in 1 2 3 4 5; do
+      cid=$(docker compose -f docker-compose.yaml ps -q "$svc" 2>/dev/null | head -1 || true)
+      if [ -n "$cid" ]; then
+        state=$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo unknown)
+        [ "$state" = "running" ] && break
+      fi
+      sleep 2
+    done
+    if [ -z "$cid" ]; then
+      printf '  %-8s %s\n' "$svc" "MISSING (no container)"
+      rc=1
+      continue
+    fi
+    state=$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null || echo unknown)
+    health=$(docker inspect -f '{{if .State.Health}} health={{.State.Health.Status}}{{end}}' "$cid" 2>/dev/null || true)
+    printf '  %-8s %s%s\n' "$svc" "$state" "$health"
+    [ "$state" = "running" ] || rc=1
+  done
+  return $rc
 }
 
 if [ -f "$SRC_DIR/.env.supabase.local" ]; then
@@ -101,70 +143,126 @@ docker build -f "$SRC_DIR/Dockerfile.worker" -t "z7b1ieqp66a7e43cywaz816w_worker
 COMPOSE="$APP_DIR/docker-compose.yaml"
 cp "$COMPOSE" "${COMPOSE}.bak-redeploy-${COMMIT}"
 
-python3 <<PY
+echo "=== Injecting runtime env into compose (idempotent) ==="
+# The runtime compose is Coolify-generated and shared across redeploys, so every
+# injection below must be idempotent: add a key only if that service does not
+# already declare it. See CAS-CURSOR-WO-0036 (duplicate CAS_API_KEY in worker).
+CAS_REDEPLOY_COMMIT="$COMMIT" \
+CAS_REDEPLOY_DOMAIN="$DOMAIN" \
+CAS_REDEPLOY_COMPOSE="$COMPOSE" \
+python3 <<'PY'
 from pathlib import Path
-import re
 import os
-p = Path("$COMPOSE")
-text = p.read_text()
-text = re.sub(r"image: 'z7b1ieqp66a7e43cywaz816w_api:[^']+'", "image: 'z7b1ieqp66a7e43cywaz816w_api:${COMMIT}'", text)
-text = re.sub(r"image: 'z7b1ieqp66a7e43cywaz816w_web:[^']+'", "image: 'z7b1ieqp66a7e43cywaz816w_web:${COMMIT}'", text)
-if "z7b1ieqp66a7e43cywaz816w_worker:" in text:
-    text = re.sub(r"image: 'z7b1ieqp66a7e43cywaz816w_worker:[^']+'", "image: 'z7b1ieqp66a7e43cywaz816w_worker:${COMMIT}'", text)
-if "CAS_PUBLIC_URL" not in text:
-    text = text.replace(
-        "LOCAL_STORAGE_PATH: /data/episodes",
-        "LOCAL_STORAGE_PATH: /data/episodes\n            CAS_PUBLIC_URL: 'https://${DOMAIN}'",
-        1,
-    )
-if "REDIS_URL" not in text and "environment:" in text:
-    text = text.replace(
-        "CAS_SECRETS_KEY:",
-        "REDIS_URL: 'redis://redis:6379'\n            CAS_SECRETS_KEY:",
-        1,
-    )
-supabase_url = os.environ.get("SUPABASE_URL", "https://iiokqyedkylwhonbrrvo.supabase.co")
+import re
+
+commit = os.environ["CAS_REDEPLOY_COMMIT"]
+domain = os.environ["CAS_REDEPLOY_DOMAIN"]
+compose_path = os.environ["CAS_REDEPLOY_COMPOSE"]
+supabase_url = os.environ.get("SUPABASE_URL") or "https://iiokqyedkylwhonbrrvo.supabase.co"
 service_role = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 cas_api_key = os.environ.get("CAS_API_KEY", "")
-if "SUPABASE_URL" not in text:
-    text = text.replace(
-        "CAS_PUBLIC_URL:",
-        f"SUPABASE_URL: '{supabase_url}'\n            CAS_PUBLIC_URL:",
-        1,
-    )
-if service_role and "SUPABASE_SERVICE_ROLE_KEY" not in text:
-    text = text.replace(
-        f"SUPABASE_URL: '{supabase_url}'",
-        f"SUPABASE_URL: '{supabase_url}'\n            SUPABASE_SERVICE_ROLE_KEY: '{service_role}'",
-        1,
-    )
-if cas_api_key and "CAS_API_KEY" not in text:
-    text = text.replace(
-        "CAS_SECRETS_KEY:",
-        f"CAS_API_KEY: '{cas_api_key}'\n            CAS_SECRETS_KEY:",
-        1,
-    )
-worker_block = text.split("worker:", 1)
-if cas_api_key and len(worker_block) > 1:
-    worker_env = worker_block[1].split("redis:", 1)[0]
-    if "CAS_API_KEY" not in worker_env:
-        for old, new in [
-            (
-                "API_BASE_URL: 'http://api:3000/api'",
-                f"API_BASE_URL: 'http://api:3000/api'\n            CAS_API_KEY: '{cas_api_key}'",
-            ),
-            (
-                "API_BASE_URL: http://api:3000/api",
-                f"API_BASE_URL: http://api:3000/api\n            CAS_API_KEY: '{cas_api_key}'",
-            ),
-        ]:
-            if old in worker_env:
-                worker_env = worker_env.replace(old, new, 1)
-                break
-        text = worker_block[0] + "worker:" + worker_env + "redis:" + worker_block[1].split("redis:", 1)[1]
+
+p = Path(compose_path)
+text = p.read_text()
+
+# --- bump image tags ---
+def bump_image(text, name):
+    return re.sub(r"image: '" + re.escape(name) + r":[^']+'",
+                  "image: '" + name + ":" + commit + "'", text)
+
+text = bump_image(text, "z7b1ieqp66a7e43cywaz816w_api")
+text = bump_image(text, "z7b1ieqp66a7e43cywaz816w_web")
+if "z7b1ieqp66a7e43cywaz816w_worker:" in text:
+    text = bump_image(text, "z7b1ieqp66a7e43cywaz816w_worker")
+
+# --- idempotent, per-service env injection ---
+def find_service_block(text, service):
+    """Return (start, end, indent) of a service block, matched by its header line.
+
+    The block ends at the next line whose indentation is <= the header's, so it
+    spans the whole service (environment, volumes, depends_on, ...)."""
+    m = re.search(r"(?m)^([ \t]*)" + re.escape(service) + r":[ \t]*$", text)
+    if not m:
+        return None
+    indent = len(m.group(1))
+    body_start = m.end()
+    end = len(text)
+    for lm in re.finditer(r"(?m)^([ \t]*)\S", text[body_start:]):
+        if len(lm.group(1)) <= indent:
+            end = body_start + lm.start()
+            break
+    return m.start(), end, indent
+
+def count_key(block, key):
+    return len(re.findall(r"(?m)^[ \t]*" + re.escape(key) + r":", block))
+
+def inject_env(text, service, key, value, anchor):
+    """Add `key: 'value'` after `anchor` inside `service`, only if `key` is absent
+    from that service block. Scanning the whole block (not a truncated slice) is
+    what keeps this from re-adding a key that sits after REDIS_URL/redis:."""
+    blk = find_service_block(text, service)
+    if blk is None:
+        return text
+    start, end, _ = blk
+    block = text[start:end]
+    if count_key(block, key) > 0:
+        return text
+    am = re.search(r"(?m)^([ \t]*)" + re.escape(anchor) + r":[^\n]*$", block)
+    if not am:
+        return text
+    indent = am.group(1)
+    new_block = block[:am.end()] + "\n" + indent + key + ": '" + value + "'" + block[am.end():]
+    return text[:start] + new_block + text[end:]
+
+# API service runtime env.
+text = inject_env(text, "api", "CAS_PUBLIC_URL", "https://" + domain, "LOCAL_STORAGE_PATH")
+text = inject_env(text, "api", "SUPABASE_URL", supabase_url, "LOCAL_STORAGE_PATH")
+if service_role:
+    text = inject_env(text, "api", "SUPABASE_SERVICE_ROLE_KEY", service_role, "SUPABASE_URL")
+text = inject_env(text, "api", "REDIS_URL", "redis://redis:6379", "CAS_SECRETS_KEY")
+if cas_api_key:
+    text = inject_env(text, "api", "CAS_API_KEY", cas_api_key, "CAS_SECRETS_KEY")
+    # Worker must share the API key; inject once, never duplicate (CAS-CURSOR-WO-0036).
+    text = inject_env(text, "worker", "CAS_API_KEY", cas_api_key, "API_BASE_URL")
+
+# Idempotency guard: refuse to write a compose that declares a managed key twice
+# in the same service (this is the failure the work order fixes). No secret
+# values are printed -- only the offending service/key name.
+managed = ("CAS_API_KEY", "CAS_PUBLIC_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "REDIS_URL")
+for service in ("api", "worker"):
+    blk = find_service_block(text, service)
+    if blk is None:
+        continue
+    s, e, _ = blk
+    body = text[s:e]
+    for key in managed:
+        n = count_key(body, key)
+        if n > 1:
+            raise SystemExit(
+                "Refusing to write compose: service '%s' declares '%s' %d times" % (service, key, n)
+            )
+
+# Structural YAML sanity check when PyYAML is available (never prints values).
+try:
+    import yaml
+    yaml.safe_load(text)
+except ImportError:
+    pass
+except Exception as exc:  # noqa: BLE001 - surface any parse error, keep the message secret-free
+    raise SystemExit("Compose YAML failed to parse after injection: %s" % exc)
+
 p.write_text(text)
-print("compose images updated")
+print("compose images + runtime env updated (idempotent)")
 PY
+
+echo "=== Validating compose YAML ==="
+# Defense in depth: docker compose is the real consumer and rejects duplicate
+# mapping keys. Output is discarded so expanded secrets never reach the log.
+if ! ( cd "$APP_DIR" && docker compose -f docker-compose.yaml config >/dev/null ); then
+  echo "Compose validation failed after injection; restoring backup and aborting" >&2
+  cp "${COMPOSE}.bak-redeploy-${COMMIT}" "$COMPOSE"
+  exit 1
+fi
 
 cleanup_stale_containers
 compose_up
@@ -175,12 +273,14 @@ for i in $(seq 1 30); do
     echo "OK: https://${DOMAIN}/api/health"
     curl -fsS "https://${DOMAIN}/api/health"
     echo
-    docker ps --format 'table {{.Names}}\t{{.Status}}' | grep z7b1ieqp66a7e43cywaz816w || true
+    # api is healthy (deploy gate). Report every started service; a lagging
+    # redis/worker is surfaced as a warning but does not fail a healthy deploy.
+    verify_services || echo "WARN: not all services are running yet; see status above" >&2
     exit 0
   fi
   sleep 2
 done
 
 echo "Health check failed" >&2
-docker ps --filter name=z7b1ieqp66a7e43cywaz816w
+verify_services || true
 exit 1

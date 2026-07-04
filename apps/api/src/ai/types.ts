@@ -46,4 +46,5 @@ export interface AIUsageLog {
   operation: string;
   latencyMs: number;
   timestamp: string;
+  success?: boolean;
 }
