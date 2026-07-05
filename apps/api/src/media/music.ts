@@ -89,27 +89,40 @@ function deriveMusicLabel(prompt: string, meta?: MusicMeta | null): string {
   return short.length < prompt.trim().length ? `${short}…` : short;
 }
 
+/** Tiny valid silent MP3 — used when Lyria is unavailable and ffmpeg is not installed (e.g. CI). */
+const MOCK_SILENT_MP3 = Buffer.from(
+  'SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI3LjEwMAAAAAAAAAAAAAAA//tQxAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDVkdHIAAAAAAAAAAAAAAABMYXZmNTguNzYuMTAwAAAAAAAAAAAAAAA//tQxAADTLQ0K8AAAAzbj5b8AAAAU0xFRUAAAAOAAAB//tQxBQAAugABpAAAACAAADSAAAAEXGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAAAB//tQxBUAAugABpAAAACAAADSAAAAAA',
+  'base64',
+);
+
 async function writePlaceholderMusic(dest: string, seconds = 30): Promise<boolean> {
-  if (!(await checkFfmpeg())) return false;
+  if (await checkFfmpeg()) {
+    try {
+      await execFileAsync(
+        'ffmpeg',
+        [
+          '-y',
+          '-f',
+          'lavfi',
+          '-i',
+          `anullsrc=r=44100:cl=stereo`,
+          '-t',
+          String(seconds),
+          '-c:a',
+          'libmp3lame',
+          '-q:a',
+          '9',
+          dest,
+        ],
+        { timeout: 60_000 },
+      );
+      return true;
+    } catch {
+      // fall through to static buffer
+    }
+  }
   try {
-    await execFileAsync(
-      'ffmpeg',
-      [
-        '-y',
-        '-f',
-        'lavfi',
-        '-i',
-        `anullsrc=r=44100:cl=stereo`,
-        '-t',
-        String(seconds),
-        '-c:a',
-        'libmp3lame',
-        '-q:a',
-        '9',
-        dest,
-      ],
-      { timeout: 60_000 },
-    );
+    await writeFile(dest, MOCK_SILENT_MP3);
     return true;
   } catch {
     return false;
