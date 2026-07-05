@@ -21,7 +21,7 @@ import { createJob } from '../jobs/store.js';
 import { enqueueJob } from '../jobs/queue.js';
 import type { EpisodeStorage } from '../storage/index.js';
 import { getEpisodeForUser } from '../storage/access.js';
-import { AGENT_SYSTEM_PROMPTS } from './prompts.js';
+import { resolveAgentSystemPrompt } from './overrides.js';
 import { getAgentDefinition } from './registry.js';
 import { appendAgentRun, updateAgentRun } from './store.js';
 
@@ -245,7 +245,7 @@ async function executeAgent(
 ): Promise<AgentExecutionResult> {
   if (!episode) throw new Error('episode not found');
 
-  const system = AGENT_SYSTEM_PROMPTS[options.agentId];
+  const system = await resolveAgentSystemPrompt(options.agentId);
   const title = episode.title;
   const script = episode.content.script ?? '';
   const outline = episode.content.outline ?? [];
@@ -339,7 +339,7 @@ async function runHermes(
 
   const planText = await withProvider('chat', async provider =>
     provider.chat([
-      { role: 'system', content: AGENT_SYSTEM_PROMPTS.hermes },
+      { role: 'system', content: await resolveAgentSystemPrompt('hermes') },
       {
         role: 'user',
         content: `Episodio: "${episode.title}"

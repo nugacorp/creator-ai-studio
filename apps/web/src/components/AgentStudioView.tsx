@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Brain, Cpu, FolderKanban, Loader2, Save, Sparkles } from 'lucide-react';
+import { Brain, Check, Cpu, FolderKanban, Loader2, Save, Sparkles } from 'lucide-react';
 import type { AgentDefinition } from '@creator-ai-studio/shared';
-import { fetchAgentConfig, fetchAgents, type AgentConfigResponse } from '../api';
+import {
+  fetchAgentConfig,
+  fetchAgents,
+  patchAgentOverrides,
+  type AgentConfigResponse,
+} from '../api';
 import { PIPELINE_STEPS } from '../lib/projectPipeline';
 
 const AGENT_COLORS: Record<string, string> = {
@@ -20,8 +25,15 @@ const AGENT_COLORS: Record<string, string> = {
   analytics_agent: 'text-lime-400 bg-lime-500/10 border-lime-400/20',
 };
 
-function notesKey(agentId: string): string {
-  return `creator-ai-agent-notes-${agentId}`;
+function parseSkillLines(text: string): string[] {
+  return text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+}
+
+function skillsToText(skills: string[] | undefined): string {
+  return (skills ?? []).join('\n');
 }
 
 interface AgentStudioViewProps {
@@ -36,7 +48,9 @@ export default function AgentStudioView({ onOpenProjects }: AgentStudioViewProps
   const [loadingConfig, setLoadingConfig] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customNotes, setCustomNotes] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [promptAppend, setPromptAppend] = useState('');
+  const [extraSkillsText, setExtraSkillsText] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     void fetchAgents()
@@ -48,20 +62,31 @@ export default function AgentStudioView({ onOpenProjects }: AgentStudioViewProps
       .finally(() => setLoadingList(false));
   }, []);
 
-  const loadConfig = useCallback(async (agentId: string) => {
-    setLoadingConfig(true);
-    setError(null);
-    try {
-      const cfg = await fetchAgentConfig(agentId);
-      setConfig(cfg);
-      setCustomNotes(localStorage.getItem(notesKey(agentId)) ?? '');
-    } catch {
-      setError('No se pudo cargar la configuración del agente');
-      setConfig(null);
-    } finally {
-      setLoadingConfig(false);
-    }
+  const applyOverridesFromConfig = useCallback((cfg: AgentConfigResponse) => {
+    const o = cfg.overrides ?? {};
+    setCustomNotes(o.customNotes ?? '');
+    setPromptAppend(o.promptAppend ?? '');
+    setExtraSkillsText(skillsToText(o.extraSkills));
   }, []);
+
+  const loadConfig = useCallback(
+    async (agentId: string) => {
+      setLoadingConfig(true);
+      setError(null);
+      setSaveState('idle');
+      try {
+        const cfg = await fetchAgentConfig(agentId);
+        setConfig(cfg);
+        applyOverridesFromConfig(cfg);
+      } catch {
+        setError('No se pudo cargar la configuración del agente');
+        setConfig(null);
+      } finally {
+        setLoadingConfig(false);
+      }
+    },
+    [applyOverridesFromConfig],
+  );
 
   useEffect(() => {
     if (selectedId) void loadConfig(selectedId);
@@ -69,12 +94,41 @@ export default function AgentStudioView({ onOpenProjects }: AgentStudioViewProps
 
   const pipelineStep = PIPELINE_STEPS.find(s => s.agentId === selectedId);
 
-  const handleSaveNotes = () => {
+  const handleSave = async () => {
     if (!selectedId) return;
-    localStorage.setItem(notesKey(selectedId), customNotes);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaveState('saving');
+    setError(null);
+    try {
+      const result = await patchAgentOverrides(selectedId, {
+        customNotes,
+        promptAppend,
+        extraSkills: parseSkillLines(extraSkillsText),
+      });
+      setConfig(prev =>
+        prev
+          ? {
+              ...prev,
+              overrides: result.overrides,
+              skills: result.skills,
+            }
+          : prev,
+      );
+      applyOverridesFromConfig({
+        ...(config as AgentConfigResponse),
+        overrides: result.overrides,
+        skills: result.skills,
+      });
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 2500);
+    } catch {
+      setSaveState('error');
+      setError('No se pudieron guardar los cambios en el servidor');
+    }
   };
+
+  const baseSkills = config?.baseSkills ?? config?.expertise ?? [];
+  const extraSkills = parseSkillLines(extraSkillsText);
+  const displaySkills = [...baseSkills, ...extraSkills];
 
   if (loadingList) {
     return (
@@ -95,8 +149,8 @@ export default function AgentStudioView({ onOpenProjects }: AgentStudioViewProps
               Estudio de agentes
             </h1>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-              Configura prompts, skills y notas de cada agente. La ejecución y aprobación ocurren
-              dentro de cada proyecto en el tablero Kanban.
+              Configura skills adicionales, instrucciones y notas por agente. Los cambios se
+              guardan en el servidor y se aplican en la próxima ejecución.
             </p>
           </div>
           {onOpenProjects && (
@@ -152,34 +206,84 @@ export default function AgentStudioView({ onOpenProjects }: AgentStudioViewProps
             </div>
           ) : (
             <>
-              <div>
-                <p className="text-[10px] text-indigo-300 font-mono uppercase tracking-wider">
-                  {config.id}
-                </p>
-                <h2 className="text-base font-bold text-white mt-1">{config.name}</h2>
-                <p className="text-xs text-slate-400 mt-1">{config.description}</p>
-                {pipelineStep && (
-                  <p className="text-[11px] text-slate-500 mt-2">
-                    Etapa Kanban: <span className="text-slate-300">{pipelineStep.column}</span> —{' '}
-                    {pipelineStep.description}
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] text-indigo-300 font-mono uppercase tracking-wider">
+                    {config.id}
                   </p>
-                )}
+                  <h2 className="text-base font-bold text-white mt-1">{config.name}</h2>
+                  <p className="text-xs text-slate-400 mt-1">{config.description}</p>
+                  {pipelineStep && (
+                    <p className="text-[11px] text-slate-500 mt-2">
+                      Etapa Kanban: <span className="text-slate-300">{pipelineStep.column}</span> —{' '}
+                      {pipelineStep.description}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSave()}
+                  disabled={saveState === 'saving'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-[11px] font-bold text-white cursor-pointer"
+                >
+                  {saveState === 'saving' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : saveState === 'saved' ? (
+                    <Check className="w-3.5 h-3.5" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5" />
+                  )}
+                  {saveState === 'saving'
+                    ? 'Guardando…'
+                    : saveState === 'saved'
+                      ? 'Guardado en servidor'
+                      : saveState === 'error'
+                        ? 'Reintentar'
+                        : 'Guardar cambios'}
+                </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-white/5 bg-[#0B0F14] p-4">
+                <div className="rounded-xl border border-white/5 bg-[#0B0F14] p-4 space-y-3">
                   <h3 className="text-[10px] font-mono uppercase text-slate-500 flex items-center gap-1.5">
                     <Brain className="w-3.5 h-3.5" />
                     Skills / expertise
                   </h3>
-                  <ul className="mt-2 space-y-1">
-                    {(config.skills ?? config.expertise).map(skill => (
-                      <li key={skill} className="text-[11px] text-slate-300 flex items-start gap-1.5">
-                        <Sparkles className="w-3 h-3 text-indigo-400 shrink-0 mt-0.5" />
-                        {skill}
-                      </li>
-                    ))}
+                  <ul className="space-y-1">
+                    {displaySkills.map(skill => {
+                      const isBase = baseSkills.includes(skill);
+                      return (
+                        <li
+                          key={skill}
+                          className="text-[11px] text-slate-300 flex items-start gap-1.5"
+                        >
+                          <Sparkles className="w-3 h-3 text-indigo-400 shrink-0 mt-0.5" />
+                          <span>
+                            {skill}
+                            {isBase && (
+                              <span className="text-[9px] text-slate-600 ml-1">(base)</span>
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
+                  <div>
+                    <label
+                      htmlFor="extra-skills"
+                      className="text-[10px] text-slate-500 uppercase font-mono"
+                    >
+                      Skills adicionales (una por línea)
+                    </label>
+                    <textarea
+                      id="extra-skills"
+                      value={extraSkillsText}
+                      onChange={e => setExtraSkillsText(e.target.value)}
+                      rows={3}
+                      placeholder="Ej: tono pastoral&#10;referencias bíblicas en español latino"
+                      className="mt-1 w-full text-xs text-slate-300 bg-[#15191E] border border-white/10 rounded-lg p-2 resize-y focus:outline-none focus:border-indigo-500/50 font-mono"
+                    />
+                  </div>
                 </div>
                 <div className="rounded-xl border border-white/5 bg-[#0B0F14] p-4 space-y-2">
                   <h3 className="text-[10px] font-mono uppercase text-slate-500">Configuración</h3>
@@ -204,37 +308,48 @@ export default function AgentStudioView({ onOpenProjects }: AgentStudioViewProps
 
               <div>
                 <h3 className="text-[10px] font-mono uppercase text-slate-500 mb-2">
-                  System prompt (solo lectura)
+                  System prompt base (solo lectura)
                 </h3>
-                <pre className="text-[10px] text-slate-400 bg-[#0B0F14] border border-white/5 rounded-xl p-4 max-h-56 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
+                <pre className="text-[10px] text-slate-400 bg-[#0B0F14] border border-white/5 rounded-xl p-4 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono leading-relaxed">
                   {config.systemPrompt}
                 </pre>
               </div>
 
               <div>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <h3 className="text-[10px] font-mono uppercase text-slate-500">
-                    Instrucciones adicionales (local)
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={handleSaveNotes}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-[10px] font-bold text-white cursor-pointer"
-                  >
-                    <Save className="w-3 h-3" />
-                    {saved ? 'Guardado' : 'Guardar'}
-                  </button>
-                </div>
+                <label
+                  htmlFor="prompt-append"
+                  className="text-[10px] font-mono uppercase text-slate-500 mb-2 block"
+                >
+                  Instrucciones adicionales al prompt (se anexan al system prompt)
+                </label>
                 <textarea
+                  id="prompt-append"
+                  value={promptAppend}
+                  onChange={e => setPromptAppend(e.target.value)}
+                  rows={3}
+                  placeholder="Reglas extra de formato, tono o restricciones específicas para este agente."
+                  className="w-full text-xs text-slate-300 bg-[#0B0F14] border border-white/10 rounded-xl p-3 resize-y focus:outline-none focus:border-indigo-500/50"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="custom-notes"
+                  className="text-[10px] font-mono uppercase text-slate-500 mb-2 block"
+                >
+                  Notas del creador (también se anexan al prompt en ejecución)
+                </label>
+                <textarea
+                  id="custom-notes"
                   value={customNotes}
                   onChange={e => setCustomNotes(e.target.value)}
                   rows={4}
-                  placeholder="Notas para refinar el comportamiento de este agente. En el futuro, analytics alimentará mejoras automáticas."
+                  placeholder="Contexto de canal, preferencias editoriales o recordatorios para este agente."
                   className="w-full text-xs text-slate-300 bg-[#0B0F14] border border-white/10 rounded-xl p-3 resize-y focus:outline-none focus:border-indigo-500/50"
                 />
                 <p className="text-[10px] text-slate-600 mt-1">
-                  La ejecución con estas notas y el aprendizaje desde analytics se integrarán en una
-                  próxima versión.
+                  Persistencia en servidor (settings.json). Recarga la página o cambia de agente para
+                  verificar que los cambios se mantienen.
                 </p>
               </div>
             </>

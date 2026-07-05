@@ -336,6 +336,18 @@ export function isAgentId(value: unknown): value is AgentId {
   return typeof value === 'string' && (AGENT_IDS as readonly string[]).includes(value);
 }
 
+/** Per-agent customizations persisted in app settings (episode-agnostic). */
+export interface AgentOverride {
+  /** Free-form notes appended to the system prompt at runtime. */
+  customNotes?: string;
+  /** Additional skills merged with the agent's base expertise. */
+  extraSkills?: string[];
+  /** Extra instructions appended after the base system prompt. */
+  promptAppend?: string;
+}
+
+export type AgentOverridesMap = Partial<Record<AgentId, AgentOverride>>;
+
 /**
  * Pipeline execution modes.
  * - `production-draft`: run every content stage but never touch YouTube.
@@ -395,6 +407,8 @@ export interface AppSettings {
   maxActiveEpisodes: number;
   /** Warn when episode storage exceeds this size (GB). */
   diskWarningThresholdGb: number;
+  /** Per-agent prompt/skill overrides from Agent Studio. */
+  agentOverrides?: AgentOverridesMap;
 }
 
 /** Disk usage snapshot for the operations dashboard. */

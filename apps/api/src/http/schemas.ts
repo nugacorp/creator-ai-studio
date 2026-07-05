@@ -44,6 +44,16 @@ export const updateStageBody = {
   additionalProperties: false,
 } as const;
 
+const agentOverrideFields = {
+  customNotes: TEXT_MEDIUM,
+  extraSkills: {
+    type: 'array',
+    maxItems: 50,
+    items: { type: 'string', maxLength: 200 },
+  },
+  promptAppend: TEXT_MEDIUM,
+} as const;
+
 export const settingsBody = {
   type: 'object',
   properties: {
@@ -57,7 +67,14 @@ export const settingsBody = {
     autoArchiveOnPublish: { type: 'boolean' },
     maxActiveEpisodes: { type: 'integer', minimum: 1, maximum: 50 },
     diskWarningThresholdGb: { type: 'number', minimum: 1, maximum: 10_000 },
+    agentOverrides: { type: 'object', additionalProperties: true },
   },
+  additionalProperties: false,
+} as const;
+
+export const agentOverrideBody = {
+  type: 'object',
+  properties: agentOverrideFields,
   additionalProperties: false,
 } as const;
 

@@ -50,10 +50,46 @@ describe('agent system', () => {
   it('GET /agents/:id/config returns system prompt and skills', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/agents/scriptwriter/config' });
     expect(response.statusCode).toBe(200);
-    const body = response.json() as { id: string; systemPrompt: string; skills: string[] };
+    const body = response.json() as {
+      id: string;
+      systemPrompt: string;
+      skills: string[];
+      baseSkills: string[];
+      overrides: Record<string, unknown>;
+    };
     expect(body.id).toBe('scriptwriter');
     expect(body.systemPrompt.length).toBeGreaterThan(20);
     expect(body.skills.length).toBeGreaterThan(0);
+    expect(body.baseSkills.length).toBeGreaterThan(0);
+    expect(body.overrides).toEqual({});
+  });
+
+  it('PATCH /agents/:id/overrides persists and GET config reflects changes', async () => {
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: '/api/agents/researcher/overrides',
+      payload: {
+        customNotes: 'Priorizar fuentes primarias.',
+        extraSkills: ['arqueología bíblica'],
+        promptAppend: 'Responde en español neutro.',
+      },
+    });
+    expect(patch.statusCode).toBe(200);
+    const patchBody = patch.json() as {
+      overrides: { customNotes: string; extraSkills: string[]; promptAppend: string };
+      skills: string[];
+    };
+    expect(patchBody.overrides.customNotes).toBe('Priorizar fuentes primarias.');
+    expect(patchBody.overrides.extraSkills).toContain('arqueología bíblica');
+    expect(patchBody.skills).toContain('arqueología bíblica');
+
+    const config = await app.inject({ method: 'GET', url: '/api/agents/researcher/config' });
+    const cfg = config.json() as {
+      overrides: { customNotes: string };
+      skills: string[];
+    };
+    expect(cfg.overrides.customNotes).toBe('Priorizar fuentes primarias.');
+    expect(cfg.skills).toContain('arqueología bíblica');
   });
 
   it('POST /episodes/:id/agents/hermes/run enqueues agent job', async () => {

@@ -1,13 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { isAgentId } from '@creator-ai-studio/shared';
+import type { AgentOverride } from '@creator-ai-studio/shared';
 import type { EpisodeStorage } from '../storage/index.js';
 import { getEpisodeForUser } from '../storage/access.js';
 import { createJob } from '../jobs/store.js';
 import { enqueueJob } from '../jobs/queue.js';
 import { listAgentDefinitions, getAgentDefinition } from './registry.js';
 import { AGENT_SYSTEM_PROMPTS } from './prompts.js';
+import { getAgentOverride, mergeAgentSkills, patchAgentOverride } from './overrides.js';
 import { listAgentRuns, getAgentRun, approveAgentRun } from './store.js';
 import { runAgent } from './runner.js';
+import { agentOverrideBody } from '../http/schemas.js';
 
 function route(prefix: string, path: string): string {
   return `${prefix}${path}`;
@@ -44,12 +47,40 @@ export function registerAgentRoutes(
       reply.code(404);
       return { error: 'agent not found' };
     }
+    const overrides = await getAgentOverride(agentId);
     return {
       ...def,
       systemPrompt: AGENT_SYSTEM_PROMPTS[agentId],
-      skills: def.expertise,
+      skills: mergeAgentSkills(def.expertise, overrides),
+      baseSkills: def.expertise,
+      overrides,
     };
   });
+
+  app.patch(
+    route(prefix, '/agents/:agentId/overrides'),
+    { schema: { body: agentOverrideBody } },
+    async (request, reply) => {
+      const { agentId } = request.params as { agentId: string };
+      if (!isAgentId(agentId)) {
+        reply.code(400);
+        return { error: 'invalid agent id' };
+      }
+      const def = getAgentDefinition(agentId);
+      if (!def) {
+        reply.code(404);
+        return { error: 'agent not found' };
+      }
+      const body = (request.body ?? {}) as Partial<AgentOverride>;
+      const overrides = await patchAgentOverride(agentId, body);
+      return {
+        agentId,
+        overrides,
+        skills: mergeAgentSkills(def.expertise, overrides),
+        message: 'Overrides guardados',
+      };
+    },
+  );
 
   app.get(route(prefix, '/episodes/:id/agent-runs'), async (request, reply) => {
     const { id } = request.params as { id: string };

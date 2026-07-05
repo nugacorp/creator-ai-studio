@@ -11,6 +11,7 @@ import type {
   EpisodeSummary,
   ProductionJob,
   ProjectStatus,
+  type JobStatus,
   SecretProvider,
   SecretsPatch,
   SecretStatus,
@@ -288,6 +289,22 @@ export async function createJob(
 
 export async function fetchJob(id: string): Promise<ProductionJob> {
   return apiFetch<ProductionJob>(`/jobs/${encodeURIComponent(id)}`);
+}
+
+export interface ProductionJobsResponse {
+  jobs: ProductionJob[];
+  summary: Record<JobStatus, number>;
+}
+
+export async function fetchProductionJobs(options?: {
+  status?: JobStatus[];
+  limit?: number;
+}): Promise<ProductionJobsResponse> {
+  const params = new URLSearchParams();
+  if (options?.status?.length) params.set('status', options.status.join(','));
+  if (options?.limit !== undefined) params.set('limit', String(options.limit));
+  const qs = params.toString();
+  return apiFetch<ProductionJobsResponse>(`/jobs${qs ? `?${qs}` : ''}`);
 }
 
 export type { AppSettings };
@@ -622,10 +639,32 @@ export async function fetchAgents(): Promise<AgentsListResponse> {
 export interface AgentConfigResponse extends AgentDefinition {
   systemPrompt: string;
   skills: string[];
+  baseSkills: string[];
+  overrides: import('@creator-ai-studio/shared').AgentOverride;
 }
 
 export async function fetchAgentConfig(agentId: string): Promise<AgentConfigResponse> {
   return apiFetch<AgentConfigResponse>(`/agents/${encodeURIComponent(agentId)}/config`);
+}
+
+export type AgentOverride = import('@creator-ai-studio/shared').AgentOverride;
+
+export interface PatchAgentOverridesResponse {
+  agentId: string;
+  overrides: AgentOverride;
+  skills: string[];
+  message: string;
+}
+
+export async function patchAgentOverrides(
+  agentId: string,
+  overrides: Partial<AgentOverride>,
+): Promise<PatchAgentOverridesResponse> {
+  return apiFetch<PatchAgentOverridesResponse>(`/agents/${encodeURIComponent(agentId)}/overrides`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(overrides),
+  });
 }
 
 export async function fetchAgentRuns(episodeId: string): Promise<AgentRunsResponse> {
