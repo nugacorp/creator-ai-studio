@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { useCallback, useEffect, useState } from 'react';
+=======
+import { useEffect, useState } from 'react';
+>>>>>>> origin/main
 import {
   Clapperboard,
   CloudUpload,
@@ -9,7 +13,10 @@ import {
   ExternalLink,
   Package,
   ShieldAlert,
+<<<<<<< HEAD
   Download,
+=======
+>>>>>>> origin/main
 } from 'lucide-react';
 import {
   authorizePublish,
@@ -20,7 +27,10 @@ import {
   fetchStorageStats,
   runSafePipeline,
   fetchJob,
+<<<<<<< HEAD
   type EpisodeAssetsResponse,
+=======
+>>>>>>> origin/main
   type PipelineMode,
   type PublishChecklistItem,
   type StorageStats,
@@ -60,6 +70,7 @@ export default function PipelinePanel({
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [checklist, setChecklist] = useState<PublishChecklistItem[] | null>(null);
   const [publishReady, setPublishReady] = useState(false);
+<<<<<<< HEAD
   const [assets, setAssets] = useState<EpisodeAssetsResponse | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
 
@@ -74,6 +85,8 @@ export default function PipelinePanel({
       })
       .catch(() => setAssets(null));
   }, [episodeId]);
+=======
+>>>>>>> origin/main
 
   useEffect(() => {
     void fetchStorageStats()

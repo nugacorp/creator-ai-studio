@@ -4,7 +4,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { areMocksAllowed } from '../config/mocks.js';
+<<<<<<< HEAD
 import { computeSlideDurationSeconds, probeMediaDurationSeconds } from './audio-probe.js';
+=======
+>>>>>>> origin/main
 
 const execFileAsync = promisify(execFile);
 

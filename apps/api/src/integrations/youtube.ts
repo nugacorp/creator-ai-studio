@@ -107,7 +107,10 @@ export interface YouTubeAnalyticsResult {
   chartData: number[];
   channelDistribution: Array<{ name: string; views: number; percentage: number }>;
   isDemo?: boolean;
+<<<<<<< HEAD
   connected?: boolean;
+=======
+>>>>>>> origin/main
 }
 
 function formatEngagement(views: number, likes: number, comments: number): string {
@@ -149,7 +152,10 @@ export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTube
       chartData: [120, 180, 150, 220, 280, 310, 290],
       channelDistribution: [{ name: 'YouTube', views: 12500, percentage: 100 }],
       isDemo: true,
+<<<<<<< HEAD
       connected: false,
+=======
+>>>>>>> origin/main
     };
   }
 

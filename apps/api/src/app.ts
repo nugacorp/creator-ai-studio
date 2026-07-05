@@ -449,8 +449,11 @@ function registerRoutes(
     const hasData = yt.views > 0 || yt.chartData.length > 0;
     return {
       isDemo: yt.isDemo ?? false,
+<<<<<<< HEAD
       connected: Boolean(yt.connected),
       hasData,
+=======
+>>>>>>> origin/main
       kpis: {
         views: yt.views,
         subscribers: yt.subscribers,
@@ -532,7 +535,11 @@ function registerRoutes(
   });
 
   app.post(route(prefix, '/integrations/elevenlabs/tts'), async (request, reply) => {
+<<<<<<< HEAD
     const body = (request.body ?? {}) as { text?: string; voiceId?: string; episodeId?: string; force?: boolean };
+=======
+    const body = (request.body ?? {}) as { text?: string; voiceId?: string; episodeId?: string };
+>>>>>>> origin/main
     const { synthesizeEpisodeSpeech } = await import('./integrations/tts.js');
     let saveDir: string | undefined;
     if (body.episodeId) {
@@ -558,6 +565,7 @@ function registerRoutes(
         }
       }
     }
+<<<<<<< HEAD
     try {
       const result = await synthesizeEpisodeSpeech({
         text: body.text ?? '',
@@ -579,6 +587,35 @@ function registerRoutes(
             provider: result.provider,
           };
         }
+=======
+    const result = await synthesizeEpisodeSpeech({
+      text: body.text ?? '',
+      voiceId: body.voiceId,
+      saveDir,
+    });
+    // FASE 8: a "demo" TTS response means the provider is not configured.
+    // When mocks are blocked (production), fail loudly instead of silently
+    // returning empty/mock audio.
+    if (result.isDemo) {
+      const { areMocksAllowed } = await import('./config/mocks.js');
+      if (!areMocksAllowed()) {
+        reply.code(503);
+        return {
+          error: 'tts_not_configured',
+          message:
+            'TTS real no configurado (API key/voz faltante o proveedor sin saldo). ' +
+            'Mocks bloqueados en este entorno.',
+          provider: result.provider,
+        };
+      }
+    }
+    if (body.episodeId && (result.savedPath || (result.audioUrl && !result.isDemo))) {
+      const episode = await storage.getEpisode(body.episodeId);
+      if (episode) {
+        await storage.updateEpisode(body.episodeId, {
+          content: { ...episode.content, audioUrl: result.audioUrl },
+        });
+>>>>>>> origin/main
       }
       if (body.episodeId && (result.savedPath || (result.audioUrl && !result.isDemo))) {
         const episode = await storage.getEpisode(body.episodeId);

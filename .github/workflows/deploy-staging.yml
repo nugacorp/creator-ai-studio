@@ -67,6 +67,7 @@ jobs:
           CAS_SECRETS_KEY: ${{ secrets.CAS_SECRETS_KEY }}
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+<<<<<<< HEAD
             "${VPS_USER}@${VPS_HOST}" bash -s <<EOF
           SUPABASE_URL=${SUPABASE_URL@Q} \
           SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY@Q} \
@@ -76,6 +77,16 @@ jobs:
           CAS_SECRETS_KEY=${CAS_SECRETS_KEY@Q} \
           bash /root/creator-ai-studio/scripts/vps-sync-supabase-env.sh
           EOF
+=======
+            "${VPS_USER}@${VPS_HOST}" \
+            "SUPABASE_URL='${SUPABASE_URL}' \
+             SUPABASE_ANON_KEY='${SUPABASE_ANON_KEY}' \
+             SUPABASE_JWT_SECRET='${SUPABASE_JWT_SECRET}' \
+             SUPABASE_SERVICE_ROLE_KEY='${SUPABASE_SERVICE_ROLE_KEY}' \
+             CAS_API_KEY='${CAS_API_KEY}' \
+             CAS_SECRETS_KEY='${CAS_SECRETS_KEY}' \
+             bash /root/creator-ai-studio/scripts/vps-sync-supabase-env.sh"
+>>>>>>> origin/main
 
       - name: Redeploy staging stack
         env:
