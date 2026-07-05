@@ -1,8 +1,20 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import type { Scene } from '@creator-ai-studio/shared';
+import { hasBackgroundMusic, musicFilePath, MUSIC_FILENAME } from './music.js';
 
-export type EpisodeAssetKey = 'video' | 'short' | 'thumbnail' | 'audio' | 'content';
+export type EpisodeAssetKey = 'video' | 'short' | 'thumbnail' | 'audio' | 'music' | 'content';
+
+export interface EpisodeSceneImageInfo {
+  sceneId: string;
+  index: number;
+  label: string;
+  filename: string;
+  available: boolean;
+  imageUrl?: string;
+  text?: string;
+}
 
 export interface EpisodeAssetInfo {
   key: EpisodeAssetKey;
@@ -21,6 +33,33 @@ function resolveAudio(episodeDir: string): { path: string; filename: string } | 
     }
   }
   return null;
+}
+
+/** Scene slide PNGs under 04-assets/ (slide-000.png …), aligned with content.scenes order. */
+export function listEpisodeSceneImages(
+  episodeId: string,
+  episodeDir: string,
+  scenes: Scene[],
+): EpisodeSceneImageInfo[] {
+  const assetsDir = path.join(episodeDir, '04-assets');
+  return scenes.map((scene, index) => {
+    const filename = `slide-${String(index).padStart(3, '0')}.png`;
+    const filePath = path.join(assetsDir, filename);
+    const available = existsSync(filePath);
+    const imageUrl = available
+      ? `/api/episodes/${episodeId}/scene-images/${filename}`
+      : scene.imageUrl?.trim() || undefined;
+    const text = scene.text?.trim();
+    return {
+      sceneId: scene.id,
+      index,
+      label: `Escena ${index + 1}`,
+      filename,
+      available,
+      imageUrl,
+      text: text ? text.slice(0, 160) : undefined,
+    };
+  });
 }
 
 export function listEpisodeAssets(episodeDir: string): EpisodeAssetInfo[] {
@@ -54,6 +93,12 @@ export function listEpisodeAssets(episodeDir: string): EpisodeAssetInfo[] {
       label: 'Narración',
       available: audio !== null,
       filename: audio?.filename,
+    },
+    {
+      key: 'music',
+      label: 'Música de fondo (Lyria)',
+      available: hasBackgroundMusic(episodeDir),
+      filename: hasBackgroundMusic(episodeDir) ? MUSIC_FILENAME : undefined,
     },
     {
       key: 'content',
@@ -92,6 +137,12 @@ export function resolveEpisodeAssetPath(
       if (!audio) return null;
       const contentType = audio.filename.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg';
       return { path: audio.path, filename: audio.filename, contentType };
+    }
+    case 'music': {
+      const file = musicFilePath(episodeDir);
+      return existsSync(file)
+        ? { path: file, filename: MUSIC_FILENAME, contentType: 'audio/mpeg' }
+        : null;
     }
     case 'content': {
       const file = path.join(episodeDir, '00-control', 'content.json');

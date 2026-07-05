@@ -150,6 +150,9 @@ export function resolveEpisodeMediaUrl(episodeId: string, url: string | undefine
   if (url.includes('/api/episodes/media/video')) {
     return `/api/episodes/${episodeId}/files/video`;
   }
+  if (url.includes('/files/music') || url.includes('background-music')) {
+    return `/api/episodes/${episodeId}/files/music`;
+  }
   return url;
 }
 
@@ -305,7 +308,14 @@ export interface CalendarEvent {
   id: string;
   title: string;
   date: string;
-  status: string;
+  time: string;
+  channel: string;
+  status: 'published' | 'scheduled' | 'draft';
+  source?: 'local' | 'youtube';
+  episodeId?: string;
+  scheduledAt?: string;
+  youtubeVideoId?: string;
+  youtubeUrl?: string;
 }
 
 export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
@@ -534,6 +544,16 @@ export interface EpisodeAssetFile {
   filename?: string;
 }
 
+export interface EpisodeSceneAsset {
+  sceneId: string;
+  index: number;
+  label: string;
+  filename: string;
+  available: boolean;
+  imageUrl?: string;
+  text?: string;
+}
+
 export interface EpisodeAssetsResponse {
   episodeId: string;
   workspacePath: string;
@@ -542,6 +562,7 @@ export interface EpisodeAssetsResponse {
   drivePath?: string | null;
   message?: string;
   files: EpisodeAssetFile[];
+  sceneImages?: EpisodeSceneAsset[];
 }
 
 export async function fetchEpisodeAssets(episodeId: string): Promise<EpisodeAssetsResponse> {
@@ -636,6 +657,44 @@ export async function approveAgentRun(
 }
 
 export type { StorageStats, TtsProvider, ElevenLabsVoice };
+
+export async function generateEpisodeMusic(
+  episodeId: string,
+  options?: {
+    prompt?: string;
+    model?: 'lyria-3-clip-preview' | 'lyria-3-pro-preview';
+    force?: boolean;
+    assignToScenes?: boolean;
+  },
+): Promise<{
+  musicUrl: string;
+  saved: boolean;
+  skipped?: boolean;
+  label: string;
+  model?: string;
+}> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/music/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...(options?.prompt ? { prompt: options.prompt } : {}),
+      ...(options?.model ? { model: options.model } : {}),
+      ...(options?.force ? { force: true } : {}),
+      ...(options?.assignToScenes === false ? { assignToScenes: false } : {}),
+    }),
+  });
+}
+
+export async function aiGenerateMusic(body: {
+  prompt: string;
+  model?: 'lyria-3-clip-preview' | 'lyria-3-pro-preview';
+}): Promise<{ audio: string; mimeType: string; model: string; lyrics?: string }> {
+  return apiFetch('/ai/generate-music', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
 
 export async function aiSeo(
   title: string,

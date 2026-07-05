@@ -33,9 +33,14 @@ export async function generateSceneImagesForEpisode(
       continue;
     }
     const dest = path.join(assetsDir, `slide-${String(i).padStart(3, '0')}.png`);
-    const hasStoredImage = scene.imageUrl?.trim() && existsSync(dest);
-    if (hasStoredImage && !options?.force) {
-      updated.push(scene);
+    const slideFilename = path.basename(dest);
+    if (existsSync(dest) && !options?.force) {
+      updated.push({
+        ...scene,
+        imageUrl:
+          scene.imageUrl?.trim() ||
+          `/api/episodes/${episodeId}/scene-images/${slideFilename}`,
+      });
       continue;
     }
 

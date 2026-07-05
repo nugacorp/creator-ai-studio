@@ -204,6 +204,7 @@ describe('api routes', () => {
     expect(body.storageLocation).toBe('local');
     expect(body.files.some(f => f.key === 'video')).toBe(true);
     expect(body.files.some(f => f.key === 'script' && f.available === false)).toBe(true);
+    expect(Array.isArray((body as { sceneImages?: unknown[] }).sceneImages)).toBe(true);
   });
 
   it('GET /episodes/:id returns 404 for a missing episode', async () => {

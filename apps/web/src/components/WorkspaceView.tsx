@@ -690,18 +690,24 @@ export default function WorkspaceView({
     }
     setIsProcessing(true);
     let generated = 0;
+    let reused = 0;
     try {
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i]!;
-        setProcessingMessage(`Generando imagen ${i + 1} de ${scenes.length}…`);
+        setProcessingMessage(`Procesando imagen ${i + 1} de ${scenes.length}…`);
         const data = await generateSceneImages(project.id, [scene.id], {
-          force: true,
           skipLlmRefine: true,
         });
         persistScenes(data.scenes);
         if (data.generated > 0) generated += data.generated;
+        else reused++;
       }
-      triggerFeedback('success', `✓ ${generated} imagen(es) generada(s)`);
+      triggerFeedback(
+        'success',
+        generated > 0
+          ? `✓ ${generated} imagen(es) generada(s)${reused > 0 ? `, ${reused} reutilizada(s)` : ''}`
+          : `✓ ${reused} imagen(es) ya existían — sin regenerar`,
+      );
     } catch (err) {
       console.error(err);
       triggerFeedback(
@@ -804,14 +810,22 @@ export default function WorkspaceView({
     }
   };
 
-  // 3. AI Scene Image generation
-  const handleGenerateSceneImage = async (sceneId: string) => {
+  // 3. AI Scene Image generation (reuses slide-XXX.png on disk unless force)
+  const handleGenerateSceneImage = async (sceneId: string, options?: { force?: boolean }) => {
     setGeneratingSceneId(sceneId);
-    setProcessingMessage('IA está modelando y generando la toma visual...');
+    setProcessingMessage(
+      options?.force ? 'Regenerando imagen de escena…' : 'Comprobando imagen existente…',
+    );
     try {
-      const data = await generateSceneImages(project.id, [sceneId], { force: true });
+      const data = await generateSceneImages(project.id, [sceneId], {
+        force: options?.force,
+        skipLlmRefine: !options?.force,
+      });
       persistScenes(data.scenes);
-      triggerFeedback('success', '✓ Imagen generada para la escena');
+      triggerFeedback(
+        'success',
+        data.generated > 0 ? '✓ Imagen generada para la escena' : '✓ Imagen existente reutilizada',
+      );
     } catch (err) {
       console.error(err);
       triggerFeedback('error', 'Error generando imagen — revisa Gemini/OpenAI en Configuración');
@@ -1349,15 +1363,30 @@ export default function WorkspaceView({
                       </div>
 
                       {/* Hover Overlay Generate Button */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-150">
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity duration-150">
                         <button
                           onClick={() => void handleGenerateSceneImage(scene.id)}
                           disabled={generatingSceneId === scene.id}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold cursor-pointer disabled:opacity-60"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>{generatingSceneId === scene.id ? 'Generando…' : 'Generar Imagen IA'}</span>
+                          <span>
+                            {generatingSceneId === scene.id
+                              ? 'Procesando…'
+                              : scene.imageUrl
+                                ? 'Actualizar imagen'
+                                : 'Generar Imagen IA'}
+                          </span>
                         </button>
+                        {scene.imageUrl ? (
+                          <button
+                            onClick={() => void handleGenerateSceneImage(scene.id, { force: true })}
+                            disabled={generatingSceneId === scene.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#15191E] border border-white/10 hover:border-indigo-500/40 text-white text-[10px] font-bold cursor-pointer disabled:opacity-60"
+                          >
+                            <span>Regenerar</span>
+                          </button>
+                        ) : null}
                       </div>
                     </div>
 

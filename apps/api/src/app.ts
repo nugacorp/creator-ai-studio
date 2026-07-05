@@ -158,14 +158,16 @@ function registerRoutes(
         files: [],
       };
     }
-    const { listEpisodeAssets } = await import('./media/assets.js');
+    const { listEpisodeAssets, listEpisodeSceneImages } = await import('./media/assets.js');
     const files = listEpisodeAssets(dir);
+    const sceneImages = listEpisodeSceneImages(id, dir, episode.content.scenes ?? []);
     const hasScript = episode.content.script.trim().length > 0;
     return {
       episodeId: id,
       workspacePath: episode.workspacePath,
       storageLocation: 'local',
       storageRoot: 'LOCAL_STORAGE_PATH en el servidor (p. ej. /data/episodes)',
+      sceneImages,
       files: [
         ...files,
         {
@@ -205,7 +207,7 @@ function registerRoutes(
       return body;
     }
 
-    const allowed = new Set(['video', 'short', 'thumbnail', 'audio', 'content']);
+    const allowed = new Set(['video', 'short', 'thumbnail', 'audio', 'music', 'content']);
     if (!allowed.has(asset)) {
       reply.code(400);
       return { error: 'invalid asset' };
@@ -213,7 +215,7 @@ function registerRoutes(
 
     const resolved = resolveEpisodeAssetPath(
       dir,
-      asset as 'video' | 'short' | 'thumbnail' | 'audio' | 'content',
+      asset as 'video' | 'short' | 'thumbnail' | 'audio' | 'music' | 'content',
     );
     if (!resolved) {
       reply.code(404);
@@ -464,15 +466,9 @@ function registerRoutes(
   });
 
   app.get(route(prefix, '/calendar/events'), async (request) => {
-    const episodes = await storage.listEpisodes(request.userId);
-    return episodes
-      .filter(e => e.status === 'review' || e.status === 'published')
-      .map(e => ({
-        id: e.id,
-        title: e.title,
-        date: e.updatedAt.split('T')[0],
-        status: e.status === 'published' ? 'published' : 'scheduled',
-      }));
+    const { buildCalendarEvents } = await import('./calendar/events.js');
+    const result = await buildCalendarEvents(storage, request.userId);
+    return result.events;
   });
 
   app.post(route(prefix, '/integrations/youtube/upload'), async (request, reply) => {
@@ -864,6 +860,87 @@ function registerRoutes(
       await storage.removeFromArchivedIndex(id);
     }
     return result;
+  });
+
+  app.post(route(prefix, '/episodes/:id/music/generate'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as {
+      prompt?: string;
+      model?: 'lyria-3-clip-preview' | 'lyria-3-pro-preview';
+      force?: boolean;
+      assignToScenes?: boolean;
+    };
+    const episode = await storage.getEpisode(id);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'episodio no en disco local' };
+    }
+    const { episodeFileUrl } = await import('./media/media-urls.js');
+    const canonicalUrl = episodeFileUrl(id, 'music');
+    const { hasBackgroundMusicFile } = await import('./media/production-locks.js');
+    const { readMusicMeta, generateEpisodeMusic, applyMusicLabelToScenes, arePromptsSimilar } =
+      await import('./media/music.js');
+
+    if (
+      !body.force &&
+      hasBackgroundMusicFile(dir) &&
+      episode.content.musicUrl &&
+      body.prompt?.trim()
+    ) {
+      const meta = await readMusicMeta(dir);
+      if (meta && arePromptsSimilar(body.prompt, meta.prompt)) {
+        return {
+          musicUrl: canonicalUrl,
+          saved: true,
+          skipped: true,
+          label: meta.label ?? body.prompt.slice(0, 72),
+        };
+      }
+    }
+
+    try {
+      const result = await generateEpisodeMusic(id, dir, {
+        prompt: body.prompt,
+        model: body.model,
+        force: body.force,
+        title: episode.title,
+        script: episode.content.script,
+      });
+      const scenes =
+        body.assignToScenes !== false
+          ? applyMusicLabelToScenes(episode.content.scenes, result.label)
+          : episode.content.scenes;
+      await storage.updateEpisode(id, {
+        content: {
+          musicUrl: result.musicUrl,
+          ...(body.assignToScenes !== false ? { scenes } : {}),
+        },
+      });
+      return {
+        musicUrl: result.musicUrl,
+        saved: result.saved,
+        skipped: result.skipped,
+        label: result.label,
+        model: result.meta.model,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'music generation failed';
+      if (message.includes('LYRIA_NOT_CONFIGURED')) {
+        reply.code(503);
+        return {
+          error: 'lyria_not_configured',
+          message:
+            'Configura GEMINI_API_KEY o conecta Google OAuth (Gemini) en Ajustes para usar Lyria.',
+        };
+      }
+      reply.code(502);
+      return { error: 'music_generation_failed', message };
+    }
   });
 
   app.post(route(prefix, '/episodes/:id/thumbnail'), async (request, reply) => {

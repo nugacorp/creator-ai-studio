@@ -69,6 +69,7 @@ function episodeToProject(episode: EpisodeSummary, content?: EpisodeDetail['cont
     seoTags: c?.seoTags ?? [],
     thumbnailUrl: c?.thumbnailUrl,
     audioUrl: c?.audioUrl,
+    musicUrl: c?.musicUrl,
     subtitlesSrt: c?.subtitlesSrt,
     videoUrl: c?.videoUrl,
     scheduledAt: c?.scheduledAt,
@@ -502,7 +503,12 @@ export function App({ initialView = 'home' }: AppProps = {}) {
 
           {currentView === 'copilot' && <CopilotView episodeTitle={activeProject?.title} />}
 
-          {currentView === 'library' && <LibraryView onAddNewScript={handleAddNewScript} />}
+          {currentView === 'library' && (
+            <LibraryView
+              onAddNewScript={handleAddNewScript}
+              onOpenWorkspace={handleOpenWorkspace}
+            />
+          )}
 
           {currentView === 'calendar' && <CalendarView />}
 
