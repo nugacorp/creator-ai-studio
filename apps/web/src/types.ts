@@ -60,6 +60,8 @@ export interface VideoProject {
   shortsUrl?: string;
   scheduledAt?: string;
   duration: string;
+  /** YouTube channel this project is produced for. */
+  channelId?: string;
 }
 
 export interface Channel {

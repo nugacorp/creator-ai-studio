@@ -60,6 +60,9 @@ export async function updateChannel(
     ...(patch.status !== undefined ? { status: patch.status } : {}),
     ...(patch.subscribers !== undefined ? { subscribers: patch.subscribers } : {}),
     ...(patch.avatar !== undefined ? { avatar: patch.avatar } : {}),
+    ...(patch.youtubeChannelId !== undefined ? { youtubeChannelId: patch.youtubeChannelId } : {}),
+    ...(patch.defaultVoiceId !== undefined ? { defaultVoiceId: patch.defaultVoiceId } : {}),
+    ...(patch.publishSchedule !== undefined ? { publishSchedule: patch.publishSchedule } : {}),
   };
   await writeChannels(channels);
   return channels[index];

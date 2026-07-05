@@ -44,12 +44,16 @@ export interface EpisodeSummary {
   localWorkspace?: string;
   /** Supabase auth user id when episode was created while logged in. */
   userId?: string;
+  /** YouTube channel this episode belongs to (denormalized from content for listing). */
+  channelId?: string;
 }
 
 /** Input accepted when creating a new episode. */
 export interface CreateEpisodeInput {
   /** Human-readable episode title. The slug is derived from it. */
   title: string;
+  /** YouTube channel to tag this episode with (from active workspace channel). */
+  channelId?: string;
 }
 
 /** Official production stages, in execution order. */
@@ -469,6 +473,15 @@ export interface AppSettings {
   activeChannelId?: string;
   /** Recurring publish slots (Camino Bíblico: Mon long, Tue/Thu/Sat shorts). */
   publishSchedule?: PublishSchedule;
+  /** Per-YouTube-channel overrides (voice, schedule). Key = YouTube channel ID. */
+  channelProfiles?: Record<string, ChannelProfile>;
+}
+
+/** Settings scoped to one YouTube channel in a multi-channel workspace. */
+export interface ChannelProfile {
+  publishSchedule?: PublishSchedule;
+  /** Default ElevenLabs voice ID for narration on this channel. */
+  defaultVoiceId?: string;
 }
 
 /** YouTube channel returned by GET /integrations/youtube/channels. */
@@ -575,6 +588,10 @@ export interface ChannelRecord {
   status: string;
   subscribers: number;
   avatar: string;
+  /** Linked YouTube channel ID when synced from OAuth. */
+  youtubeChannelId?: string;
+  defaultVoiceId?: string;
+  publishSchedule?: PublishSchedule;
 }
 
 export interface CreateChannelInput {
@@ -583,6 +600,9 @@ export interface CreateChannelInput {
   status?: string;
   subscribers?: number;
   avatar?: string;
+  youtubeChannelId?: string;
+  defaultVoiceId?: string;
+  publishSchedule?: PublishSchedule;
 }
 
 /** Workspace collaborator role (Equipos). */

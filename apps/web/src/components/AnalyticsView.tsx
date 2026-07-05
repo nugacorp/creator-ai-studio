@@ -26,7 +26,13 @@ function buildChartPaths(data: number[], width = 500, height = 200) {
   return { area, line, points };
 }
 
-export default function AnalyticsView() {
+export default function AnalyticsView({
+  activeChannelId = null,
+  activeChannelName = null,
+}: {
+  activeChannelId?: string | null;
+  activeChannelName?: string | null;
+}) {
   const [activeChannelTab, setActiveChannelTab] = useState<ChannelTab>('Todos');
   const [analytics, setAnalytics] = useState({
     isDemo: false,
@@ -42,7 +48,7 @@ export default function AnalyticsView() {
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    void fetchAnalytics()
+    void fetchAnalytics(activeChannelId ?? undefined)
       .then(data => {
         setLoadError(false);
         setAnalytics({
@@ -58,7 +64,7 @@ export default function AnalyticsView() {
         });
       })
       .catch(() => setLoadError(true));
-  }, []);
+  }, [activeChannelId]);
 
   const channelMultiplier =
     activeChannelTab === 'YouTube'
@@ -113,6 +119,16 @@ export default function AnalyticsView() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {activeChannelName && (
+        <p className="text-xs rounded-xl border border-indigo-500/20 bg-indigo-950/20 px-4 py-3 text-indigo-200">
+          Métricas del canal activo: <strong className="text-white">{activeChannelName}</strong>
+        </p>
+      )}
+      {!activeChannelId && (
+        <p className="text-xs rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-amber-200">
+          Selecciona un canal en la cabecera para ver analytics de un canal específico.
+        </p>
+      )}
       {analytics.isDemo && (
         <p className="text-xs rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-amber-200">
           Modo demo local — estos números no son reales. En staging/producción conecta YouTube OAuth en

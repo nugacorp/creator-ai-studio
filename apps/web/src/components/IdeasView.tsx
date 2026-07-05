@@ -21,6 +21,8 @@ import {
 } from '../api';
 
 interface IdeasViewProps {
+  activeChannelId?: string | null;
+  activeChannelName?: string | null;
   onOpenWorkspace: (episodeId: string) => void;
   onProjectsRefresh?: () => void;
 }
@@ -137,7 +139,12 @@ function ProposalCard({
   );
 }
 
-export default function IdeasView({ onOpenWorkspace, onProjectsRefresh }: IdeasViewProps) {
+export default function IdeasView({
+  activeChannelId = null,
+  activeChannelName = null,
+  onOpenWorkspace,
+  onProjectsRefresh,
+}: IdeasViewProps) {
   const [ideas, setIdeas] = useState<EpisodeIdea[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -151,7 +158,7 @@ export default function IdeasView({ onOpenWorkspace, onProjectsRefresh }: IdeasV
   const loadIdeas = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await fetchIdeas();
+      const list = await fetchIdeas(activeChannelId ? { channelId: activeChannelId } : undefined);
       setIdeas(list);
       setSelectedId(prev => (prev && list.some(i => i.id === prev) ? prev : list[0]?.id ?? null));
     } catch {
@@ -159,7 +166,7 @@ export default function IdeasView({ onOpenWorkspace, onProjectsRefresh }: IdeasV
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeChannelId]);
 
   useEffect(() => {
     void loadIdeas();
@@ -184,6 +191,7 @@ export default function IdeasView({ onOpenWorkspace, onProjectsRefresh }: IdeasV
         rawIdea: rawIdea.trim(),
         audience: audience.trim() || undefined,
         passage: passage.trim() || undefined,
+        ...(activeChannelId ? { channelId: activeChannelId } : {}),
       });
       setIdeas(prev => [created, ...prev]);
       setSelectedId(created.id);
@@ -267,10 +275,28 @@ export default function IdeasView({ onOpenWorkspace, onProjectsRefresh }: IdeasV
             <p className="text-sm text-slate-400 leading-relaxed max-w-2xl">
               Planta una idea en una frase, deja que la IA proponga títulos y ángulos, aprueba la
               ganadora y lanza la producción con el investigador y el resto de agentes.
+              {activeChannelName && (
+                <>
+                  {' '}
+                  Trabajando para <strong className="text-indigo-300">{activeChannelName}</strong>.
+                </>
+              )}
             </p>
           </div>
         </div>
       </header>
+
+      {!activeChannelId && (
+        <p className="text-xs rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-amber-200">
+          Selecciona un canal en la cabecera para etiquetar nuevas ideas con ese canal.
+        </p>
+      )}
+
+      {activeChannelId && !loading && filtered.length === 0 && tab === 'activas' && (
+        <p className="text-xs rounded-xl border border-white/10 bg-[#15191E] px-4 py-3 text-slate-400">
+          Aún no hay ideas para {activeChannelName ?? 'este canal'} — escribe una abajo para empezar.
+        </p>
+      )}
 
       {error && (
         <div className="text-xs text-rose-300 bg-rose-950/30 border border-rose-900/30 rounded-xl px-4 py-3">

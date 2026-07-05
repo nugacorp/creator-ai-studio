@@ -466,6 +466,13 @@ export default function SettingsView() {
                     </button>
                   </div>
 
+                  {group.oauthPurpose === 'youtube' && (
+                    <p className="text-[10px] text-indigo-300/90 bg-indigo-950/20 border border-indigo-800/30 rounded-xl px-3 py-2 leading-relaxed">
+                      Una cuenta Google puede tener varios canales de YouTube. Tras conectar, elige el
+                      canal activo en el selector de la <strong>cabecera</strong> o en Modo Multicanal.
+                    </p>
+                  )}
+
                   {group.oauthPurpose && (
                     status?.authMethod === 'oauth' && status?.configured ? (
                       <div className="flex items-center justify-between gap-3 rounded-xl bg-emerald-950/30 border border-emerald-800/40 px-3 py-2">

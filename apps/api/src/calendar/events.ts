@@ -16,6 +16,7 @@ export interface CalendarEventDto {
   /** HH:MM (UTC time part when derived from scheduledAt). */
   time: string;
   channel: string;
+  channelId?: string;
   status: CalendarEventStatus;
   source: CalendarEventSource;
   episodeId?: string;
@@ -42,6 +43,7 @@ function eventSortKey(event: CalendarEventDto): string {
 async function loadLocalCalendarEvents(
   storage: EpisodeStorage,
   userId?: string,
+  channelId?: string,
 ): Promise<CalendarEventDto[]> {
   const summaries = await storage.listEpisodes(userId);
   const events: CalendarEventDto[] = [];
@@ -49,6 +51,9 @@ async function loadLocalCalendarEvents(
   for (const summary of summaries) {
     const detail = await storage.getEpisode(summary.id);
     if (!detail) continue;
+
+    const episodeChannelId = detail.content.channelId ?? summary.channelId;
+    if (channelId && episodeChannelId !== channelId) continue;
 
     const scheduledAt = detail.content.scheduledAt;
     const isScheduled = summary.status === 'review' && Boolean(scheduledAt);
@@ -65,6 +70,7 @@ async function loadLocalCalendarEvents(
       date,
       time,
       channel: 'YouTube',
+      channelId: episodeChannelId,
       status: isPublished ? 'published' : 'scheduled',
       source: 'local',
       episodeId: summary.id,
@@ -121,15 +127,21 @@ export interface CalendarEventsResult {
 export async function buildCalendarEvents(
   storage: EpisodeStorage,
   userId?: string,
+  channelId?: string,
 ): Promise<CalendarEventsResult> {
-  const localEvents = await loadLocalCalendarEvents(storage, userId);
+  const localEvents = await loadLocalCalendarEvents(storage, userId, channelId);
   const linkedVideoIds = new Set(
     localEvents.map(e => e.youtubeVideoId).filter((id): id is string => Boolean(id)),
   );
 
   const accessToken = await resolveYouTubeAccessTokenForCalendar();
   const youtubeConnected = Boolean(accessToken && (await hasYouTubeScopes()));
-  const youtubeEvents = youtubeConnected ? await loadYouTubeCalendarEvents(linkedVideoIds) : [];
+  let youtubeEvents = youtubeConnected ? await loadYouTubeCalendarEvents(linkedVideoIds) : [];
+  if (channelId) {
+    youtubeEvents = youtubeEvents.filter(
+      e => e.channelId === channelId || (!e.channelId && localEvents.length === 0),
+    );
+  }
 
   const events = [...localEvents, ...youtubeEvents].sort((a, b) =>
     eventSortKey(a).localeCompare(eventSortKey(b)),

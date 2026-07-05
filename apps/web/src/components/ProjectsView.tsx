@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, ArrowLeft, ArrowRight, Video, Search, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
-import { VideoProject, ProjectStatus } from '../types';
+import { VideoProject, ProjectStatus, Channel } from '../types';
 import DeleteEpisodeModal from './DeleteEpisodeModal';
 import {
   filterProjectsBySection,
@@ -21,6 +21,10 @@ interface ProjectsViewProps {
   onDeleteEpisode?: (id: string) => Promise<void>;
   boardFilter?: DashboardSection | null;
   onClearBoardFilter?: () => void;
+  activeChannel?: Channel | null;
+  channelFilterActive?: boolean;
+  onChannelFilterActiveChange?: (active: boolean) => void;
+  onGoToChannelPicker?: () => void;
 }
 
 const PIPELINE_COLUMNS: ProjectStatus[] = [
@@ -44,6 +48,10 @@ export default function ProjectsView({
   onDeleteEpisode,
   boardFilter = null,
   onClearBoardFilter,
+  activeChannel = null,
+  channelFilterActive = true,
+  onChannelFilterActiveChange,
+  onGoToChannelPicker,
 }: ProjectsViewProps) {
   const [selectedSeries, setSelectedSeries] = useState<string>('Todos');
   const [searchQuery, setSearchQuery] = useState('');
@@ -159,6 +167,49 @@ export default function ProjectsView({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {activeChannel && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#15191E] border border-white/5 rounded-2xl px-4 py-3">
+          <div className="text-xs text-slate-300">
+            <span className="font-mono uppercase tracking-wide text-indigo-400/80">Canal activo</span>
+            <span className="mx-2 text-slate-500">·</span>
+            <strong className="text-white">{activeChannel.name}</strong>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={channelFilterActive}
+              onChange={e => onChannelFilterActiveChange?.(e.target.checked)}
+              className="rounded border-white/20 bg-[#0B0F14] text-indigo-600 focus:ring-indigo-500/40"
+            />
+            Solo canal activo
+          </label>
+        </div>
+      )}
+
+      {!activeChannel && (
+        <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl px-4 py-3 text-xs text-amber-200">
+          Selecciona un canal de YouTube en la{' '}
+          <button
+            type="button"
+            onClick={onGoToChannelPicker}
+            className="text-indigo-300 hover:text-white underline font-semibold cursor-pointer"
+          >
+            cabecera
+          </button>{' '}
+          para filtrar proyectos por canal.
+        </div>
+      )}
+
+      {activeChannel && channelFilterActive && filteredProjects.length === 0 && (
+        <div className="bg-[#15191E] border border-white/5 rounded-2xl p-8 text-center space-y-3">
+          <p className="text-sm text-slate-300">
+            Aún no hay proyectos para <strong className="text-white">{activeChannel.name}</strong>.
+          </p>
+          <p className="text-xs text-slate-500">
+            Crea uno en Contenido (Ideas) o con el botón Nuevo proyecto.
+          </p>
+        </div>
+      )}
       {boardFilter && (
         <div className="flex flex-wrap items-center justify-between gap-3 bg-indigo-950/30 border border-indigo-500/20 rounded-2xl px-4 py-3">
           <div className="text-xs text-indigo-200">
@@ -310,9 +361,16 @@ export default function ProjectsView({
                       >
                         {/* Tags and Duration */}
                         <div className="flex items-center justify-between text-[10px]">
-                          <span className="px-1.5 py-0.5 rounded bg-indigo-950/40 text-indigo-300 font-semibold border border-indigo-800/20">
-                            {proj.series}
-                          </span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="px-1.5 py-0.5 rounded bg-indigo-950/40 text-indigo-300 font-semibold border border-indigo-800/20 shrink-0">
+                              {proj.series}
+                            </span>
+                            {proj.channelId && activeChannel && proj.channelId !== activeChannel.id && (
+                              <span className="px-1.5 py-0.5 rounded bg-slate-800/60 text-slate-400 font-mono text-[9px] truncate max-w-[80px]">
+                                otro canal
+                              </span>
+                            )}
+                          </div>
                           <span className="text-slate-400 font-mono flex items-center gap-1">
                             <Video className="w-3 h-3 text-slate-400" />
                             {proj.duration}

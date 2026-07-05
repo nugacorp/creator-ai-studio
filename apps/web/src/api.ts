@@ -162,8 +162,11 @@ export function resolveEpisodeMediaUrl(episodeId: string, url: string | undefine
   return url;
 }
 
-export async function fetchEpisodes(): Promise<EpisodeSummary[]> {
-  return apiFetch<EpisodeSummary[]>('/episodes');
+export async function fetchEpisodes(options?: { channelId?: string }): Promise<EpisodeSummary[]> {
+  const params = new URLSearchParams();
+  if (options?.channelId) params.set('channelId', options.channelId);
+  const qs = params.toString();
+  return apiFetch<EpisodeSummary[]>(`/episodes${qs ? `?${qs}` : ''}`);
 }
 
 export async function fetchEpisodeDetail(id: string): Promise<EpisodeDetail> {
@@ -198,8 +201,13 @@ export async function deleteEpisode(id: string): Promise<{ ok: boolean; id: stri
   });
 }
 
-export async function fetchIdeas(): Promise<import('@creator-ai-studio/shared').EpisodeIdea[]> {
-  const body = await apiFetch<{ ideas: import('@creator-ai-studio/shared').EpisodeIdea[] }>('/ideas');
+export async function fetchIdeas(options?: { channelId?: string }): Promise<import('@creator-ai-studio/shared').EpisodeIdea[]> {
+  const params = new URLSearchParams();
+  if (options?.channelId) params.set('channelId', options.channelId);
+  const qs = params.toString();
+  const body = await apiFetch<{ ideas: import('@creator-ai-studio/shared').EpisodeIdea[] }>(
+    `/ideas${qs ? `?${qs}` : ''}`,
+  );
   return body.ideas;
 }
 
@@ -415,6 +423,7 @@ export interface CalendarEvent {
   date: string;
   time: string;
   channel: string;
+  channelId?: string;
   status: 'published' | 'scheduled' | 'draft';
   source?: 'local' | 'youtube';
   episodeId?: string;
@@ -423,8 +432,11 @@ export interface CalendarEvent {
   youtubeUrl?: string;
 }
 
-export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
-  return apiFetch<CalendarEvent[]>('/calendar/events');
+export async function fetchCalendarEvents(channelId?: string): Promise<CalendarEvent[]> {
+  const params = new URLSearchParams();
+  if (channelId) params.set('channelId', channelId);
+  const qs = params.toString();
+  return apiFetch<CalendarEvent[]>(`/calendar/events${qs ? `?${qs}` : ''}`);
 }
 
 export interface AnalyticsData {
@@ -436,8 +448,11 @@ export interface AnalyticsData {
   channelDistribution?: Array<{ name: string; views: number; percentage: number }>;
 }
 
-export async function fetchAnalytics(): Promise<AnalyticsData> {
-  return apiFetch<AnalyticsData>('/analytics');
+export async function fetchAnalytics(channelId?: string): Promise<AnalyticsData> {
+  const params = new URLSearchParams();
+  if (channelId) params.set('channelId', channelId);
+  const qs = params.toString();
+  return apiFetch<AnalyticsData>(`/analytics${qs ? `?${qs}` : ''}`);
 }
 
 export interface ChannelData {

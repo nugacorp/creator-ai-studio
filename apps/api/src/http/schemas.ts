@@ -12,6 +12,7 @@ export const createEpisodeBody = {
   required: ['title'],
   properties: {
     title: { type: 'string', minLength: 1, maxLength: 200 },
+    channelId: TEXT_SHORT,
   },
   additionalProperties: false,
 } as const;
@@ -23,6 +24,7 @@ export const createIdeaBody = {
     rawIdea: { type: 'string', minLength: 1, maxLength: 500 },
     audience: { type: 'string', maxLength: 200 },
     passage: { type: 'string', maxLength: 300 },
+    channelId: TEXT_SHORT,
   },
   additionalProperties: false,
 } as const;
@@ -80,6 +82,7 @@ export const settingsBody = {
     diskWarningThresholdGb: { type: 'number', minimum: 1, maximum: 10_000 },
     agentOverrides: { type: 'object', additionalProperties: true },
     activeChannelId: TEXT_SHORT,
+    channelProfiles: { type: 'object', additionalProperties: true },
   },
   additionalProperties: false,
 } as const;

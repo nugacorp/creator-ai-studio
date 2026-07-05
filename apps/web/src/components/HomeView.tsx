@@ -11,6 +11,8 @@ interface HomeViewProps {
   onGoToProjects: () => void;
   projects: VideoProject[];
   onCreateEpisode: (title: string) => Promise<void>;
+  activeChannel?: import('../types').Channel | null;
+  onGoToChannelPicker?: () => void;
 }
 
 export default function HomeView({
@@ -19,6 +21,8 @@ export default function HomeView({
   onGoToProjects,
   projects,
   onCreateEpisode,
+  activeChannel = null,
+  onGoToChannelPicker,
 }: HomeViewProps) {
   const { user, profile } = useAuth();
   const greetingName = resolveDisplayName({
@@ -117,10 +121,28 @@ export default function HomeView({
             <div className="text-xs text-indigo-400 font-bold uppercase tracking-wider font-mono">Panel del Creador</div>
             <h1 className="font-display font-bold text-3xl text-white tracking-tight">{greeting}</h1>
             <p className="text-sm text-slate-400 max-w-2xl">
-              {projects.length > 0
-                ? `Tienes ${projects.length} episodio(s) en el pipeline. Continúa donde lo dejaste o crea uno nuevo.`
-                : 'Crea tu primer episodio y ejecuta el pipeline completo hasta YouTube desde el workspace.'}
+              {activeChannel ? (
+                <>
+                  Canal activo: <strong className="text-white">{activeChannel.name}</strong>
+                  {projects.length > 0
+                    ? ` — ${projects.length} proyecto(s) en este canal.`
+                    : ' — aún no hay proyectos; crea uno en Ideas o con Nuevo proyecto.'}
+                </>
+              ) : projects.length > 0 ? (
+                `Tienes ${projects.length} episodio(s) en el pipeline. Continúa donde lo dejaste o crea uno nuevo.`
+              ) : (
+                'Crea tu primer episodio y ejecuta el pipeline completo hasta YouTube desde el workspace.'
+              )}
             </p>
+            {!activeChannel && onGoToChannelPicker && (
+              <button
+                type="button"
+                onClick={onGoToChannelPicker}
+                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
+              >
+                Seleccionar canal de YouTube en la cabecera →
+              </button>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-3 pt-1">

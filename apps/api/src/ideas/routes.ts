@@ -16,7 +16,12 @@ export function registerIdeaRoutes(
   storage: EpisodeStorage,
 ): void {
   app.get(route(prefix, '/ideas'), async request => {
-    const ideas = await listIdeas(request.userId);
+    const query = request.query as { channelId?: string };
+    const channelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
+    const ideas = await listIdeas(request.userId, channelId);
     return { ideas };
   });
 

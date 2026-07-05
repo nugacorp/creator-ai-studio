@@ -52,7 +52,11 @@ export async function approveIdeaProposal(
     throw new Error('max_active_episodes');
   }
 
-  const episode = await storage.createEpisode({ title: proposal.title }, userId);
+  const channelId = idea.channelId ?? settings.activeChannelId;
+  const episode = await storage.createEpisode(
+    { title: proposal.title, ...(channelId ? { channelId } : {}) },
+    userId,
+  );
   const researchBrief = buildResearchBrief(idea, proposal);
   const dir = await storage.getEpisodeDirectory(episode.id);
   if (!dir) {
@@ -64,6 +68,7 @@ export async function approveIdeaProposal(
 
   await storage.updateEpisode(episode.id, {
     content: {
+      ...(channelId ? { channelId } : {}),
       outline: proposal.points,
       researchBrief,
       rawIdea: idea.rawIdea,

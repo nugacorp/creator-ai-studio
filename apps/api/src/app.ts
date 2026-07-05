@@ -123,13 +123,20 @@ function registerRoutes(
   app.get(route(prefix, '/auth/status'), async () => getAuthConfig());
 
   app.get(route(prefix, '/episodes'), async (request): Promise<EpisodeSummary[]> => {
+    const query = request.query as { channelId?: string };
+    const channelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
     const source = getEpisodeMetadataSource();
     if (source === 'supabase' || source === 'hybrid') {
       const fromDb = await listEpisodesFromSupabase(request.userId);
-      if (fromDb && fromDb.length > 0) return fromDb;
+      if (fromDb && fromDb.length > 0) {
+        return channelId ? fromDb.filter(e => e.channelId === channelId) : fromDb;
+      }
       if (source === 'supabase') return fromDb ?? [];
     }
-    return storage.listEpisodes(request.userId);
+    return storage.listEpisodes(request.userId, channelId);
   });
 
   app.get(route(prefix, '/episodes/:id'), async (request, reply) => {
@@ -249,7 +256,10 @@ function registerRoutes(
       };
     }
 
-    const episode = await storage.createEpisode({ title }, request.userId);
+    const episode = await storage.createEpisode(
+      { title, ...(body.channelId ? { channelId: body.channelId.trim() } : {}) },
+      request.userId,
+    );
     const detail = await storage.getEpisode(episode.id);
     if (detail) {
       const { syncEpisodeToSupabase } = await import('./db/episodes-sync.js');
@@ -454,13 +464,23 @@ function registerRoutes(
     return getStorageStats(storage);
   });
 
-  app.get(route(prefix, '/analytics'), async () => {
-    const yt = await fetchYouTubeAnalytics('default');
+  app.get(route(prefix, '/analytics'), async (request) => {
+    const query = request.query as { channelId?: string };
+    let channelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
+    if (!channelId) {
+      const settings = await getSettings();
+      channelId = settings.activeChannelId;
+    }
+    const yt = await fetchYouTubeAnalytics(channelId ?? '');
     const hasData = yt.views > 0 || yt.chartData.length > 0;
     return {
       isDemo: yt.isDemo ?? false,
       connected: Boolean(yt.connected),
       hasData,
+      channelId: channelId ?? null,
       kpis: {
         views: yt.views,
         subscribers: yt.subscribers,
@@ -473,8 +493,13 @@ function registerRoutes(
   });
 
   app.get(route(prefix, '/calendar/events'), async (request) => {
+    const query = request.query as { channelId?: string };
+    const channelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
     const { buildCalendarEvents } = await import('./calendar/events.js');
-    const result = await buildCalendarEvents(storage, request.userId);
+    const result = await buildCalendarEvents(storage, request.userId, channelId);
     return result.events;
   });
 

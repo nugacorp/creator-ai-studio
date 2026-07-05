@@ -27,10 +27,13 @@ export interface EpisodeIdea {
   createdAt: string;
   updatedAt: string;
   userId?: string;
+  /** YouTube channel this idea targets (active workspace channel at creation). */
+  channelId?: string;
 }
 
 export interface CreateIdeaInput {
   rawIdea: string;
   audience?: string;
   passage?: string;
+  channelId?: string;
 }

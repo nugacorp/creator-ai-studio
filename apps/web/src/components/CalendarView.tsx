@@ -44,7 +44,13 @@ function eventDateTime(ev: CalendarEvent): number {
   return Number.isNaN(ms) ? 0 : ms;
 }
 
-export default function CalendarView() {
+export default function CalendarView({
+  activeChannelId = null,
+  activeChannelName = null,
+}: {
+  activeChannelId?: string | null;
+  activeChannelName?: string | null;
+}) {
   const [monthOffset, setMonthOffset] = useState(0);
   const today = new Date();
   const baseDate = useMemo(
@@ -70,7 +76,7 @@ export default function CalendarView() {
   const [loadError, setLoadError] = useState(false);
 
   const loadEvents = useCallback(() => {
-    void fetchCalendarEvents()
+    void fetchCalendarEvents(activeChannelId ?? undefined)
       .then(apiEvents => {
         setEvents(apiEvents.map(mapApiEvent));
         setLoadError(false);
@@ -79,7 +85,7 @@ export default function CalendarView() {
         setEvents([]);
         setLoadError(true);
       });
-  }, []);
+  }, [activeChannelId]);
 
   useEffect(() => {
     loadEvents();
@@ -144,6 +150,11 @@ export default function CalendarView() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {activeChannelName && (
+        <p className="text-xs rounded-xl border border-indigo-500/20 bg-indigo-950/20 px-4 py-3 text-indigo-200">
+          Publicaciones de <strong className="text-white">{activeChannelName}</strong>
+        </p>
+      )}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#15191E] p-4.5 rounded-2xl border border-[rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-3">

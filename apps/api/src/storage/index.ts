@@ -110,6 +110,7 @@ export class EpisodeStorage {
       updatedAt: now,
       archiveStatus: 'local',
       ...(userId ? { userId } : {}),
+      ...(input.channelId ? { channelId: input.channelId } : {}),
     };
 
     const episodeDir = path.join(this.basePath, `${id}-${slug}`);
@@ -125,7 +126,11 @@ export class EpisodeStorage {
     );
 
     await this.writeControlFiles(episodeDir, episode, createInitialStages());
-    await this.writeContent(episodeDir, createDefaultContent());
+    const content = createDefaultContent();
+    if (input.channelId) {
+      content.channelId = input.channelId;
+    }
+    await this.writeContent(episodeDir, content);
 
     for (const stage of EPISODE_STAGE_DIRECTORIES) {
       if (stage === '00-control') {
@@ -173,14 +178,19 @@ export class EpisodeStorage {
   }
 
   /** List every stored episode, sorted by creation time (oldest first). */
-  async listEpisodes(userId?: string): Promise<EpisodeSummary[]> {
+  async listEpisodes(userId?: string, channelId?: string): Promise<EpisodeSummary[]> {
     const local = await this.listLocalEpisodes();
     const archived = await this.readArchivedIndex();
     const localIds = new Set(local.map(e => e.id));
-    const merged = [...local, ...archived.filter(e => !localIds.has(e.id))];
+    let merged = [...local, ...archived.filter(e => !localIds.has(e.id))];
     merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    if (!userId) return merged;
-    return merged.filter(e => !e.userId || e.userId === userId);
+    if (userId) {
+      merged = merged.filter(e => !e.userId || e.userId === userId);
+    }
+    if (channelId) {
+      merged = merged.filter(e => e.channelId === channelId);
+    }
+    return merged;
   }
 
   /** Episodes with workspace folders on disk. */
@@ -307,6 +317,14 @@ export class EpisodeStorage {
     if (input.content) {
       const current = await this.readContent(located.dir);
       const merged = { ...current, ...input.content };
+      if (merged.channelId !== undefined && merged.channelId !== summary.channelId) {
+        summary.channelId = merged.channelId;
+        await writeFile(
+          path.join(located.dir, 'episode.json'),
+          `${JSON.stringify(summary, null, 2)}\n`,
+          'utf8',
+        );
+      }
       await this.writeContent(located.dir, merged);
     }
 

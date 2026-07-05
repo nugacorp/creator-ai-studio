@@ -54,6 +54,7 @@ import {
   type DashboardSection,
   type WorkspaceTab,
 } from './lib/dashboardNavigation';
+import { filterProjectsByChannel } from './lib/channelScope';
 
 const ACTIVE_CHANNEL_STORAGE_KEY = 'cas_active_channel_id';
 
@@ -83,6 +84,7 @@ function episodeToProject(episode: EpisodeSummary, content?: EpisodeDetail['cont
     id: episode.id,
     title: episode.title,
     series: c?.series ?? 'Reflexiones',
+    channelId: c?.channelId ?? episode.channelId,
     status:
       (c?.kanbanColumn as ProjectStatus | undefined) ??
       EPISODE_TO_PROJECT_STATUS[episode.status] ??
@@ -129,6 +131,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [activeProjectId, setActiveProjectId] = useState<string>('');
   const [workspaceRefreshToken, setWorkspaceRefreshToken] = useState(0);
   const [projectsBoardFilter, setProjectsBoardFilter] = useState<DashboardSection | null>(null);
+  const [channelFilterActive, setChannelFilterActive] = useState(true);
+  const [allProjects, setAllProjects] = useState<VideoProject[]>([]);
   const [workspaceInitialTab, setWorkspaceInitialTab] = useState<WorkspaceTab | null>(null);
   const [workspaceForcedTab, setWorkspaceForcedTab] = useState<WorkspaceTab | undefined>();
   const [workspaceForcedTabRequest, setWorkspaceForcedTabRequest] = useState(0);
@@ -169,6 +173,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     try {
       const episodes = await fetchEpisodes();
       if (episodes.length === 0) {
+        setAllProjects([]);
         setProjects([]);
         setActiveProjectId('');
         return;
@@ -184,9 +189,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
           }
         }),
       );
-      setProjects(details);
-      setActiveProjectId(prev => (prev && details.some(p => p.id === prev) ? prev : details[0].id));
+      setAllProjects(details);
     } catch {
+      setAllProjects([]);
       setProjects([]);
     }
   }, []);
@@ -198,9 +203,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
 
   const reloadEpisode = useCallback(async (episodeId: string) => {
     const detail = await fetchEpisodeDetail(episodeId);
-    setProjects(prev =>
-      prev.map(p => (p.id === episodeId ? episodeToProject(detail, detail.content) : p)),
-    );
+    const mapped = episodeToProject(detail, detail.content);
+    setAllProjects(prev => prev.map(p => (p.id === episodeId ? mapped : p)));
+    setProjects(prev => prev.map(p => (p.id === episodeId ? mapped : p)));
     setWorkspaceRefreshToken(t => t + 1);
   }, []);
 
@@ -208,6 +213,18 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     if (!canAccessApi) return;
     void loadProjects();
   }, [loadProjects, canAccessApi]);
+
+  useEffect(() => {
+    const scoped = filterProjectsByChannel(
+      allProjects,
+      selectedChannel?.id ?? null,
+      channelFilterActive,
+    );
+    setProjects(scoped);
+    setActiveProjectId(prev =>
+      prev && scoped.some(p => p.id === prev) ? prev : scoped[0]?.id ?? '',
+    );
+  }, [channelFilterActive, allProjects, selectedChannel?.id]);
 
   // Make the switch into a workspace unmistakable: scroll the content area back
   // to the top whenever the selected episode's workspace opens.
@@ -392,7 +409,10 @@ export function App({ initialView = 'home' }: AppProps = {}) {
 
   const handleCreateEpisode = async (title: string) => {
     try {
-      const created = await createEpisode({ title });
+      const created = await createEpisode({
+        title,
+        ...(selectedChannel?.id ? { channelId: selectedChannel.id } : {}),
+      });
       await loadProjects();
       setActiveProjectId(created.id);
       setCurrentView('workspace');
@@ -404,7 +424,10 @@ export function App({ initialView = 'home' }: AppProps = {}) {
 
   const handleAddNewScript = async (title: string, scriptText: string, outline: string[]) => {
     try {
-      const created = await createEpisode({ title: `Borrador: ${title}` });
+      const created = await createEpisode({
+        title: `Borrador: ${title}`,
+        ...(selectedChannel?.id ? { channelId: selectedChannel.id } : {}),
+      });
       await updateEpisode(created.id, {
         content: {
           series: 'Reflexiones',
@@ -459,6 +482,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
           youtubeConnected={youtubeConnected}
           channelsLoading={channelsLoading}
           onGoToSettings={() => setCurrentView('settings')}
+          onGoToMultichannel={() => setCurrentView('multichannel')}
           notifications={notifications}
           setNotifications={setNotifications}
           onMenuClick={() => setMobileSidebarOpen(true)}
@@ -473,11 +497,15 @@ export function App({ initialView = 'home' }: AppProps = {}) {
               onGoToProjects={() => setCurrentView('projects')}
               projects={projects}
               onCreateEpisode={handleCreateEpisode}
+              activeChannel={selectedChannel}
+              onGoToChannelPicker={() => setCurrentView('multichannel')}
             />
           )}
 
           {currentView === 'contenido' && (
             <IdeasView
+              activeChannelId={selectedChannel?.id ?? null}
+              activeChannelName={selectedChannel?.name ?? null}
               onOpenWorkspace={projectId => {
                 setActiveProjectId(projectId);
                 setCurrentView('workspace');
@@ -497,6 +525,10 @@ export function App({ initialView = 'home' }: AppProps = {}) {
               onDeleteEpisode={handleDeleteEpisode}
               boardFilter={projectsBoardFilter}
               onClearBoardFilter={() => setProjectsBoardFilter(null)}
+              activeChannel={selectedChannel}
+              channelFilterActive={channelFilterActive}
+              onChannelFilterActiveChange={setChannelFilterActive}
+              onGoToChannelPicker={() => setCurrentView('multichannel')}
             />
           )}
 
@@ -578,9 +610,19 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             />
           )}
 
-          {currentView === 'calendar' && <CalendarView />}
+          {currentView === 'calendar' && (
+            <CalendarView
+              activeChannelId={selectedChannel?.id ?? null}
+              activeChannelName={selectedChannel?.name ?? null}
+            />
+          )}
 
-          {currentView === 'analytics' && <AnalyticsView />}
+          {currentView === 'analytics' && (
+            <AnalyticsView
+              activeChannelId={selectedChannel?.id ?? null}
+              activeChannelName={selectedChannel?.name ?? null}
+            />
+          )}
 
           {currentView === 'automation' && <AutomationView />}
 
@@ -598,7 +640,10 @@ export function App({ initialView = 'home' }: AppProps = {}) {
               youtubeConnected={youtubeConnected}
               loading={channelsLoading}
               selectedChannelId={selectedChannel?.id ?? null}
-              onSelectChannel={handleSelectChannel}
+              onSelectChannel={channel => {
+                handleSelectChannel(channel);
+                handleAddNotification(`Canal activo: ${channel.name}`, 'info');
+              }}
               onGoToSettings={() => setCurrentView('settings')}
             />
           )}

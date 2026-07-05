@@ -306,7 +306,7 @@ function daysAgoIso(days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTubeAnalyticsResult> {
+export async function fetchYouTubeAnalytics(channelId: string): Promise<YouTubeAnalyticsResult> {
   const accessToken = await resolveYouTubeAccessToken();
   const empty: YouTubeAnalyticsResult = {
     views: 0,
@@ -336,10 +336,14 @@ export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTube
     };
   }
 
-  const channelResponse = await fetch(
-    'https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true',
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  const channelUrl =
+    channelId.length > 0
+      ? `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${encodeURIComponent(channelId)}`
+      : 'https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&mine=true';
+
+  const channelResponse = await fetch(channelUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
   if (!channelResponse.ok) {
     return empty;
@@ -347,20 +351,25 @@ export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTube
 
   const channelData = (await channelResponse.json()) as {
     items?: Array<{
+      id?: string;
       snippet?: { title?: string };
       statistics?: { viewCount?: string; subscriberCount?: string };
     }>;
   };
   const channel = channelData.items?.[0];
+  if (!channel) {
+    return empty;
+  }
   const stats = channel?.statistics;
   const views = Number(stats?.viewCount ?? 0);
   const subscribers = Number(stats?.subscriberCount ?? 0);
   const channelName = channel?.snippet?.title ?? 'YouTube';
+  const resolvedChannelId = channel.id ?? channelId;
 
   const startDate = daysAgoIso(13);
   const endDate = daysAgoIso(0);
   const analyticsParams = new URLSearchParams({
-    ids: 'channel==MINE',
+    ids: resolvedChannelId ? `channel==${resolvedChannelId}` : 'channel==MINE',
     startDate,
     endDate,
     metrics: 'views,estimatedMinutesWatched,likes,comments',

@@ -81,6 +81,10 @@ export default function MultichannelView({
               Canal activo: {channels.find(c => c.id === selectedChannelId)?.name ?? 'ninguno'}
             </p>
           </div>
+          <p className="text-[11px] text-slate-500">
+            Haz clic en una tarjeta para cambiar el canal activo — la cabecera y toda la app se
+            actualizarán con la información de ese canal.
+          </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {channels.map(channel => {

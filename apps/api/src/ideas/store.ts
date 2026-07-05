@@ -32,10 +32,16 @@ async function writeIdeasFile(data: IdeasFile): Promise<void> {
   await rename(tmp, file);
 }
 
-export async function listIdeas(userId?: string): Promise<EpisodeIdea[]> {
+export async function listIdeas(userId?: string, channelId?: string): Promise<EpisodeIdea[]> {
   const { ideas } = await readIdeasFile();
-  if (!userId) return ideas;
-  return ideas.filter(idea => !idea.userId || idea.userId === userId);
+  let filtered = ideas;
+  if (userId) {
+    filtered = filtered.filter(idea => !idea.userId || idea.userId === userId);
+  }
+  if (channelId) {
+    filtered = filtered.filter(idea => idea.channelId === channelId);
+  }
+  return filtered;
 }
 
 export async function getIdea(id: string): Promise<EpisodeIdea | null> {
@@ -55,6 +61,7 @@ export async function createIdea(input: CreateIdeaInput, userId?: string): Promi
     createdAt: now,
     updatedAt: now,
     userId,
+    ...(input.channelId ? { channelId: input.channelId } : {}),
   };
   const file = await readIdeasFile();
   file.ideas.unshift(idea);

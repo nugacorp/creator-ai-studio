@@ -12,6 +12,7 @@ interface HeaderProps {
   youtubeConnected: boolean;
   channelsLoading: boolean;
   onGoToSettings?: () => void;
+  onGoToMultichannel?: () => void;
   notifications: Notification[];
   setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
   onMenuClick?: () => void;
@@ -24,6 +25,7 @@ export default function Header({
   youtubeConnected,
   channelsLoading,
   onGoToSettings,
+  onGoToMultichannel,
   notifications,
   setNotifications,
   onMenuClick
@@ -114,9 +116,15 @@ export default function Header({
         {showChannelsDropdown && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setShowChannelsDropdown(false)} />
-            <div className="absolute left-0 mt-2 w-72 bg-[#15191E] border border-white/10 rounded-xl shadow-2xl p-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Canales de YouTube
+            <div className="absolute left-0 mt-2 w-80 bg-[#15191E] border border-white/10 rounded-xl shadow-2xl p-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="px-3 py-2 border-b border-white/5 space-y-1">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Canales de YouTube
+                </div>
+                <p className="text-[10px] text-slate-500 leading-relaxed">
+                  Una cuenta Google puede tener varios canales. Elige en cuál trabajar — toda la app
+                  (proyectos, ideas, calendario, analytics) se filtra por este canal.
+                </p>
               </div>
               <div className="space-y-1 mt-1 max-h-80 overflow-y-auto">
                 {channels.map(chan => (
@@ -151,6 +159,18 @@ export default function Header({
                   </button>
                 ))}
               </div>
+              {channels.length > 1 && onGoToMultichannel && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowChannelsDropdown(false);
+                    onGoToMultichannel();
+                  }}
+                  className="w-full mt-1 px-3 py-2 text-[10px] text-indigo-400 hover:text-indigo-300 hover:bg-white/5 rounded-lg transition-colors cursor-pointer text-left font-medium"
+                >
+                  Ver consola multicanal →
+                </button>
+              )}
             </div>
           </>
         )}
