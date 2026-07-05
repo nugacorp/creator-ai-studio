@@ -61,7 +61,7 @@ Registry: `apps/api/src/agents/registry.ts`. Runner: `apps/api/src/agents/runner
 
 - Production auth: Supabase JWT (`Authorization: Bearer`) + optional `CAS_API_KEY`
 - Canonical media URLs: `/api/episodes/{id}/files/{type}` (audio, video, thumbnail, subtitles, music, shorts)
-- Dev CORS: web `:5173` and API `:3000` are cross-origin; use same-origin proxy or expect demo fallback
+- **Local dev CORS:** keep `VITE_API_BASE_URL=/api` and use Vite's proxy (`apps/web/vite.config.ts`); never point at `:3000` directly or the UI shows demo fallback — see [AGENTS.md](../../AGENTS.md) and [PROJECT_STATE.md](../../PROJECT_STATE.md)
 
 ## Quality gates (before push)
 

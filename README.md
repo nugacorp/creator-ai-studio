@@ -48,7 +48,7 @@ Opcional — worker:
 npm run start --workspace @creator-ai-studio/production-worker
 ```
 
-La web usa `/api` por defecto. Para otro origen, define `VITE_API_BASE_URL` en `.env` (ver [.env.example](.env.example)).
+La web usa `/api` por defecto (same-origin vía proxy de Vite en dev). **No** apuntes `VITE_API_BASE_URL` a `http://localhost:3000/api` — provoca CORS y datos demo en la UI. Ver [AGENTS.md](AGENTS.md) y [PROJECT_STATE.md](PROJECT_STATE.md).
 
 Los episodios se guardan en disco según `LOCAL_STORAGE_PATH` (por defecto `episodes/`, ignorado por git).
 

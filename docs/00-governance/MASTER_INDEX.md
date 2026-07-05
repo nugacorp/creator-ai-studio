@@ -35,7 +35,7 @@ Provide the official index of controlled documents and repository areas.
 Official documents:
 
 - [README](../../README.md)
-- [PROJECT_STATE](PROJECT_STATE.md)
+- [PROJECT_STATE](../../PROJECT_STATE.md) — **canonical current state** (repo root)
 - [CHANGELOG](CHANGELOG.md)
 - [ROADMAP](ROADMAP.md)
 - [DOCUMENT_REGISTRY](DOCUMENT_REGISTRY.md)

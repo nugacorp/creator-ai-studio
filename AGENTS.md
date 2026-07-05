@@ -16,16 +16,35 @@ for this environment. The update script already runs `npm install` on VM startup
 
 ### Non-obvious gotchas
 
-- **Frontend↔backend is cross-origin in the default dev setup.** The web dev server
-  (`5173`) and API (`3000`) are different origins. The API has **no CORS plugin** and
-  Vite has **no dev proxy**, so the dashboard's real API calls are blocked by CORS and
-  the UI silently falls back to built-in **demo data** (e.g. sample "David vs Goliat"
-  projects appear even when the backend has none). In production this is solved by an
-  nginx same-origin setup (`Dockerfile.web` + `deploy/nginx.web.conf`, serving the app
-  and proxying `/api`). To exercise the dashboard against the real backend locally, put
-  both on a single origin (any reverse proxy that serves the web app and forwards
-  `/api/*` to the API on `3000`). The dashboard reads `VITE_API_BASE_URL` (defaults to
-  `/api`).
+#### Local dev: same-origin API (avoid silent demo data)
+
+The dashboard calls the API via `VITE_API_BASE_URL` (default **`/api`**). In production, nginx serves the SPA and proxies `/api` → the API container (same origin).
+
+**Local default (recommended):** `apps/web/vite.config.ts` defines a Vite dev proxy — `/api` → `http://127.0.0.1:3000`. With the default env, the browser talks to `http://localhost:5173/api/...` (same origin as the dev server); Vite forwards to the API.
+
+```bash
+# Terminal 1 — build once, then start API on :3000
+npm run build --workspace @creator-ai-studio/api
+npm run start --workspace @creator-ai-studio/api
+
+# Terminal 2 — Vite on :5173 (proxy active)
+npm run dev --workspace @creator-ai-studio/web
+```
+
+Keep **`VITE_API_BASE_URL=/api`** (or unset — same default). Do **not** point it at `http://localhost:3000/api` unless you also add CORS on the API.
+
+**Symptoms when misconfigured (cross-origin):** API requests fail (no CORS plugin on Fastify). The UI **silently falls back to built-in demo data** — e.g. sample "David vs Goliat" projects, fake Analytics KPIs, placeholder channels, empty real backend despite API running.
+
+**Fix checklist:**
+
+1. Open the app at **`http://localhost:5173`** (not `:3000`).
+2. Ensure `.env` / `.env.local` does **not** override `VITE_API_BASE_URL` to a full `http://localhost:3000/...` URL.
+3. Confirm `apps/web/vite.config.ts` proxy block is present (do not remove for local dev).
+4. Rebuild/restart web dev server after env changes (Vite inlines `VITE_*` at startup).
+5. Optional sanity check: Network tab should show requests to `/api/...` on port **5173**, not direct `:3000` calls.
+
+Alternative: any reverse proxy that serves the web app and forwards `/api/*` to port `3000` on one origin.
+
 - **Episode storage location.** Episodes persist to the local filesystem at
   `LOCAL_STORAGE_PATH` (default `episodes/`, resolved relative to the process cwd). When
   the API is started via the workspace `start` script, its cwd is `apps/api`, so data

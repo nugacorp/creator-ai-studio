@@ -1,5 +1,7 @@
 # Staging Snapshot — Production Readiness (FASE 0)
 
+> ⚠️ **Snapshot histórico — ver [PROJECT_STATE.md](../../PROJECT_STATE.md) para el estado actual.** Los commits y features listados abajo corresponden a un punto anterior de `staging`.
+
 **Captured:** 2026-07-05  
 **Work order:** Production Readiness Master Plan
 

@@ -1,5 +1,7 @@
 # Contexto del Proyecto — Creator AI Studio
 
+> ⚠️ **Snapshot histórico — ver [PROJECT_STATE.md](../../PROJECT_STATE.md) para el estado actual.** Este handoff fue generado el 2026-06-26 y no refleja commits recientes en `staging` (14 agentes, Contenido, rclone, etc.).
+
 > Documento de traspaso (handoff) para retomar el desarrollo en otra herramienta de IA (ej. ChatGPT).
 > Resume **qué es el proyecto, cómo está construido y en qué punto va**.
 > Fecha de generación: 2026-06-26. Generado a partir del código y la documentación reales del repositorio.
