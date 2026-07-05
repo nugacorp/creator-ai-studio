@@ -221,7 +221,10 @@ export default function ProjectPipelinePanel({
   }
 
   return (
-    <section className="bg-[#15191E] border border-white/5 rounded-2xl p-5 space-y-5">
+    <section
+      id="project-pipeline-panel"
+      className="bg-[#15191E] border border-white/5 rounded-2xl p-5 space-y-5 scroll-mt-4"
+    >
       <div>
         <h2 className="font-display font-bold text-base text-white">Pipeline del proyecto</h2>
         <p className="text-[11px] text-slate-400 mt-0.5">

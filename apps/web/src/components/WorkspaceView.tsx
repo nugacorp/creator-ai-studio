@@ -32,6 +32,7 @@ import {
   CheckCircle2,
   Smartphone,
   Copy,
+  Loader2,
 } from 'lucide-react';
 import { VideoProject, Scene, ProjectStatus, EpisodeShort } from '../types';
 import type { WorkspaceTab } from '../lib/dashboardNavigation';
@@ -83,6 +84,9 @@ interface WorkspaceViewProps {
   onMoveProjectStatus?: (id: string, status: ProjectStatus) => Promise<void>;
   onGoToChannelAnalytics?: () => void;
 }
+
+/** Matches scriptwriter skip threshold in apps/api/src/agents/runner.ts */
+const SCRIPT_EMPTY_THRESHOLD = 100;
 
 const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: typeof FileText }[] = [
   { id: 'guion', label: 'Guion', icon: FileText },
@@ -164,6 +168,7 @@ export default function WorkspaceView({
   const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null);
   const [schedulingPublish, setSchedulingPublish] = useState(false);
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+  const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [generatingSceneId, setGeneratingSceneId] = useState<string | null>(null);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(project.scenes[0]?.id || null);
 
@@ -546,6 +551,15 @@ export default function WorkspaceView({
     stageStatuses.get('video') === 'completed' ||
     stageStatuses.get('subtitles') === 'completed';
 
+  const hasOutlineReady = outline.length > 0;
+  const scriptNeedsGeneration = scriptText.trim().length <= SCRIPT_EMPTY_THRESHOLD;
+  const showGenerateScriptCta = hasOutlineReady && scriptNeedsGeneration;
+  const showEmptyOutlinePrompt = !hasOutlineReady && scriptNeedsGeneration;
+
+  const scrollToPipelinePanel = () => {
+    document.getElementById('project-pipeline-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const renderSectionFooter = (tab: WorkspaceTab) => {
     const status = aggregateStageStatus(stagesForTab(tab), stageStatuses);
     const validation = validateTabForApproval(tab, project, {
@@ -718,6 +732,78 @@ export default function WorkspaceView({
   const persistScenes = (nextScenes: Scene[]) => {
     setScenes(nextScenes);
     onUpdateProject({ ...project, scenes: nextScenes, script: scriptText });
+  };
+
+  const handleGenerateScript = async () => {
+    if (outline.length === 0) {
+      triggerFeedback(
+        'error',
+        'Añade puntos al outline o espera la investigación antes de generar el guion.',
+      );
+      return;
+    }
+
+    setIsGeneratingScript(true);
+    setIsProcessing(true);
+    setProcessingMessage('El agente Guionista está redactando tu guion desde el outline…');
+
+    try {
+      await updateEpisode(project.id, {
+        content: {
+          outline,
+          ...(scriptText.trim().length > SCRIPT_EMPTY_THRESHOLD ? { script: scriptText } : { script: '' }),
+        },
+      });
+
+      const { job } = await runEpisodeAgent(project.id, 'scriptwriter');
+
+      await new Promise<void>((resolve, reject) => {
+        const poll = window.setInterval(async () => {
+          try {
+            const updatedJob = await fetchJob(job.id);
+            if (updatedJob.status === 'completed') {
+              window.clearInterval(poll);
+              resolve();
+            } else if (updatedJob.status === 'failed') {
+              window.clearInterval(poll);
+              reject(new Error(updatedJob.error ?? 'El guionista no pudo completar el trabajo'));
+            }
+          } catch (err) {
+            window.clearInterval(poll);
+            reject(err instanceof Error ? err : new Error('Error al consultar el job del guionista'));
+          }
+        }, 2000);
+      });
+
+      const detail = await fetchEpisodeDetail(project.id);
+      const newScript = detail.content.script ?? '';
+      const newOutline = detail.content.outline ?? outline;
+
+      setScriptText(newScript);
+      setOutline(newOutline);
+
+      const map = new Map<EpisodeStage, EpisodeStageStatus>();
+      for (const s of detail.stages) map.set(s.stage, s.status);
+      setStageStatuses(map);
+
+      persistProject({ script: newScript, outline: newOutline });
+
+      triggerFeedback(
+        'success',
+        newScript.trim()
+          ? '✓ Guion generado por el agente Guionista — revisa y edita antes de aprobar'
+          : '✓ Agente Guionista finalizó — revisa el contenido del episodio',
+      );
+    } catch (err) {
+      triggerFeedback(
+        'error',
+        err instanceof Error ? err.message : 'No se pudo generar el guion con IA',
+      );
+    } finally {
+      setIsGeneratingScript(false);
+      setIsProcessing(false);
+      setProcessingMessage('');
+    }
   };
 
   const handleGenerateScenesFromScript = async () => {
@@ -1172,6 +1258,98 @@ export default function WorkspaceView({
                 </ol>
               </div>
             )}
+
+            {showGenerateScriptCta && (
+              <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/20 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-indigo-200 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Outline listo — genera el guion con el agente guionista
+                  </p>
+                  <p className="text-[11px] text-indigo-100/70">
+                    {outline.length} punto{outline.length === 1 ? '' : 's'} en el outline. El Guionista redactará el guion narrativo completo.
+                  </p>
+                </div>
+                <div className="flex flex-col items-stretch sm:items-end gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={isGeneratingScript}
+                    onClick={() => void handleGenerateScript()}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
+                  >
+                    {isGeneratingScript ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isGeneratingScript ? 'Generando guion…' : 'Generar guion con IA'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={scrollToPipelinePanel}
+                    className="text-[10px] font-semibold text-indigo-300/80 hover:text-indigo-200 underline-offset-2 hover:underline cursor-pointer text-right"
+                  >
+                    También desde Pipeline → Guionista
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {showEmptyOutlinePrompt && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-950/15 px-4 py-3 space-y-1">
+                <p className="text-xs font-bold text-amber-200 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  Sin outline todavía
+                </p>
+                <p className="text-[11px] text-amber-100/80 leading-relaxed">
+                  Espera a que termine la investigación, sincroniza desde el brief o añade puntos al outline antes de generar el guion con IA.
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-[rgba(255,255,255,0.05)]">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white">Agente Guionista IA</h4>
+                <p className="text-[11px] text-[#8B949E] max-w-xl">
+                  Redacta el guion narrativo a partir del outline. Usa el mismo agente que el panel Pipeline — no es el Copiloto de reescritura.
+                </p>
+              </div>
+              {!scriptNeedsGeneration ? (
+                <span className="text-[10px] font-mono text-emerald-400/90 border border-emerald-500/20 bg-emerald-950/20 px-2.5 py-1 rounded-full">
+                  Guion presente — edita abajo o usa sugerencias del Copiloto
+                </span>
+              ) : (
+                <div className="flex flex-col items-stretch sm:items-end gap-1.5">
+                  <button
+                    type="button"
+                    disabled={!showGenerateScriptCta || isGeneratingScript}
+                    title={
+                      showGenerateScriptCta
+                        ? undefined
+                        : 'Completa el outline antes de generar el guion'
+                    }
+                    onClick={() => void handleGenerateScript()}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {isGeneratingScript ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isGeneratingScript ? 'Generando guion…' : 'Generar guion con IA'}</span>
+                  </button>
+                  {showGenerateScriptCta && (
+                    <button
+                      type="button"
+                      onClick={scrollToPipelinePanel}
+                      className="text-[10px] font-semibold text-slate-400 hover:text-indigo-300 underline-offset-2 hover:underline cursor-pointer text-right"
+                    >
+                      Ejecutar desde pipeline → Guionista
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             
