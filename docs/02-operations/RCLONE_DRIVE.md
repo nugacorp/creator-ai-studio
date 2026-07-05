@@ -35,6 +35,50 @@ OAuth requires a browser. On a headless VPS, use `rclone authorize drive` from y
 
 For unattended servers, configure a Google service account with Drive access and add it in `rclone.conf` instead of OAuth. See [rclone Google Drive docs](https://rclone.org/drive/).
 
+
+## Config file locations
+
+| Context | Path |
+|---------|------|
+| **Host (VPS)** — edit with `rclone config` or apply script | `/var/lib/docker/volumes/creator-ai-studio-rclone-config/_data/rclone.conf` |
+| **API / worker container** | `RCLONE_CONFIG=/config/rclone/rclone.conf` (same Docker volume mount) |
+
+Production uses volume `creator-ai-studio-production-rclone` with the same in-container path.
+
+## Non-interactive OAuth (GitHub Actions)
+
+If SSH OAuth paste fails on the VPS, use the workflow **Setup rclone on VPS** (`.github/workflows/setup-rclone-vps.yml`):
+
+1. On a machine with a browser and [rclone](https://rclone.org/install/) installed, run:
+
+   ```bash
+   rclone authorize drive
+   ```
+
+   Copy the **entire** single-line JSON output (starts with `{"access_token":`).
+
+2. GitHub → **Settings → Secrets and variables → Actions** → add **`RCLONE_OAUTH_TOKEN_JSON`** with that JSON (one line, no extra quotes).
+
+3. Ensure **`VPS_HOST`**, **`VPS_SSH_KEY`**, and optional **`VPS_USER`** / **`RCLONE_REMOTE`** secrets exist (same as deploy-staging).
+
+4. Run the workflow:
+
+   ```bash
+   gh workflow run setup-rclone-vps.yml
+   ```
+
+   Or: Actions → **Setup rclone on VPS** → **Run workflow**.
+
+The workflow runs `scripts/vps-apply-rclone-token.sh` on the VPS, replaces a broken `gdrive` remote, creates `Creator-AI-Studio/episodes` on Drive, and updates `/root/creator-ai-studio/.env.supabase.local`.
+
+To fix a bad token manually on the VPS:
+
+```bash
+export RCLONE_CONFIG=/var/lib/docker/volumes/creator-ai-studio-rclone-config/_data/rclone.conf
+rclone config delete gdrive
+# then re-run the workflow or vps-apply-rclone-token.sh with a valid token
+```
+
 ## CI / GitHub Actions
 
 1. Complete the one-time `rclone config` on the VPS (credentials persist in the volume).

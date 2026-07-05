@@ -12,6 +12,7 @@
 #   CAS_API_KEY               — worker + machine-to-machine Bearer
 #   GEMINI_API_KEY              — API Gemini provider (optional)
 #   RCLONE_REMOTE               — e.g. gdrive:Creator-AI-Studio/episodes (optional)
+#   RCLONE_OAUTH_TOKEN_JSON     — OAuth JSON for setup-rclone-vps workflow (optional, one-time)
 #
 # The VPS must have Docker, the Coolify app at /data/coolify/applications/...,
 # and /root/creator-ai-studio as sync target.

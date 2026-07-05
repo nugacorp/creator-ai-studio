@@ -1,6 +1,8 @@
 #!/bin/bash
 # One-time rclone Google Drive setup on the Creator AI Studio VPS.
 # Run interactively on the VPS (SSH) — OAuth requires a browser.
+# Non-interactive alternative: scripts/vps-apply-rclone-token.sh or
+# GitHub Actions workflow setup-rclone-vps.yml (see docs/02-operations/RCLONE_DRIVE.md).
 #
 # Usage:
 #   bash /root/creator-ai-studio/scripts/vps-setup-rclone.sh
