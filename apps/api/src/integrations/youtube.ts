@@ -18,6 +18,89 @@ async function resolveYouTubeAccessToken(): Promise<string | undefined> {
   return getValidGoogleAccessToken();
 }
 
+/** Exported for calendar sync (same token resolution as uploads/analytics). */
+export async function resolveYouTubeAccessTokenForCalendar(): Promise<string | undefined> {
+  return resolveYouTubeAccessToken();
+}
+
+export interface YouTubeScheduledVideo {
+  videoId: string;
+  title: string;
+  publishAt: string;
+  channelTitle?: string;
+}
+
+/**
+ * List videos scheduled on YouTube (private + status.publishAt).
+ * Requires `youtube.readonly` — already requested by YouTube OAuth in Settings.
+ */
+export async function fetchYouTubeScheduledVideos(
+  accessToken?: string,
+): Promise<YouTubeScheduledVideo[]> {
+  const token = accessToken ?? (await resolveYouTubeAccessToken());
+  if (!token) return [];
+
+  const channelResponse = await fetch(
+    'https://www.googleapis.com/youtube/v3/channels?part=contentDetails,snippet&mine=true',
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!channelResponse.ok) return [];
+
+  const channelData = (await channelResponse.json()) as {
+    items?: Array<{
+      snippet?: { title?: string };
+      contentDetails?: { relatedPlaylists?: { uploads?: string } };
+    }>;
+  };
+  const channel = channelData.items?.[0];
+  const uploadsPlaylistId = channel?.contentDetails?.relatedPlaylists?.uploads;
+  const channelTitle = channel?.snippet?.title;
+  if (!uploadsPlaylistId) return [];
+
+  const playlistResponse = await fetch(
+    `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails,snippet&playlistId=${encodeURIComponent(uploadsPlaylistId)}&maxResults=50`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!playlistResponse.ok) return [];
+
+  const playlistData = (await playlistResponse.json()) as {
+    items?: Array<{ contentDetails?: { videoId?: string } }>;
+  };
+  const videoIds = (playlistData.items ?? [])
+    .map(item => item.contentDetails?.videoId)
+    .filter((id): id is string => Boolean(id));
+  if (videoIds.length === 0) return [];
+
+  const videosResponse = await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?part=status,snippet&id=${videoIds.map(encodeURIComponent).join(',')}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!videosResponse.ok) return [];
+
+  const videosData = (await videosResponse.json()) as {
+    items?: Array<{
+      id?: string;
+      snippet?: { title?: string };
+      status?: { publishAt?: string; privacyStatus?: string };
+    }>;
+  };
+
+  const now = Date.now();
+  return (videosData.items ?? [])
+    .filter(item => {
+      const publishAt = item.status?.publishAt;
+      if (!publishAt) return false;
+      return new Date(publishAt).getTime() > now;
+    })
+    .map(item => ({
+      videoId: item.id ?? '',
+      title: item.snippet?.title ?? 'Sin título',
+      publishAt: item.status?.publishAt ?? '',
+      channelTitle,
+    }))
+    .filter(item => item.videoId && item.publishAt);
+}
+
 /** True when the shared Google OAuth token was granted YouTube scopes. */
 export async function hasYouTubeScopes(): Promise<boolean> {
   const scopes = (await getSecret('GOOGLE_OAUTH_SCOPES')) ?? '';
