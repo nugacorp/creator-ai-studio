@@ -3,36 +3,53 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CopilotView from '../src/components/CopilotView';
 
 vi.mock('../src/api', () => ({
-  aiChat: vi.fn(),
+  fetchCopilotMessages: vi.fn(),
+  copilotChat: vi.fn(),
+  copilotConfirmAction: vi.fn(),
 }));
 
-import { aiChat } from '../src/api';
+import { fetchCopilotMessages, copilotChat } from '../src/api';
 
-const mockedAiChat = vi.mocked(aiChat);
+const mockedFetch = vi.mocked(fetchCopilotMessages);
+const mockedChat = vi.mocked(copilotChat);
 
 beforeAll(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
 });
 
 describe('CopilotView', () => {
-  it('communicates project-only scope and provider-neutral AI copy', () => {
-    render(<CopilotView />);
+  it('communicates project-only scope and loads persistent history', async () => {
+    mockedFetch.mockResolvedValueOnce({
+      welcome: 'Bienvenido al copiloto',
+      messages: [
+        {
+          id: '1',
+          role: 'user',
+          content: 'Lista episodios',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: '2',
+          role: 'assistant',
+          content: 'Tienes 1 episodio activo.',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    });
 
+    render(<CopilotView channelId="ch-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Lista episodios')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Tienes 1 episodio activo.')).toBeInTheDocument();
     expect(screen.getByText('Copiloto Inteligente de Creator OS')).toBeInTheDocument();
-    expect(
-      screen.getByText(/solo responde sobre Creator AI Studio/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByPlaceholderText(/pregunta solo sobre Creator AI Studio/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/Gemini 3\.5 Flash/i)).not.toBeInTheDocument();
-    expect(
-      screen.queryByPlaceholderText(/cualquier cosa/i),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText(/Centro de comando/i)).toBeInTheDocument();
   });
 
   it('shows a styled refusal when the API returns out_of_scope', async () => {
-    mockedAiChat.mockResolvedValueOnce({
+    mockedFetch.mockResolvedValueOnce({ welcome: 'Hola', messages: [] });
+    mockedChat.mockResolvedValueOnce({
       reply:
         'Soy el copiloto de Creator AI Studio y no puedo responder consultas fuera del proyecto.',
       out_of_scope: true,
@@ -40,11 +57,14 @@ describe('CopilotView', () => {
 
     render(<CopilotView episodeTitle="David vs Goliat" />);
 
-    fireEvent.change(
-      screen.getByPlaceholderText(/pregunta solo sobre Creator AI Studio/i),
-      { target: { value: 'cuanto es 4+9?' } },
-    );
-    fireEvent.submit(screen.getByPlaceholderText(/pregunta solo sobre Creator AI Studio/i).closest('form')!);
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Pide crear un episodio/i)).toBeEnabled();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText(/Pide crear un episodio/i), {
+      target: { value: 'cuanto es 4+9?' },
+    });
+    fireEvent.submit(screen.getByPlaceholderText(/Pide crear un episodio/i).closest('form')!);
 
     await waitFor(() => {
       expect(screen.getByText(/Fuera del alcance del copiloto/i)).toBeInTheDocument();

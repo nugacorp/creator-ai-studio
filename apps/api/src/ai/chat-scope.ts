@@ -81,6 +81,19 @@ const CHAT_SCOPE_KEYWORDS = [
   'predicación',
   'versiculo',
   'versículo',
+  'crear',
+  'editar',
+  'modificar',
+  'idea',
+  'ideas',
+  'brainstorm',
+  'workspace',
+  'programar',
+  'encolar',
+  'ejecutar',
+  'listar',
+  'estado',
+  'comando',
 ];
 
 /** Patterns for general knowledge / math / trivia that must never reach the LLM. */

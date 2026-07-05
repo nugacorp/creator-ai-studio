@@ -30,6 +30,7 @@ import { registerJobRoutes } from './jobs/routes.js';
 import { registerAgentRoutes } from './agents/routes.js';
 import { registerIdeaRoutes } from './ideas/routes.js';
 import { registerTeamRoutes } from './team/routes.js';
+import { registerCopilotRoutes } from './copilot/routes.js';
 import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
 import { createChannel, deleteChannel, listChannels, updateChannel } from './channels/store.js';
@@ -90,6 +91,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerAgentRoutes(app, prefix, storage);
     registerIdeaRoutes(app, prefix, storage);
     registerTeamRoutes(app, prefix);
+    registerCopilotRoutes(app, prefix, storage);
     registerSecretRoutes(app, prefix);
     registerOAuthRoutes(app, prefix);
   }

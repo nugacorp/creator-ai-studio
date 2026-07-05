@@ -609,7 +609,14 @@ export function App({ initialView = 'home' }: AppProps = {}) {
               </div>
             ))}
 
-          {currentView === 'copilot' && <CopilotView episodeTitle={activeProject?.title} />}
+          {currentView === 'copilot' && (
+            <CopilotView
+              episodeTitle={activeProject?.title}
+              activeEpisodeId={activeProject?.id ?? null}
+              channelId={selectedChannel?.id ?? null}
+              onOpenWorkspace={handleOpenWorkspace}
+            />
+          )}
 
           {currentView === 'library' && (
             <LibraryView

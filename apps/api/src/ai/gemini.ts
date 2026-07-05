@@ -52,6 +52,16 @@ async function geminiGenerate(
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
+/** Generate text with a custom system instruction (used by copilot). */
+export async function geminiGenerateWithSystem(
+  auth: GeminiAuth,
+  contents: string,
+  operation: string,
+  systemInstruction: string,
+): Promise<string> {
+  return geminiGenerate(auth, getGeminiTextModel(), contents, operation, systemInstruction);
+}
+
 export class GeminiAIProvider implements AIProvider {
   readonly name = 'gemini' as const;
 

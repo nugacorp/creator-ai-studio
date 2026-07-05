@@ -547,6 +547,83 @@ export async function aiChat(message: string): Promise<{ reply: string; out_of_s
   });
 }
 
+export interface CopilotToolResult {
+  tool: string;
+  success: boolean;
+  summary: string;
+  data?: Record<string, unknown>;
+}
+
+export interface CopilotPendingAction {
+  id: string;
+  type: 'confirm_publish';
+  episodeId: string;
+  episodeTitle: string;
+  label: string;
+}
+
+export interface CopilotMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  outOfScope?: boolean;
+  toolResults?: CopilotToolResult[];
+  pendingActions?: CopilotPendingAction[];
+  createdAt: string;
+}
+
+export interface CopilotChatResponse {
+  reply: string;
+  out_of_scope?: boolean;
+  toolResults?: CopilotToolResult[];
+  pendingActions?: CopilotPendingAction[];
+  messages?: CopilotMessage[];
+}
+
+export async function fetchCopilotMessages(channelId?: string | null): Promise<{
+  messages: CopilotMessage[];
+  welcome: string;
+}> {
+  const query = channelId ? `?channelId=${encodeURIComponent(channelId)}` : '';
+  return apiFetch<{ messages: CopilotMessage[]; welcome: string }>(`/copilot/messages${query}`);
+}
+
+export async function copilotChat(input: {
+  message: string;
+  channelId?: string | null;
+  activeEpisodeId?: string | null;
+  episodeTitle?: string | null;
+}): Promise<CopilotChatResponse> {
+  return apiFetch<CopilotChatResponse>('/copilot/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: input.message,
+      ...(input.channelId ? { channelId: input.channelId } : {}),
+      ...(input.activeEpisodeId ? { activeEpisodeId: input.activeEpisodeId } : {}),
+      ...(input.episodeTitle ? { episodeTitle: input.episodeTitle } : {}),
+    }),
+  });
+}
+
+export async function copilotConfirmAction(input: {
+  action: string;
+  episodeId: string;
+  channelId?: string | null;
+  scheduledAt?: string;
+}): Promise<CopilotChatResponse> {
+  return apiFetch<CopilotChatResponse>('/copilot/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: input.action,
+      episodeId: input.episodeId,
+      ...(input.channelId ? { channelId: input.channelId } : {}),
+      ...(input.scheduledAt ? { scheduledAt: input.scheduledAt } : {}),
+    }),
+  });
+}
+
 export async function aiGenerateScript(
   prompt: string,
   options?: Record<string, string>,
