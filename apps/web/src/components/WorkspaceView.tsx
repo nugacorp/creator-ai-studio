@@ -41,20 +41,26 @@ import {
   validateTabForApproval,
   shouldAdvanceKanban,
 } from '../lib/workspaceStages';
+import { parseSrtCueTexts, formatTimelineClock } from '../lib/srtPreview';
 import SceneImage from './SceneImage';
 import {
-  aiGenerateImage,
   aiRewrite,
   aiSeo,
   aiTts,
+  authorizePublish,
+  buildPublishPackage,
   fetchElevenLabsVoices,
   fetchEpisodeDetail,
+  fetchJob,
+  fetchSecrets,
+  generateEpisodeThumbnail,
   generateSceneImages,
   generateStoryboardFromScript,
   generateSubtitles,
   loadAuthenticatedMediaUrl,
   renderEpisodeVideo,
   resolveEpisodeMediaUrl,
+  updateEpisode,
   updateStageStatus,
   type ElevenLabsVoice,
 } from '../api';
@@ -65,6 +71,7 @@ interface WorkspaceViewProps {
   onUpdateProject: (updated: VideoProject) => void;
   initialTab?: WorkspaceTab;
   forcedTab?: WorkspaceTab;
+  forcedTabRequest?: number;
   stageRefreshToken?: number;
   onMoveProjectStatus?: (id: string, status: ProjectStatus) => Promise<void>;
 }
@@ -86,6 +93,7 @@ export default function WorkspaceView({
   onUpdateProject,
   initialTab,
   forcedTab,
+  forcedTabRequest = 0,
   stageRefreshToken = 0,
   onMoveProjectStatus,
 }: WorkspaceViewProps) {
@@ -119,17 +127,80 @@ export default function WorkspaceView({
   // Escenas State
   const [scenes, setScenes] = useState<Scene[]>(project.scenes);
 
+  // Publicación State
+  const defaultScheduleDate = () => {
+    if (project.scheduledAt) {
+      const d = new Date(project.scheduledAt);
+      if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+    const next = new Date();
+    next.setDate(next.getDate() + 1);
+    return next.toISOString().slice(0, 10);
+  };
+  const defaultScheduleTime = () => {
+    if (project.scheduledAt) {
+      const d = new Date(project.scheduledAt);
+      if (!Number.isNaN(d.getTime())) {
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      }
+    }
+    return '18:00';
+  };
+  const [scheduleDate, setScheduleDate] = useState(defaultScheduleDate);
+  const [scheduleTime, setScheduleTime] = useState(defaultScheduleTime);
+  const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null);
+  const [schedulingPublish, setSchedulingPublish] = useState(false);
+  const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+  const [generatingSceneId, setGeneratingSceneId] = useState<string | null>(null);
+  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(project.scenes[0]?.id || null);
+
+  // Thumbnail State
+  const [thumbnailText, setThumbnailText] = useState(project.title);
+  const [showGlow, setShowGlow] = useState(true);
+  const [showShadow, setShowShadow] = useState(true);
+  const [thumbnailUrl, setThumbnailUrl] = useState(project.thumbnailUrl || '');
+  const [thumbnailResolution, setThumbnailResolution] = useState('1K (Full HD)');
+
+  const [videoSourceUrl, setVideoSourceUrl] = useState(project.videoUrl || '');
+  const [videoPlaybackUrl, setVideoPlaybackUrl] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [renderStatusMessage, setRenderStatusMessage] = useState<string | null>(null);
+  const [previewSceneIndex, setPreviewSceneIndex] = useState(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // SEO State
+  const [seoTitles, setSeoTitles] = useState<string[]>(project.seoTitles);
+  const [seoDescription, setSeoDescription] = useState(project.seoDescription);
+  const [seoTags, setSeoTags] = useState<string[]>(project.seoTags);
+
+  // Subtitles state
+  const [subtitlesSrt, setSubtitlesSrt] = useState(project.subtitlesSrt ?? '');
+
+  // Timeline playback state (Video Tab)
+  const [timelineProgress, setTimelineProgress] = useState(0);
+  const [isPlayingTimeline, setIsPlayingTimeline] = useState(false);
+
   useEffect(() => {
     setScriptText(project.script);
     setOutline(project.outline);
     setScenes(project.scenes);
-    setThumbnailUrl(
-      project.thumbnailUrl ||
-        'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=600',
-    );
+    setThumbnailUrl(project.thumbnailUrl || '');
+    setSeoTitles(project.seoTitles);
     setSeoDescription(project.seoDescription);
+    setSeoTags(project.seoTags);
     setSubtitlesSrt(project.subtitlesSrt ?? '');
     if (project.audioUrl) setAudioBase64(project.audioUrl);
+    if (project.videoUrl) setVideoSourceUrl(project.videoUrl);
+    if (project.scheduledAt) {
+      const d = new Date(project.scheduledAt);
+      if (!Number.isNaN(d.getTime())) {
+        setScheduleDate(d.toISOString().slice(0, 10));
+        setScheduleTime(
+          `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+        );
+      }
+    }
     if (initialTab) setActiveTab(initialTab);
   }, [
     project.id,
@@ -138,14 +209,27 @@ export default function WorkspaceView({
     project.scenes,
     project.thumbnailUrl,
     project.audioUrl,
+    project.videoUrl,
+    project.seoTitles,
     project.seoDescription,
+    project.seoTags,
     project.subtitlesSrt,
+    project.scheduledAt,
     initialTab,
   ]);
 
   useEffect(() => {
-    if (forcedTab) setActiveTab(forcedTab);
-  }, [forcedTab]);
+    void fetchSecrets()
+      .then(secrets => {
+        const yt = secrets.items.find(item => item.provider === 'youtube');
+        setYoutubeConnected(Boolean(yt?.configured));
+      })
+      .catch(() => setYoutubeConnected(false));
+  }, []);
+
+  useEffect(() => {
+    if (forcedTab !== undefined) setActiveTab(forcedTab);
+  }, [forcedTab, forcedTabRequest]);
 
   useEffect(() => {
     audioRef.current = null;
@@ -185,22 +269,88 @@ export default function WorkspaceView({
 
     setAudioPlaybackUrl(`data:audio/wav;base64,${audioBase64}`);
   }, [audioBase64, project.id]);
-  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(project.scenes[0]?.id || null);
 
-  // Thumbnail State
-  const [thumbnailText, setThumbnailText] = useState(project.title);
-  const [showGlow, setShowGlow] = useState(true);
-  const [showShadow, setShowShadow] = useState(true);
-  const [thumbnailUrl, setThumbnailUrl] = useState(project.thumbnailUrl || 'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=600');
-  const [thumbnailResolution, setThumbnailResolution] = useState('1K (Full HD)');
+  useEffect(() => {
+    if (!videoSourceUrl?.trim()) {
+      setVideoPlaybackUrl(null);
+      return;
+    }
+    if (videoSourceUrl.startsWith('blob:')) {
+      setVideoPlaybackUrl(videoSourceUrl);
+      return;
+    }
+    const resolved = resolveEpisodeMediaUrl(project.id, videoSourceUrl);
+    if (!resolved?.startsWith('/')) {
+      setVideoPlaybackUrl(resolved);
+      return;
+    }
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    void loadAuthenticatedMediaUrl(resolved)
+      .then(url => {
+        if (cancelled) {
+          if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setVideoPlaybackUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setVideoPlaybackUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl?.startsWith('blob:')) URL.revokeObjectURL(objectUrl);
+    };
+  }, [videoSourceUrl, project.id]);
 
-  // SEO State
-  const [seoTitles, setSeoTitles] = useState<string[]>(project.seoTitles);
-  const [seoDescription, setSeoDescription] = useState(project.seoDescription);
-  const [seoTags, setSeoTags] = useState<string[]>(project.seoTags);
+  const subtitleCueTexts = parseSrtCueTexts(subtitlesSrt, Math.max(scenes.length, 12));
+  const totalSceneDuration =
+    scenes.reduce((sum, s) => sum + (s.duration || 0), 0) || scenes.length * 8;
+  const primaryMusicTrack =
+    scenes.find(s => s.musicTrack?.trim())?.musicTrack ?? 'Sin pista de música definida';
+  const hasNarrationTrack = Boolean(audioPlaybackUrl && audioBase64 !== 'demo_active');
+  const previewDuration = videoDuration > 0 ? videoDuration : totalSceneDuration;
+  const activeSubtitlePreview =
+    subtitleCueTexts[previewSceneIndex] ??
+    subtitleCueTexts[0] ??
+    (scriptText.trim() ? scriptText.slice(0, 80) : project.title);
 
-  // Subtitles state
-  const [subtitlesSrt, setSubtitlesSrt] = useState(project.subtitlesSrt ?? '');
+  useEffect(() => {
+    void fetchSecrets()
+      .then(res => {
+        const yt = res.items.find(item => item.provider === 'youtube');
+        setYoutubeConnected(Boolean(yt?.configured));
+      })
+      .catch(() => setYoutubeConnected(false));
+  }, []);
+
+  useEffect(() => {
+    if (!isPlayingTimeline || videoPlaybackUrl) return;
+    const interval = window.setInterval(() => {
+      const total = totalSceneDuration || 1;
+      setVideoCurrentTime(prev => {
+        const next = prev + 0.25;
+        if (next >= total) {
+          setIsPlayingTimeline(false);
+          setPreviewSceneIndex(0);
+          setTimelineProgress(0);
+          return 0;
+        }
+        setTimelineProgress((next / total) * 100);
+        let acc = 0;
+        for (let i = 0; i < scenes.length; i++) {
+          acc += scenes[i]?.duration || 8;
+          if (next < acc) {
+            setPreviewSceneIndex(i);
+            break;
+          }
+        }
+        return next;
+      });
+    }, 250);
+    return () => window.clearInterval(interval);
+  }, [isPlayingTimeline, videoPlaybackUrl, scenes, totalSceneDuration]);
 
   useEffect(() => {
     let active = true;
@@ -211,6 +361,8 @@ export default function WorkspaceView({
         for (const s of detail.stages) map.set(s.stage, s.status);
         setStageStatuses(map);
         if (detail.content.subtitlesSrt) setSubtitlesSrt(detail.content.subtitlesSrt);
+        if (detail.content.thumbnailUrl) setThumbnailUrl(detail.content.thumbnailUrl);
+        if (detail.content.videoUrl) setVideoSourceUrl(detail.content.videoUrl);
       })
       .catch(() => {
         // non-blocking — badges fall back to pending
@@ -219,11 +371,6 @@ export default function WorkspaceView({
       active = false;
     };
   }, [project.id, stageRefreshToken]);
-
-  // Timeline playback state (Video Tab)
-  const [timelineProgress, setTimelineProgress] = useState(0);
-  const [isPlayingTimeline, setIsPlayingTimeline] = useState(false);
-  const timelineIntervalRef = useRef<any>(null);
 
   // Sync state changes back to parent
   const persistProject = (patch: Partial<VideoProject> = {}) => {
@@ -237,6 +384,7 @@ export default function WorkspaceView({
       seoDescription,
       seoTags,
       subtitlesSrt,
+      videoUrl: videoSourceUrl,
       ...patch,
     });
   };
@@ -390,8 +538,126 @@ export default function WorkspaceView({
     setTimeout(() => setFeedbackMsg(null), 4000);
   };
 
-  const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
-  const [generatingSceneId, setGeneratingSceneId] = useState<string | null>(null);
+  const toggleTimelinePlayback = () => {
+    if (videoPlaybackUrl && videoRef.current) {
+      if (isPlayingTimeline) {
+        videoRef.current.pause();
+        setIsPlayingTimeline(false);
+      } else {
+        void videoRef.current.play().then(() => setIsPlayingTimeline(true)).catch(() => {
+          triggerFeedback('error', 'No se pudo reproducir el video');
+        });
+      }
+      return;
+    }
+    if (audioPlaybackUrl) {
+      if (!audioRef.current) {
+        audioRef.current = new Audio(audioPlaybackUrl);
+        audioRef.current.onended = () => {
+          setIsPlayingAudio(false);
+          setIsPlayingTimeline(false);
+        };
+      } else if (audioRef.current.src !== audioPlaybackUrl) {
+        audioRef.current.src = audioPlaybackUrl;
+      }
+      if (isPlayingTimeline || isPlayingAudio) {
+        audioRef.current.pause();
+        setIsPlayingAudio(false);
+        setIsPlayingTimeline(false);
+      } else {
+        void audioRef.current.play().then(() => {
+          setIsPlayingAudio(true);
+          setIsPlayingTimeline(true);
+        }).catch(() => {
+          triggerFeedback('error', 'No se pudo reproducir la narración');
+        });
+      }
+      return;
+    }
+    triggerFeedback('error', 'Genera narración o exporta el video para previsualizar');
+  };
+
+  const handleConfirmSchedule = async () => {
+    if (!scheduleDate || !scheduleTime) {
+      triggerFeedback('error', 'Selecciona fecha y hora de publicación.');
+      return;
+    }
+    const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
+    if (new Date(scheduledAt).getTime() <= Date.now()) {
+      triggerFeedback('error', 'La fecha de publicación debe ser en el futuro.');
+      return;
+    }
+
+    setSchedulingPublish(true);
+    try {
+      await updateEpisode(project.id, { content: { scheduledAt } });
+      onUpdateProject({ ...project, scheduledAt, status: 'Programado' });
+
+      if (youtubeConnected !== true) {
+        triggerFeedback(
+          'error',
+          'Fecha guardada, pero YouTube no está conectado. Ve a Configuración → Integraciones → YouTube OAuth.',
+        );
+        return;
+      }
+
+      const pkg = await buildPublishPackage(project.id);
+      if (!pkg.ready) {
+        const missing = pkg.checklist
+          .filter(item => !item.ok)
+          .map(item => item.label)
+          .join(', ');
+        triggerFeedback(
+          'error',
+          `Fecha guardada. Completa el paquete de publicación antes de subir a YouTube: ${missing}`,
+        );
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `¿Subir el video a YouTube (privado) y programarlo para ${scheduleDate} ${scheduleTime}?`,
+      );
+      if (!confirmed) {
+        triggerFeedback('success', '✓ Fecha de publicación guardada (sin subir a YouTube).');
+        return;
+      }
+
+      const { job } = await authorizePublish(project.id, { scheduledAt });
+      triggerFeedback('success', 'Subiendo y programando en YouTube…');
+
+      await new Promise<void>((resolve, reject) => {
+        const poll = window.setInterval(async () => {
+          try {
+            const updatedJob = await fetchJob(job.id);
+            if (updatedJob.status === 'completed') {
+              window.clearInterval(poll);
+              const url = updatedJob.result?.youtubeUrl as string | undefined;
+              triggerFeedback(
+                'success',
+                url
+                  ? `✓ Video programado en YouTube: ${url}`
+                  : '✓ Video programado en YouTube.',
+              );
+              resolve();
+            } else if (updatedJob.status === 'failed') {
+              window.clearInterval(poll);
+              reject(new Error(updatedJob.error ?? 'Publicación falló'));
+            }
+          } catch (err) {
+            window.clearInterval(poll);
+            reject(err instanceof Error ? err : new Error('Publicación falló'));
+          }
+        }, 2000);
+      });
+    } catch (err) {
+      triggerFeedback(
+        'error',
+        err instanceof Error ? err.message : 'Error al programar publicación',
+      );
+    } finally {
+      setSchedulingPublish(false);
+    }
+  };
 
   const persistScenes = (nextScenes: Scene[]) => {
     setScenes(nextScenes);
@@ -561,12 +827,18 @@ export default function WorkspaceView({
     setProcessingMessage('Especialista SEO IA está analizando palabras clave...');
     try {
       const data = await aiSeo(project.title, scriptText);
-      if (data.titles && data.description) {
-        setSeoTitles(data.titles);
-        setSeoDescription(data.description);
-        if (data.tags) setSeoTags(data.tags);
-        triggerFeedback('success', '✓ SEO optimizado por el Agente Especialista IA');
+      const titles = data.titles?.filter(Boolean) ?? [];
+      const description = data.description?.trim() ?? '';
+      const tags = data.tags?.filter(Boolean) ?? [];
+      if (titles.length === 0 || !description) {
+        triggerFeedback('error', 'La IA no devolvió metadatos SEO válidos');
+        return;
       }
+      setSeoTitles(titles);
+      setSeoDescription(description);
+      setSeoTags(tags);
+      persistProject({ seoTitles: titles, seoDescription: description, seoTags: tags });
+      triggerFeedback('success', '✓ SEO optimizado por el Agente Especialista IA');
     } catch (err) {
       console.error(err);
       triggerFeedback('error', 'Error al optimizar SEO');
@@ -608,7 +880,9 @@ export default function WorkspaceView({
         return;
       }
       const videoUrl = data.videoUrl ?? `/api/episodes/${project.id}/files/video`;
+      setVideoSourceUrl(videoUrl);
       persistProject({ videoUrl });
+      setRenderStatusMessage(data.message);
       triggerFeedback(
         'success',
         data.skipped ? 'Video ya existente — usa forzar si cambiaste escenas' : `✓ ${data.message}`,
@@ -622,53 +896,30 @@ export default function WorkspaceView({
     }
   };
 
-  // Thumbnail tools
-  const handleRemoveBackground = () => {
+  const handleGenerateThumbnailBackground = async () => {
     setIsProcessing(true);
-    setProcessingMessage('Removiendo fondo del personaje con IA...');
-    setTimeout(() => {
-      // simulate removing background by changing the Unsplash ID to a cut-out PNG-like landscape
-      setThumbnailUrl('https://images.unsplash.com/photo-1518020382113-a7e8fc38eac9?auto=format&fit=crop&q=80&w=600');
-      setIsProcessing(false);
-      triggerFeedback('success', '✓ Fondo removido con éxito');
-    }, 2000);
-  };
-
-  const handleUpscaleThumbnail = () => {
-    setIsProcessing(true);
-    setProcessingMessage('Upscaling imagen a 4K Super Resolution...');
-    setTimeout(() => {
-      setThumbnailResolution('4K Ultra HD (3840x2160)');
-      setIsProcessing(false);
-      triggerFeedback('success', '✓ Miniatura escalada a 4K con ultra-definición');
-    }, 2500);
-  };
-
-  // Playback simulation for video timeline
-  useEffect(() => {
-    if (isPlayingTimeline) {
-      timelineIntervalRef.current = setInterval(() => {
-        setTimelineProgress(prev => {
-          if (prev >= 100) {
-            setIsPlayingTimeline(false);
-            clearInterval(timelineIntervalRef.current);
-            return 0;
-          }
-          return prev + 2;
-        });
-      }, 250);
-    } else {
-      if (timelineIntervalRef.current) {
-        clearInterval(timelineIntervalRef.current);
+    setProcessingMessage('Generando y guardando miniatura en el episodio…');
+    try {
+      const data = await generateEpisodeThumbnail(project.id, {
+        force: true,
+        prompt: `High quality YouTube thumbnail background 16:9 for: ${thumbnailText}. Cinematic biblical, dramatic lighting, no text in image.`,
+      });
+      if (data.imageUrl) {
+        setThumbnailUrl(data.imageUrl);
+        persistProject({ thumbnailUrl: data.imageUrl });
+        triggerFeedback(
+          'success',
+          data.skipped ? 'Miniatura existente en servidor' : '✓ Miniatura guardada — persiste al refrescar',
+        );
       }
+    } catch (err) {
+      console.error(err);
+      triggerFeedback('error', 'Error generando miniatura — revisa Gemini/OpenAI en Configuración');
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
     }
-
-    return () => {
-      if (timelineIntervalRef.current) {
-        clearInterval(timelineIntervalRef.current);
-      }
-    };
-  }, [isPlayingTimeline]);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -695,7 +946,11 @@ export default function WorkspaceView({
       </div>
 
       {/* Tabs list */}
-      <div className="flex items-center gap-1 border-b border-[rgba(255,255,255,0.05)] overflow-x-auto pb-1 scrollbar-none">
+      <div
+        id="workspace-tabs"
+        data-workspace-tabs
+        className="flex items-center gap-1 border-b border-[rgba(255,255,255,0.05)] overflow-x-auto pb-1 scrollbar-none scroll-mt-4"
+      >
         {WORKSPACE_TABS.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1226,57 +1481,72 @@ export default function WorkspaceView({
               
               {/* Top View: Video Preview Stage */}
               <div className="lg:col-span-2 bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-2xl overflow-hidden aspect-video flex flex-col justify-between relative group">
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 z-10" />
-                
-                {/* Simulated playback visual */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 z-10 pointer-events-none" />
+
                 <div className="absolute inset-0 flex items-center justify-center bg-zinc-950">
                   <div className="relative w-full h-full">
-                    {/* Background slide */}
-                    <SceneImage
-                      src={scenes[0]?.imageUrl || thumbnailUrl}
-                      alt="Preview frame"
-                      className="w-full h-full object-cover opacity-85"
-                    />
-                    
-                    {/* Animated visual overlays representing subtitles and music waveforms */}
-                    <div className="absolute bottom-16 left-1/2 -translate-x-1/2 text-center w-full max-w-xl z-20 px-4">
-                      <div className="bg-black/75 border border-yellow-500/30 text-yellow-400 font-bold px-4 py-2 rounded-xl text-xs sm:text-sm tracking-wide shadow-xl font-display leading-relaxed">
-                        {isPlayingTimeline
-                          ? (scriptText.slice(0, 80) || project.title)
-                          : project.title}
-                      </div>
-                    </div>
+                    {videoPlaybackUrl ? (
+                      <video
+                        ref={videoRef}
+                        src={videoPlaybackUrl}
+                        className="w-full h-full object-contain bg-black"
+                        playsInline
+                        onTimeUpdate={e => {
+                          const el = e.currentTarget;
+                          setVideoCurrentTime(el.currentTime);
+                          setTimelineProgress(el.duration ? (el.currentTime / el.duration) * 100 : 0);
+                        }}
+                        onLoadedMetadata={e => setVideoDuration(e.currentTarget.duration)}
+                        onEnded={() => setIsPlayingTimeline(false)}
+                        onPause={() => setIsPlayingTimeline(false)}
+                        onPlay={() => setIsPlayingTimeline(true)}
+                      />
+                    ) : (
+                      <SceneImage
+                        src={scenes[previewSceneIndex]?.imageUrl || scenes[0]?.imageUrl || thumbnailUrl}
+                        alt={`Preview escena ${previewSceneIndex + 1}`}
+                        className="w-full h-full object-cover opacity-90"
+                      />
+                    )}
 
-                    {/* Progress slider bar inside video player */}
-                    <div className="absolute bottom-4 left-4 right-4 z-20 flex items-center gap-3 text-[10px] font-mono text-[#8B949E]">
-                      <span>00:{isPlayingTimeline ? '05' : '00'}</span>
+                    {activeSubtitlePreview && (
+                      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 text-center w-full max-w-xl z-20 px-4 pointer-events-none">
+                        <div className="bg-black/75 border border-yellow-500/30 text-yellow-400 font-bold px-4 py-2 rounded-xl text-xs sm:text-sm tracking-wide shadow-xl font-display leading-relaxed">
+                          {activeSubtitlePreview}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-4 left-4 right-4 z-20 flex items-center gap-3 text-[10px] font-mono text-[#8B949E] pointer-events-none">
+                      <span>{formatTimelineClock(videoCurrentTime)}</span>
                       <div className="flex-1 h-1.5 bg-[rgba(255,255,255,0.05)] rounded-full overflow-hidden">
                         <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${timelineProgress}%` }} />
                       </div>
-                      <span>00:{project.duration.split(':')[1]}</span>
+                      <span>{formatTimelineClock(previewDuration)}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Status elements */}
-                <div className="p-4 z-10 flex items-center justify-between text-xs text-white">
+                <div className="p-4 z-10 flex items-center justify-between text-xs text-white pointer-events-none">
                   <span className="flex items-center gap-1.5 bg-black/60 px-2.5 py-1 rounded-full border border-[rgba(255,255,255,0.05)]">
-                    <span className="w-1.5 h-1.5 bg-rose-500 rounded-full animate-ping" /> PREVISUALIZACIÓN ACTIVA
+                    <span className={`w-1.5 h-1.5 rounded-full ${videoPlaybackUrl ? 'bg-emerald-500' : 'bg-amber-500'} ${isPlayingTimeline ? 'animate-ping' : ''}`} />
+                    {videoPlaybackUrl ? 'VIDEO RENDERIZADO' : 'PREVIEW ESCENAS + AUDIO'}
                   </span>
-                  <span className="bg-black/60 px-2 py-0.5 rounded font-mono font-bold text-indigo-400">1080p CINE</span>
+                  <span className="bg-black/60 px-2 py-0.5 rounded font-mono font-bold text-indigo-400">1080p</span>
                 </div>
 
                 <div className="p-4 z-10 self-center">
                   <button
-                    onClick={() => setIsPlayingTimeline(!isPlayingTimeline)}
+                    type="button"
+                    onClick={toggleTimelinePlayback}
                     className="p-5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white shadow-2xl transition-all scale-100 hover:scale-105 active:scale-95 cursor-pointer"
                   >
                     {isPlayingTimeline ? <Pause className="w-6 h-6 fill-white" /> : <Play className="w-6 h-6 fill-white pl-0.5" />}
                   </button>
                 </div>
 
-                <div className="p-4 z-10 text-xs text-[#8B949E] self-start font-medium bg-black/40 backdrop-blur-xs rounded-tr-xl">
-                  {scenes.length} Escenas en Storyboard cargadas
+                <div className="p-4 z-10 text-xs text-[#8B949E] self-start font-medium bg-black/40 backdrop-blur-xs rounded-tr-xl pointer-events-none">
+                  {scenes.length} escena(s) · {subtitleCueTexts.length} cue(s) de subtítulos
                 </div>
               </div>
 
@@ -1285,19 +1555,27 @@ export default function WorkspaceView({
                 <h4 className="text-[11px] font-bold text-[#8B949E] uppercase tracking-wider font-mono">Consola de Renderizado</h4>
                 <div className="space-y-4">
                   <div className="bg-[#15191E] p-3.5 rounded-xl border border-[rgba(255,255,255,0.05)] space-y-2">
-                    <div className="text-xs font-bold text-white">Último Render</div>
+                    <div className="text-xs font-bold text-white">Último render</div>
                     <p className="text-[10px] text-[#8B949E] leading-normal">
-                      Sincronización automatizada por el **Agente Editor**. Los subtítulos se acoplan automáticamente usando estilos dinámicos de CapCut.
+                      {renderStatusMessage ??
+                        (videoPlaybackUrl
+                          ? 'Video exportado en el servidor — reproducción desde archivos del episodio.'
+                          : `Pendiente: ${scenes.length} escena(s), narración ${hasNarrationTrack ? 'lista' : 'faltante'}, subtítulos ${subtitleCueTexts.length > 0 ? 'listos' : 'opcionales'}.`)}
                     </p>
                   </div>
 
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] text-[#8B949E]">
-                      <span>Compilación de pistas</span>
-                      <span>Sincronizado</span>
+                      <span>Pistas listas</span>
+                      <span>{hasNarrationTrack && scenes.length > 0 ? 'Sí' : 'Incompleto'}</span>
                     </div>
                     <div className="w-full h-1.5 bg-[#15191E] rounded-full overflow-hidden p-[0.5px]">
-                      <div className="h-full bg-emerald-500 rounded-full w-[100%]" />
+                      <div
+                        className="h-full bg-emerald-500 rounded-full transition-all"
+                        style={{
+                          width: `${Math.round(((hasNarrationTrack ? 1 : 0) + (scenes.length > 0 ? 1 : 0) + (subtitleCueTexts.length > 0 ? 1 : 0)) / 3 * 100)}%`,
+                        }}
+                      />
                     </div>
                   </div>
 
@@ -1310,7 +1588,7 @@ export default function WorkspaceView({
 
                   <button
                     type="button"
-                    disabled={isProcessing}
+                    disabled={isProcessing || scenes.length === 0}
                     onClick={() => void handleRenderVideo()}
                     className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
                   >
@@ -1336,8 +1614,16 @@ export default function WorkspaceView({
                     <span>Narración</span>
                   </div>
                   <div className="flex-1 h-9 bg-amber-950/20 border border-amber-900/30 rounded-xl p-1.5 flex items-center relative overflow-hidden">
-                    <div className="absolute inset-y-0 left-0 bg-amber-600/35 rounded-md border border-amber-500/40 w-4/5 flex items-center px-2.5">
-                      <span className="text-[10px] font-bold text-amber-200">VOZ_KORE_ESPAÑOL.wav (Sincronizado)</span>
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded-md border flex items-center px-2.5 ${
+                        hasNarrationTrack
+                          ? 'bg-amber-600/35 border-amber-500/40 w-4/5'
+                          : 'bg-amber-900/20 border-amber-800/30 w-1/3'
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold text-amber-200 truncate">
+                        {hasNarrationTrack ? 'Narración del episodio (MP3)' : 'Sin narración — pestaña Narración'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1372,15 +1658,20 @@ export default function WorkspaceView({
                     <span>Subtítulos</span>
                   </div>
                   <div className="flex-1 h-9 bg-yellow-950/10 border border-yellow-900/20 rounded-xl p-1 flex gap-1 relative overflow-hidden">
-                    <div className="w-1/4 bg-yellow-600/20 rounded border border-yellow-500/30 flex items-center px-2 text-[8px] text-yellow-200">
-                      <span>"¿Te has sentido abrumado...?"</span>
-                    </div>
-                    <div className="w-1/4 bg-yellow-600/20 rounded border border-yellow-500/30 flex items-center px-2 text-[8px] text-yellow-200">
-                      <span>"Filipenses nos da la clave..."</span>
-                    </div>
-                    <div className="w-1/4 bg-yellow-600/20 rounded border border-yellow-500/30 flex items-center px-2 text-[8px] text-yellow-200">
-                      <span>"Jesús abordó esto..."</span>
-                    </div>
+                    {subtitleCueTexts.length > 0 ? (
+                      subtitleCueTexts.map((cue, idx) => (
+                        <div
+                          key={`${idx}-${cue.slice(0, 12)}`}
+                          className="flex-1 min-w-0 bg-yellow-600/20 rounded border border-yellow-500/30 flex items-center px-2 text-[8px] text-yellow-200"
+                        >
+                          <span className="truncate">&quot;{cue}&quot;</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex-1 bg-yellow-900/20 rounded border border-yellow-800/30 flex items-center px-2 text-[8px] text-yellow-300/70">
+                        Genera subtítulos en la pestaña Subtítulos
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1392,7 +1683,7 @@ export default function WorkspaceView({
                   </div>
                   <div className="flex-1 h-9 bg-emerald-950/20 border border-emerald-900/30 rounded-xl p-1.5 flex items-center relative overflow-hidden">
                     <div className="absolute inset-y-0 left-0 bg-emerald-600/25 rounded-md border border-emerald-500/30 w-[95%] flex items-center px-2.5">
-                      <span className="text-[10px] font-bold text-emerald-300">Peaceful Ambient Piano Loop (Faded Out 15%)</span>
+                      <span className="text-[10px] font-bold text-emerald-300 truncate">{primaryMusicTrack}</span>
                     </div>
                   </div>
                 </div>
@@ -1412,11 +1703,10 @@ export default function WorkspaceView({
               <div className="lg:col-span-2 bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 flex flex-col items-center justify-center relative overflow-hidden">
                 <div className="w-full max-w-lg aspect-video rounded-xl overflow-hidden relative shadow-2xl border border-[rgba(255,255,255,0.05)] bg-[#15191E]">
                   {/* Background Image */}
-                  <img
+                  <SceneImage
                     src={thumbnailUrl}
                     alt="Thumbnail background"
                     className="w-full h-full object-cover select-none"
-                    referrerPolicy="no-referrer"
                   />
 
                   {/* High Contrast Vignette overlay */}
@@ -1502,16 +1792,20 @@ export default function WorkspaceView({
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button
-                        onClick={handleRemoveBackground}
-                        className="py-2 px-2.5 rounded-xl bg-[#15191E] hover:bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.05)] text-[10px] font-bold text-white transition-all cursor-pointer text-center"
+                        type="button"
+                        disabled
+                        title="Próximamente"
+                        className="py-2 px-2.5 rounded-xl bg-[#15191E] border border-[rgba(255,255,255,0.05)] text-[10px] font-bold text-slate-500 cursor-not-allowed text-center"
                       >
-                        Remover Fondo
+                        Remover Fondo (próximamente)
                       </button>
                       <button
-                        onClick={handleUpscaleThumbnail}
-                        className="py-2 px-2.5 rounded-xl bg-[#15191E] hover:bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.05)] text-[10px] font-bold text-white transition-all cursor-pointer text-center"
+                        type="button"
+                        disabled
+                        title="Próximamente"
+                        className="py-2 px-2.5 rounded-xl bg-[#15191E] border border-[rgba(255,255,255,0.05)] text-[10px] font-bold text-slate-500 cursor-not-allowed text-center"
                       >
-                        Upscale a 4K
+                        Upscale 4K (próximamente)
                       </button>
                     </div>
                   </div>
@@ -1519,25 +1813,10 @@ export default function WorkspaceView({
                   {/* Image Generation */}
                   <div className="pt-2">
                     <button
-                      onClick={async () => {
-                        setIsProcessing(true);
-                        setProcessingMessage('Iniciando generador de miniaturas conceptuales con IA...');
-                        try {
-                          const data = await aiGenerateImage({
-                            prompt: `high quality background for video thumbnail about: ${thumbnailText}, highly artistic, beautiful lightning, trending on artstation`,
-                            aspectRatio: '16:9',
-                          });
-                          if (data.imageUrl) {
-                            setThumbnailUrl(data.imageUrl);
-                            triggerFeedback('success', '✓ Miniatura cargada por IA');
-                          }
-                        } catch (e) {
-                          triggerFeedback('error', 'Error generando miniatura');
-                        } finally {
-                          setIsProcessing(false);
-                        }
-                      }}
-                      className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                      type="button"
+                      disabled={isProcessing}
+                      onClick={() => void handleGenerateThumbnailBackground()}
+                      className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
                     >
                       Generar Nuevo Fondo IA
                     </button>
@@ -1632,6 +1911,20 @@ export default function WorkspaceView({
             </div>
 
             <div className="bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-xl p-5 space-y-4">
+              {youtubeConnected === true ? (
+                <p className="text-xs text-emerald-400">YouTube OAuth conectado — la subida usará tu cuenta configurada.</p>
+              ) : youtubeConnected === false ? (
+                <p className="text-xs text-amber-400">
+                  YouTube no conectado. Conecta OAuth en Configuración → Integraciones para subir o programar.
+                </p>
+              ) : null}
+
+              {project.scheduledAt && (
+                <p className="text-xs text-slate-400">
+                  Programado: {new Date(project.scheduledAt).toLocaleString('es-ES')}
+                </p>
+              )}
+
               {/* Distribution checklist */}
               <div className="space-y-2.5">
                 <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block">Redes sociales elegidas</label>
@@ -1655,7 +1948,8 @@ export default function WorkspaceView({
                   <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Fecha de publicación</label>
                   <input
                     type="date"
-                    defaultValue="2026-06-29"
+                    value={scheduleDate}
+                    onChange={e => setScheduleDate(e.target.value)}
                     className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-xl p-2 text-xs text-white"
                   />
                 </div>
@@ -1663,22 +1957,20 @@ export default function WorkspaceView({
                   <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Hora (Horeb Local)</label>
                   <input
                     type="time"
-                    defaultValue="18:00"
+                    value={scheduleTime}
+                    onChange={e => setScheduleTime(e.target.value)}
                     className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-xl p-2 text-xs text-white"
                   />
                 </div>
               </div>
 
               <button
-                onClick={() => {
-                  triggerFeedback(
-                    'success',
-                    'Programación pendiente — conecta YouTube OAuth y usa Publicar para agendar.',
-                  );
-                }}
-                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                type="button"
+                disabled={schedulingPublish || isProcessing}
+                onClick={() => void handleConfirmSchedule()}
+                className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
               >
-                Confirmar Programación del Video
+                {schedulingPublish ? 'Programando…' : 'Confirmar Programación del Video'}
               </button>
             </div>
           </div>

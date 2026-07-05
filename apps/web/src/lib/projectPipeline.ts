@@ -104,3 +104,11 @@ export function stepIndex(column: ProjectStatus): number {
 export function agentsForStep(step: PipelineStep): AgentId[] {
   return [step.agentId, ...(step.relatedAgentIds ?? [])];
 }
+
+/** Workspace tab to open when editing content for a given agent. */
+export function workspaceTabForAgent(agentId: AgentId, fallback: WorkspaceTab): WorkspaceTab {
+  if (agentId === 'storyboard_designer' || agentId === 'scene_asset_designer') return 'escenas';
+  if (agentId === 'audio_engineer') return 'narracion';
+  const step = PIPELINE_STEPS.find(s => s.agentId === agentId);
+  return step?.workspaceTab ?? fallback;
+}

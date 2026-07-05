@@ -365,10 +365,27 @@ describe('api routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = response.json() as { reply: string };
+    const body = response.json() as { reply: string; out_of_scope?: boolean };
+    expect(body.out_of_scope).toBe(true);
     expect(body.reply).toContain('Creator AI Studio');
     expect(body.reply).toContain('no puedo responder');
     expect(body.reply).not.toContain('8');
+  });
+
+  it('POST /api/gemini/chat refuses math even with episode context prefix', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/gemini/chat',
+      payload: {
+        message: '[Contexto: episodio activo "David vs Goliat"] cuanto es 4+9?',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { reply: string; out_of_scope?: boolean };
+    expect(body.out_of_scope).toBe(true);
+    expect(body.reply).toContain('no puedo responder');
+    expect(body.reply).not.toContain('13');
   });
 
   it('POST /api/episodes/:id/jobs creates a production job', async () => {

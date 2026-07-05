@@ -476,7 +476,11 @@ function registerRoutes(
   });
 
   app.post(route(prefix, '/integrations/youtube/upload'), async (request, reply) => {
-    const body = (request.body ?? {}) as { episodeId?: string; authorize?: boolean };
+    const body = (request.body ?? {}) as {
+      episodeId?: string;
+      authorize?: boolean;
+      publishAt?: string;
+    };
 
     // FASE 3/6 safety gate: uploading to YouTube ALWAYS requires an explicit
     // human authorization flag. Pipelines in draft/review mode never set it.
@@ -511,7 +515,9 @@ function registerRoutes(
     }
     try {
       const { uploadToYouTube } = await import('./integrations/youtube.js');
-      const result = await uploadToYouTube(title, description, videoPath);
+      const result = await uploadToYouTube(title, description, videoPath, {
+        publishAt: body.publishAt,
+      });
       if (body.episodeId && episode && result.videoId) {
         await storage.updateEpisode(body.episodeId, {
           status: 'review',
@@ -862,7 +868,7 @@ function registerRoutes(
 
   app.post(route(prefix, '/episodes/:id/thumbnail'), async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { force?: boolean };
+    const body = (request.body ?? {}) as { force?: boolean; prompt?: string };
     const episode = await storage.getEpisode(id);
     if (!episode) {
       reply.code(404);
@@ -873,6 +879,8 @@ function registerRoutes(
       reply.code(400);
       return { error: 'episodio no en disco local' };
     }
+    const { episodeFileUrl } = await import('./media/media-urls.js');
+    const canonicalUrl = episodeFileUrl(id, 'thumbnail');
     const { isStageCompleted, hasThumbnailFile } = await import('./media/production-locks.js');
     if (
       !body.force &&
@@ -880,11 +888,14 @@ function registerRoutes(
       hasThumbnailFile(dir) &&
       episode.content.thumbnailUrl
     ) {
-      return { imageUrl: episode.content.thumbnailUrl, saved: true, skipped: true };
+      return { imageUrl: canonicalUrl, saved: true, skipped: true };
     }
     const { withProvider } = await import('./ai/router.js');
+    const prompt =
+      body.prompt?.trim() ||
+      `Miniatura YouTube cinematográfica 16:9 para video cristiano: ${episode.title}`;
     const imageUrl = await withProvider('image', p =>
-      p.generateImage(`Miniatura YouTube: ${episode.title}`, { aspectRatio: '16:9' }),
+      p.generateImage(prompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
     );
     const { saveThumbnailToDisk } = await import('./media/render.js');
     const savedPath = await saveThumbnailToDisk(dir, imageUrl);
@@ -897,9 +908,9 @@ function registerRoutes(
       };
     }
     await storage.updateEpisode(id, {
-      content: { thumbnailUrl: imageUrl },
+      content: { thumbnailUrl: canonicalUrl },
     });
-    return { imageUrl, saved: Boolean(savedPath) };
+    return { imageUrl: canonicalUrl, saved: Boolean(savedPath) };
   });
 
   app.post(route(prefix, '/episodes/:id/pipeline'), async (request, reply) => {
@@ -970,7 +981,7 @@ function registerRoutes(
   // FASE 6 — authorized YouTube publish (requires explicit human confirmation).
   app.post(route(prefix, '/episodes/:id/authorize-publish'), async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { confirm?: boolean };
+    const body = (request.body ?? {}) as { confirm?: boolean; scheduledAt?: string };
     if (body.confirm !== true) {
       reply.code(400);
       return {
@@ -998,11 +1009,20 @@ function registerRoutes(
         checklist: pkg.checklist,
       };
     }
+    if (body.scheduledAt) {
+      await storage.updateEpisode(id, {
+        content: { scheduledAt: body.scheduledAt },
+      });
+    }
     const { createJob } = await import('./jobs/store.js');
     const { enqueueJob } = await import('./jobs/queue.js');
     const job = await createJob(id, {
       type: 'pipeline',
-      payload: { mode: 'publish-authorized', authorized: true },
+      payload: {
+        mode: 'publish-authorized',
+        authorized: true,
+        scheduledAt: body.scheduledAt,
+      },
     });
     await enqueueJob(job);
     reply.code(201);

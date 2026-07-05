@@ -235,6 +235,20 @@ export async function renderEpisodeVideo(
   });
 }
 
+export async function generateEpisodeThumbnail(
+  episodeId: string,
+  options?: { force?: boolean; prompt?: string },
+): Promise<{ imageUrl: string; saved: boolean; skipped?: boolean }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/thumbnail`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...(options?.force ? { force: true } : {}),
+      ...(options?.prompt ? { prompt: options.prompt } : {}),
+    }),
+  });
+}
+
 export async function updateStageStatus(
   id: string,
   stage: EpisodeStage,
@@ -389,8 +403,8 @@ export async function scheduleCalendarEvent(input: {
   });
 }
 
-export async function aiChat(message: string): Promise<{ reply: string }> {
-  return apiFetch<{ reply: string }>('/gemini/chat', {
+export async function aiChat(message: string): Promise<{ reply: string; out_of_scope?: boolean }> {
+  return apiFetch<{ reply: string; out_of_scope?: boolean }>('/gemini/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message }),
@@ -491,11 +505,15 @@ export async function buildPublishPackage(episodeId: string): Promise<PublishPac
 
 export async function authorizePublish(
   episodeId: string,
+  options?: { scheduledAt?: string },
 ): Promise<{ job: ProductionJob; checklist: PublishChecklistItem[] }> {
   return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/authorize-publish`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm: true }),
+    body: JSON.stringify({
+      confirm: true,
+      ...(options?.scheduledAt ? { scheduledAt: options.scheduledAt } : {}),
+    }),
   });
 }
 

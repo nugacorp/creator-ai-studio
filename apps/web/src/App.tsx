@@ -96,6 +96,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [projectsBoardFilter, setProjectsBoardFilter] = useState<DashboardSection | null>(null);
   const [workspaceInitialTab, setWorkspaceInitialTab] = useState<WorkspaceTab | null>(null);
   const [workspaceForcedTab, setWorkspaceForcedTab] = useState<WorkspaceTab | undefined>();
+  const [workspaceForcedTabRequest, setWorkspaceForcedTabRequest] = useState(0);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [deleteWorkspaceTarget, setDeleteWorkspaceTarget] = useState<VideoProject | null>(null);
@@ -214,9 +215,20 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const handleOpenWorkspace = (projectId: string, initialTab?: WorkspaceTab) => {
     setWorkspaceInitialTab(initialTab ?? null);
     setWorkspaceForcedTab(initialTab);
+    if (initialTab) setWorkspaceForcedTabRequest(n => n + 1);
     setActiveProjectId(projectId);
     setCurrentView('workspace');
   };
+
+  const handleGoToWorkspaceTab = useCallback((tab: WorkspaceTab) => {
+    setWorkspaceForcedTab(tab);
+    setWorkspaceForcedTabRequest(n => n + 1);
+    requestAnimationFrame(() => {
+      mainRef.current
+        ?.querySelector('[data-workspace-tabs]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
 
   const handleNavigateToSection = (section: DashboardSection) => {
     if (shouldOpenCalendar(section)) {
@@ -272,6 +284,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
           seoTags: updated.seoTags,
           thumbnailUrl: updated.thumbnailUrl,
           audioUrl: updated.audioUrl,
+          videoUrl: updated.videoUrl,
           subtitlesSrt: updated.subtitlesSrt,
           scheduledAt: updated.scheduledAt,
           duration: updated.duration,
@@ -461,13 +474,14 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                 <ProjectPipelinePanel
                   episodeId={activeProject.id}
                   projectStatus={activeProject.status}
-                  onGoToTab={tab => setWorkspaceForcedTab(tab)}
+                  onGoToTab={handleGoToWorkspaceTab}
                 />
                 <WorkspaceView
                   project={activeProject}
                   onUpdateProject={handleUpdateProject}
                   initialTab={workspaceInitialTab ?? undefined}
                   forcedTab={workspaceForcedTab}
+                  forcedTabRequest={workspaceForcedTabRequest}
                   stageRefreshToken={workspaceRefreshToken}
                   onMoveProjectStatus={handleMoveProjectStatus}
                 />

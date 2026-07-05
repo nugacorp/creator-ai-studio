@@ -6,6 +6,7 @@ interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant';
   text: string;
+  outOfScope?: boolean;
 }
 
 interface CopilotViewProps {
@@ -48,7 +49,12 @@ export default function CopilotView({ episodeTitle }: CopilotViewProps) {
       const assistantMsgId = `asst_${Date.now()}`;
       setMessages(prev => [
         ...prev,
-        { id: assistantMsgId, sender: 'assistant', text: data.reply || 'Lo siento, he tenido un inconveniente procesando esa consulta.' }
+        {
+          id: assistantMsgId,
+          sender: 'assistant',
+          text: data.reply || 'Lo siento, he tenido un inconveniente procesando esa consulta.',
+          outOfScope: data.out_of_scope === true,
+        },
       ]);
     } catch (err) {
       console.error(err);
@@ -90,6 +96,7 @@ export default function CopilotView({ episodeTitle }: CopilotViewProps) {
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {messages.map((msg) => {
               const isAss = msg.sender === 'assistant';
+              const isRefusal = isAss && msg.outOfScope;
               return (
                 <div
                   key={msg.id}
@@ -98,20 +105,31 @@ export default function CopilotView({ episodeTitle }: CopilotViewProps) {
                   {/* Icon */}
                   <div
                     className={`w-8 h-8 rounded-2xl flex items-center justify-center shrink-0 border ${
-                      isAss ? 'bg-indigo-950/20 border-indigo-800/35 text-indigo-400' : 'bg-zinc-800 border-zinc-700 text-white'
+                      isRefusal
+                        ? 'bg-amber-950/20 border-amber-800/35 text-amber-400'
+                        : isAss
+                          ? 'bg-indigo-950/20 border-indigo-800/35 text-indigo-400'
+                          : 'bg-zinc-800 border-zinc-700 text-white'
                     }`}
                   >
-                    {isAss ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                    {isRefusal ? <AlertCircle className="w-4 h-4" /> : isAss ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
                   </div>
 
                   {/* Speech Bubble */}
                   <div
                     className={`p-4 rounded-2xl text-xs leading-relaxed shadow-md ${
-                      isAss
-                        ? 'bg-[#15191E] border border-[rgba(255,255,255,0.05)] text-[#E6EDF2]'
-                        : 'bg-indigo-600 text-white'
+                      isRefusal
+                        ? 'bg-amber-950/15 border border-amber-800/30 text-amber-100'
+                        : isAss
+                          ? 'bg-[#15191E] border border-[rgba(255,255,255,0.05)] text-[#E6EDF2]'
+                          : 'bg-indigo-600 text-white'
                     }`}
                   >
+                    {isRefusal && (
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400 mb-1.5">
+                        Fuera del alcance del copiloto
+                      </p>
+                    )}
                     <p className="whitespace-pre-wrap">{msg.text}</p>
                   </div>
                 </div>

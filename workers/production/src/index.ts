@@ -311,9 +311,15 @@ async function runPublishJob(job: ProductionJob): Promise<{ youtubeUrl?: string;
         'Usa el flujo de publicación autorizada.',
     );
   }
+  const publishAt =
+    typeof job.payload?.scheduledAt === 'string' ? job.payload.scheduledAt : undefined;
   const res = await apiFetch('/integrations/youtube/upload', {
     method: 'POST',
-    body: JSON.stringify({ episodeId: job.episodeId, authorize: true }),
+    body: JSON.stringify({
+      episodeId: job.episodeId,
+      authorize: true,
+      ...(publishAt ? { publishAt } : {}),
+    }),
   });
   await assertOk(res, 'YouTube upload');
   const data = (await res.json()) as { url?: string; videoId?: string; status?: string };

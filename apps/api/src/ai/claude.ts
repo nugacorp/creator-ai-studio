@@ -8,6 +8,7 @@ import type {
 } from './types.js';
 import { providerErrorFromResponse } from './provider-error.js';
 import { getAnthropicModel } from './models.js';
+import { CHAT_SYSTEM_PROMPT } from './chat-scope.js';
 
 async function claudeMessage(
   apiKey: string,
@@ -47,7 +48,7 @@ export class ClaudeAIProvider implements AIProvider {
 
   async chat(messages: ChatMessage[]): Promise<string> {
     const history = messages.map(m => `${m.role}: ${m.content}`).join('\n');
-    return claudeMessage(this.apiKey, history, 'chat');
+    return claudeMessage(this.apiKey, history, 'chat', CHAT_SYSTEM_PROMPT);
   }
 
   async generateScript(prompt: string, options?: ScriptOptions): Promise<string> {
@@ -84,6 +85,10 @@ export class ClaudeAIProvider implements AIProvider {
     } catch {
       // fall through
     }
-    return { titles: [title], description: script.substring(0, 150), tags: ['cristiano'] };
+    return {
+      titles: [title],
+      description: `Descubre ${title}: reflexión cristiana con aplicación práctica para tu vida de fe.`,
+      tags: ['cristiano'],
+    };
   }
 }

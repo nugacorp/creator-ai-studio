@@ -28,6 +28,7 @@ export async function uploadToYouTube(
   title: string,
   description: string,
   videoPath: string,
+  options?: { publishAt?: string },
 ): Promise<YouTubeUploadResult> {
   const accessToken = await resolveYouTubeAccessToken();
 
@@ -55,7 +56,10 @@ export async function uploadToYouTube(
       },
       body: JSON.stringify({
         snippet: { title, description, categoryId: '22' },
-        status: { privacyStatus: 'private' },
+        status: {
+          privacyStatus: 'private',
+          ...(options?.publishAt ? { publishAt: options.publishAt } : {}),
+        },
       }),
     },
   );
@@ -95,7 +99,7 @@ export async function uploadToYouTube(
   return {
     videoId,
     url: `https://www.youtube.com/watch?v=${videoId}`,
-    status: 'uploaded',
+    status: options?.publishAt ? 'scheduled' : 'uploaded',
   };
 }
 

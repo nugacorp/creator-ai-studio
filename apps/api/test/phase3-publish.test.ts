@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import type { EpisodeSummary, ProductionJob } from '@creator-ai-studio/shared';
+import type { EpisodeSummary, ProductionJob, EpisodeDetail } from '@creator-ai-studio/shared';
 import { buildApp } from '../src/app.js';
 import { EpisodeStorage } from '../src/storage/index.js';
 import { areMocksAllowed } from '../src/config/mocks.js';
@@ -133,6 +133,19 @@ describe('FASE 3 — safe pipeline & publish package', () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ error: 'publish_not_authorized' });
+  });
+
+  it('PATCH /episodes/:id persists scheduledAt', async () => {
+    const episode = await createEpisode('Schedule test');
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/episodes/${episode.id}`,
+      payload: { content: { scheduledAt: '2026-08-15T18:00:00.000Z' } },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const detail = response.json() as EpisodeDetail;
+    expect(detail.content.scheduledAt).toBe('2026-08-15T18:00:00.000Z');
   });
 });
 

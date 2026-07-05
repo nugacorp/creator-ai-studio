@@ -8,6 +8,7 @@ import type {
 } from './types.js';
 import { providerErrorFromResponse } from './provider-error.js';
 import { getOpenAIImageModel, getOpenAIModel } from './models.js';
+import { CHAT_SYSTEM_PROMPT } from './chat-scope.js';
 
 async function openaiChat(
   apiKey: string,
@@ -45,8 +46,7 @@ export class OpenAIProvider implements AIProvider {
     return openaiChat(this.apiKey, [
       {
         role: 'system',
-        content:
-          'Eres el copiloto de Creator AI Studio para producción de videos cristianos. Responde en español.',
+        content: CHAT_SYSTEM_PROMPT,
       },
       ...messages.map(m => ({ role: m.role, content: m.content })),
     ], 'chat');
@@ -129,6 +129,10 @@ export class OpenAIProvider implements AIProvider {
     } catch {
       // fall through
     }
-    return { titles: [title], description: script.substring(0, 150), tags: ['cristiano'] };
+    return {
+      titles: [title],
+      description: `Descubre ${title}: reflexión cristiana con aplicación práctica para tu vida de fe.`,
+      tags: ['cristiano'],
+    };
   }
 }

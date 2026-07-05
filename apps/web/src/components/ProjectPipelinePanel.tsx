@@ -8,7 +8,7 @@ import {
   UserCheck,
   XCircle,
 } from 'lucide-react';
-import type { AgentRunRecord, AgentRunStatus, EpisodeStageStatus } from '@creator-ai-studio/shared';
+import type { AgentId, AgentRunRecord, AgentRunStatus, EpisodeStageStatus } from '@creator-ai-studio/shared';
 import type { ProjectStatus } from '../types';
 import type { WorkspaceTab } from '../lib/dashboardNavigation';
 import {
@@ -16,6 +16,8 @@ import {
   agentsForStep,
   stepForColumn,
   stepIndex,
+  workspaceTabForAgent,
+  type PipelineStep,
 } from '../lib/projectPipeline';
 import {
   approveAgentRun,
@@ -54,6 +56,33 @@ function runStatusTone(status: AgentRunStatus): string {
   return 'text-slate-400';
 }
 
+function stepperChipClass(step: PipelineStep, index: number, currentIndex: number, viewingStep: PipelineStep): string {
+  const done = index < currentIndex;
+  const isProjectCurrent = index === currentIndex;
+  const isViewing = step.column === viewingStep.column;
+
+  const base =
+    'shrink-0 flex items-center gap-1 text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-lg border cursor-pointer transition-colors';
+
+  if (isViewing) {
+    if (done) {
+      return `${base} border-emerald-400/60 bg-emerald-950/40 text-emerald-300 ring-1 ring-emerald-500/40 hover:bg-emerald-950/55`;
+    }
+    if (isProjectCurrent) {
+      return `${base} border-indigo-400/70 bg-indigo-950/40 text-indigo-100 ring-1 ring-indigo-500/50 hover:bg-indigo-950/55`;
+    }
+    return `${base} border-slate-400/40 bg-slate-800/40 text-slate-200 ring-1 ring-slate-500/30 hover:bg-slate-800/60`;
+  }
+
+  if (isProjectCurrent) {
+    return `${base} border-indigo-500/50 bg-indigo-950/30 text-indigo-200 hover:bg-indigo-950/45`;
+  }
+  if (done) {
+    return `${base} border-emerald-500/20 bg-emerald-950/20 text-emerald-400/80 hover:border-emerald-500/40 hover:bg-emerald-950/35 hover:text-emerald-300`;
+  }
+  return `${base} border-white/5 text-slate-500 hover:border-white/15 hover:bg-white/5 hover:text-slate-300`;
+}
+
 interface ProjectPipelinePanelProps {
   episodeId: string;
   projectStatus: ProjectStatus;
@@ -73,13 +102,16 @@ export default function ProjectPipelinePanel({
 }: ProjectPipelinePanelProps) {
   const currentStep = stepForColumn(projectStatus);
   const currentIndex = stepIndex(projectStatus);
+  const [viewingStep, setViewingStep] = useState<PipelineStep>(currentStep);
   const [runs, setRuns] = useState<AgentRunRecord[]>([]);
   const [stageStatus, setStageStatus] = useState<EpisodeStageStatus>('pending');
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedAgentId, setSelectedAgentId] = useState(currentStep.agentId);
+  const [selectedAgentId, setSelectedAgentId] = useState<AgentId>(currentStep.agentId);
+
+  const isViewingCurrentProjectStep = viewingStep.column === currentStep.column;
 
   const load = useCallback(async () => {
     setError(null);
@@ -88,7 +120,7 @@ export default function ProjectPipelinePanel({
         fetchEpisodeDetail(episodeId),
         fetchAgentRuns(episodeId),
       ]);
-      const stage = detail.stages.find(s => s.stage === currentStep.episodeStage);
+      const stage = detail.stages.find(s => s.stage === viewingStep.episodeStage);
       setStageStatus(stage?.status ?? 'pending');
       setRuns(runsData.runs ?? []);
     } catch (e) {
@@ -100,25 +132,45 @@ export default function ProjectPipelinePanel({
     } finally {
       setLoading(false);
     }
-  }, [episodeId, currentStep.episodeStage]);
+  }, [episodeId, viewingStep.episodeStage]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   useEffect(() => {
+    setViewingStep(currentStep);
     setSelectedAgentId(currentStep.agentId);
-  }, [currentStep.agentId]);
+  }, [currentStep.column, currentStep.agentId]);
 
   const activeRun = loading ? undefined : latestRunForAgent(runs, selectedAgentId);
-  const stepAgents = agentsForStep(currentStep);
+  const stepAgents = agentsForStep(viewingStep);
 
-  const handleRunAgent = async () => {
+  useEffect(() => {
+    if (activeRun?.status !== 'running') return;
+    const interval = window.setInterval(() => {
+      void load();
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [activeRun?.status, load]);
+
+  const handleSelectStep = (step: PipelineStep) => {
+    setViewingStep(step);
+    setSelectedAgentId(step.agentId);
+    onGoToTab(step.workspaceTab);
+  };
+
+  const handleSelectAgent = (agentId: AgentId) => {
+    setSelectedAgentId(agentId);
+    onGoToTab(workspaceTabForAgent(agentId, viewingStep.workspaceTab));
+  };
+
+  const handleRunAgent = async (agentId: AgentId = selectedAgentId) => {
     setRunning(true);
     setError(null);
     try {
-      await runEpisodeAgent(episodeId, selectedAgentId, {
-        autoEnqueuePlan: selectedAgentId === 'hermes',
+      await runEpisodeAgent(episodeId, agentId, {
+        autoEnqueuePlan: agentId === 'hermes',
       });
       await load();
     } catch (e) {
@@ -128,10 +180,15 @@ export default function ProjectPipelinePanel({
     }
   };
 
+  const handleAgentPillDoubleClick = (agentId: AgentId) => {
+    setSelectedAgentId(agentId);
+    void handleRunAgent(agentId);
+  };
+
   const handleApproveStage = async () => {
     setApproving(true);
     try {
-      await updateStageStatus(episodeId, currentStep.episodeStage, 'completed');
+      await updateStageStatus(episodeId, viewingStep.episodeStage, 'completed');
       setStageStatus('completed');
     } catch {
       setError('No se pudo aprobar la etapa');
@@ -175,20 +232,19 @@ export default function ProjectPipelinePanel({
       <ol className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
         {PIPELINE_STEPS.map((step, index) => {
           const done = index < currentIndex;
-          const active = index === currentIndex;
+          const isViewing = step.column === viewingStep.column;
           return (
-            <li
-              key={step.column}
-              className={`shrink-0 flex items-center gap-1 text-[9px] font-mono uppercase tracking-wide px-2 py-1 rounded-lg border ${
-                active
-                  ? 'border-indigo-500/50 bg-indigo-950/30 text-indigo-200'
-                  : done
-                    ? 'border-emerald-500/20 bg-emerald-950/20 text-emerald-400/80'
-                    : 'border-white/5 text-slate-500'
-              }`}
-            >
-              {done ? <CheckCircle2 className="w-3 h-3" /> : null}
-              {step.column}
+            <li key={step.column}>
+              <button
+                type="button"
+                aria-current={isViewing ? 'step' : undefined}
+                title={`Ver etapa ${step.column}`}
+                onClick={() => handleSelectStep(step)}
+                className={stepperChipClass(step, index, currentIndex, viewingStep)}
+              >
+                {done ? <CheckCircle2 className="w-3 h-3" /> : null}
+                {step.column}
+              </button>
             </li>
           );
         })}
@@ -203,15 +259,25 @@ export default function ProjectPipelinePanel({
         </p>
       )}
 
-      {/* Current step */}
-      <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/15 p-4 space-y-4">
+      {/* Viewing step detail */}
+      <div
+        className={`rounded-xl border p-4 space-y-4 ${
+          isViewingCurrentProjectStep
+            ? 'border-indigo-500/30 bg-indigo-950/15'
+            : 'border-emerald-500/25 bg-emerald-950/10'
+        }`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] text-indigo-300 font-mono uppercase tracking-wider">
-              Etapa actual · {currentStep.column}
+            <p
+              className={`text-[10px] font-mono uppercase tracking-wider ${
+                isViewingCurrentProjectStep ? 'text-indigo-300' : 'text-emerald-300'
+              }`}
+            >
+              {isViewingCurrentProjectStep ? 'Etapa actual' : 'Revisando etapa'} · {viewingStep.column}
             </p>
-            <h3 className="text-sm font-bold text-white mt-1">{currentStep.label}</h3>
-            <p className="text-[11px] text-slate-400 mt-1 max-w-xl">{currentStep.description}</p>
+            <h3 className="text-sm font-bold text-white mt-1">{viewingStep.label}</h3>
+            <p className="text-[11px] text-slate-400 mt-1 max-w-xl">{viewingStep.description}</p>
           </div>
           <span
             className={`rounded-full border px-2.5 py-0.5 text-[10px] font-mono uppercase ${STATUS_PILL[stageStatus]}`}
@@ -240,7 +306,9 @@ export default function ProjectPipelinePanel({
               <button
                 key={agentId}
                 type="button"
-                onClick={() => setSelectedAgentId(agentId)}
+                title="Clic para seleccionar · doble clic para ejecutar"
+                onClick={() => handleSelectAgent(agentId)}
+                onDoubleClick={() => void handleAgentPillDoubleClick(agentId)}
                 className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border cursor-pointer transition-colors ${
                   selectedAgentId === agentId
                     ? 'bg-indigo-600 border-indigo-500 text-white'
@@ -265,7 +333,7 @@ export default function ProjectPipelinePanel({
           </button>
           <button
             type="button"
-            disabled={approving || stageStatus === 'completed'}
+            disabled={approving || stageStatus === 'completed' || !isViewingCurrentProjectStep}
             onClick={() => void handleApproveStage()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-600/40 text-emerald-300 hover:bg-emerald-950/30 disabled:opacity-50 text-xs font-bold cursor-pointer"
           >
@@ -284,13 +352,13 @@ export default function ProjectPipelinePanel({
           )}
           <button
             type="button"
-            onClick={() => onGoToTab(currentStep.workspaceTab)}
+            onClick={() => onGoToTab(workspaceTabForAgent(selectedAgentId, viewingStep.workspaceTab))}
             className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-white/10 text-xs text-slate-300 hover:text-white cursor-pointer"
           >
             Editar contenido
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
-          {currentStep.column === 'Edición' && (
+          {viewingStep.column === 'Edición' && (
             <button
               type="button"
               onClick={() => onGoToTab('subtitulos')}

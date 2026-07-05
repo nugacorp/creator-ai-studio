@@ -12,6 +12,7 @@ import { googleOAuthHeaders } from '../secrets/google-auth.js';
 import { providerErrorFromResponse, ProviderError } from './provider-error.js';
 import { getGeminiImageModel, getGeminiTextModel } from './models.js';
 import { areMocksAllowed } from '../config/mocks.js';
+import { CHAT_SYSTEM_PROMPT } from './chat-scope.js';
 
 async function geminiGenerate(
   auth: GeminiAuth,
@@ -65,7 +66,7 @@ export class GeminiAIProvider implements AIProvider {
       getGeminiTextModel(),
       history,
       'chat',
-      'Eres el copiloto de Creator AI Studio, un asistente para producción de videos cristianos en YouTube. Responde en español, de forma clara y práctica.',
+      CHAT_SYSTEM_PROMPT,
     );
   }
 
@@ -234,7 +235,7 @@ export class GeminiAIProvider implements AIProvider {
 
     return {
       titles: [`${title} | Reflexión Cristiana`],
-      description: script.substring(0, 150),
+      description: `Descubre ${title}: reflexión cristiana con aplicación práctica para tu vida de fe. Suscríbete y activa la campana para no perderte nuevos videos.`,
       tags: ['reflexion', 'cristiana', 'biblia'],
     };
   }

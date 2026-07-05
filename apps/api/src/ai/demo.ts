@@ -36,15 +36,14 @@ export class DemoAIProvider implements AIProvider {
     return { isDemo: true };
   }
 
-  async optimizeSEO(title: string, script: string): Promise<SEOResult> {
-    const excerpt = script.substring(0, 80).replace(/\n/g, ' ');
+  async optimizeSEO(title: string, _script: string): Promise<SEOResult> {
     return {
       titles: [
         `${title} | Reflexión Cristiana`,
         `¿Qué dice la Biblia sobre ${title}?`,
         `${title} — Mensaje de Fe`,
       ],
-      description: excerpt || `Reflexión cristiana sobre ${title}.`,
+      description: `En este video exploramos ${title}: una reflexión cristiana basada en la Palabra de Dios. Suscríbete para más contenido de fe, esperanza y enseñanza bíblica.`,
       tags: ['reflexion', 'cristiana', 'biblia', 'fe', title.toLowerCase().split(' ')[0] ?? 'video'],
     };
   }
