@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { EpisodeContent, EpisodeDetail, EpisodeStage, Scene } from '@creator-ai-studio/shared';
+import { isRealSceneSlideFile, slidePathForIndex } from './slide-files.js';
 
 export function isStageCompleted(episode: EpisodeDetail, stage: EpisodeStage): boolean {
   return episode.stages.find(s => s.stage === stage)?.status === 'completed';
@@ -91,13 +92,7 @@ export function stagesToInvalidate(
 
 export function allScenesHaveStoredImages(episodeDir: string, scenes: Scene[]): boolean {
   if (scenes.length === 0) return false;
-  return scenes.every((scene, index) => {
-    const filename = `slide-${String(index).padStart(3, '0')}.png`;
-    if (scene.imageUrl?.includes(filename) && existsSync(path.join(episodeDir, '04-assets', filename))) {
-      return true;
-    }
-    return Boolean(scene.imageUrl?.trim()) && existsSync(path.join(episodeDir, '04-assets', filename));
-  });
+  return scenes.every((_, index) => isRealSceneSlideFile(slidePathForIndex(episodeDir, index)));
 }
 
 export function hasAudioFile(episodeDir: string): boolean {

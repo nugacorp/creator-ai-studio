@@ -16,6 +16,7 @@ import { HUMAN_APPROVAL_AGENT_IDS, isJobType } from '@creator-ai-studio/shared';
 import { withProvider } from '../ai/router.js';
 import { areMocksAllowed } from '../config/mocks.js';
 import { resolveSceneImagePrompt } from '../media/scene-image-refine.js';
+import { generateSceneImagesForEpisode } from '../media/scene-images.js';
 import { generateEpisodeMusic, applyMusicLabelToScenes } from '../media/music.js';
 import { parseScenesFromScript } from '../media/script-to-scenes.js';
 import { createJob } from '../jobs/store.js';
@@ -657,17 +658,27 @@ async function runSceneAssetDesigner(
   const parsed = parseJsonBlock(text);
   const assets = (parsed?.assets as Array<{ sceneId?: string; imagePrompt?: string }> | undefined) ?? [];
 
-  const updatedScenes: Scene[] = [];
+  const scenesWithPrompts: Scene[] = [];
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i]!;
     const asset = assets.find(a => a.sceneId === scene.id);
     const imagePrompt =
       asset?.imagePrompt ??
       (await resolveSceneImagePrompt(scene, i));
-    const imageUrl = await withProvider('image', p =>
-      p.generateImage(imagePrompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
-    );
-    updatedScenes.push({ ...scene, imageUrl, imagePrompt });
+    scenesWithPrompts.push({ ...scene, imagePrompt });
+  }
+
+  const episode = await storage.getEpisode(episodeId);
+  const result = await generateSceneImagesForEpisode(
+    episodeId,
+    dir,
+    scenesWithPrompts,
+    episode?.title ?? 'Episode',
+    { skipLlmRefine: true },
+  );
+  const updatedScenes = result.scenes;
+
+  for (const scene of updatedScenes) {
     logs.push(`[Assets] Imagen generada para ${scene.id}`);
   }
 

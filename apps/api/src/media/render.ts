@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import type { Scene } from '@creator-ai-studio/shared';
 import { areMocksAllowed } from '../config/mocks.js';
 import { computeSlideDurationSeconds, probeMediaDurationSeconds } from './audio-probe.js';
+import { isRealSceneSlideFile, slideFilenameForIndex } from './slide-files.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -102,10 +103,6 @@ export interface ResolvedSlide {
   durationHint: number;
 }
 
-function slideFilenameForIndex(index: number): string {
-  return `slide-${String(index).padStart(3, '0')}.png`;
-}
-
 /** Resolve one slide per scene — prefers on-disk assets over authenticated API URLs. */
 export async function resolveSceneSlides(
   episodeDir: string,
@@ -119,7 +116,7 @@ export async function resolveSceneSlides(
     const scene = scenes[i]!;
     const indexedPath = path.join(assetsDir, slideFilenameForIndex(i));
 
-    if (existsSync(indexedPath)) {
+    if (isRealSceneSlideFile(indexedPath)) {
       slides.push({ path: indexedPath, durationHint: scene.duration ?? 0 });
       continue;
     }
@@ -127,7 +124,7 @@ export async function resolveSceneSlides(
     const urlName = scene.imageUrl?.match(/(slide-\d{3}\.png)/i)?.[1];
     if (urlName) {
       const fromUrl = path.join(assetsDir, urlName);
-      if (existsSync(fromUrl)) {
+      if (isRealSceneSlideFile(fromUrl)) {
         slides.push({ path: fromUrl, durationHint: scene.duration ?? 0 });
         continue;
       }
@@ -138,10 +135,17 @@ export async function resolveSceneSlides(
       url &&
       (url.startsWith('data:image') || url.startsWith('http://') || url.startsWith('https://'))
     ) {
-      if (await downloadImage(url, indexedPath)) {
+      if (await downloadImage(url, indexedPath) && isRealSceneSlideFile(indexedPath)) {
         slides.push({ path: indexedPath, durationHint: scene.duration ?? 0 });
         continue;
       }
+    }
+
+    if (!areMocksAllowed()) {
+      throw new Error(
+        `Falta imagen real para escena ${i + 1}/${scenes.length} (${slideFilenameForIndex(i)}). ` +
+          'Genera las imágenes de escena con Imagen/Gemini antes de renderizar.',
+      );
     }
 
     await createPlaceholderSlide(indexedPath);

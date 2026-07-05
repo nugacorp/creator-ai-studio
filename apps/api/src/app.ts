@@ -829,7 +829,17 @@ function registerRoutes(
       { sceneIds: body.sceneIds, force: body.force, skipLlmRefine: body.skipLlmRefine },
     );
     const updated = await storage.updateEpisode(id, { content: { scenes: result.scenes } });
-    return { scenes: result.scenes, generated: result.generated, episode: updated };
+    return {
+      scenes: result.scenes,
+      generated: result.generated,
+      sceneIndex: result.sceneIndex,
+      totalScenes: result.totalScenes,
+      message:
+        result.sceneIndex && result.totalScenes
+          ? `Imagen ${result.sceneIndex}/${result.totalScenes} procesada`
+          : undefined,
+      episode: updated,
+    };
   });
 
   app.get(route(prefix, '/episodes/:id/scene-images/:filename'), async (request, reply) => {

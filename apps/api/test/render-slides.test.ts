@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Scene } from '@creator-ai-studio/shared';
 import { resolveSceneSlides } from '../src/media/render.js';
+import { fakeSceneSlideBuffer } from './slide-fixtures.js';
 
 function scene(id: string, index: number, imageUrl = ''): Scene {
   return {
@@ -34,7 +35,7 @@ describe('resolveSceneSlides', () => {
     for (let i = 0; i < 6; i++) {
       await writeFile(
         path.join(episodeDir, '04-assets', `slide-${String(i).padStart(3, '0')}.png`),
-        Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+        fakeSceneSlideBuffer(),
       );
     }
     const scenes = Array.from({ length: 6 }, (_, i) =>
@@ -45,8 +46,8 @@ describe('resolveSceneSlides', () => {
   });
 
   it('does not skip scenes missing imageUrl when file exists at index', async () => {
-    await writeFile(path.join(episodeDir, '04-assets', 'slide-004.png'), Buffer.from([1, 2, 3]));
-    await writeFile(path.join(episodeDir, '04-assets', 'slide-005.png'), Buffer.from([1, 2, 3]));
+    await writeFile(path.join(episodeDir, '04-assets', 'slide-004.png'), fakeSceneSlideBuffer());
+    await writeFile(path.join(episodeDir, '04-assets', 'slide-005.png'), fakeSceneSlideBuffer());
     const scenes = [
       ...Array.from({ length: 4 }, (_, i) => scene(`s${i}`, i, `/api/episodes/x/scene-images/slide-00${i}.png`)),
       scene('s4', 4, ''),
@@ -56,5 +57,18 @@ describe('resolveSceneSlides', () => {
     expect(slides).toHaveLength(6);
     expect(slides[4]?.path).toContain('slide-004.png');
     expect(slides[5]?.path).toContain('slide-005.png');
+  });
+
+  it('rejects placeholder-sized slides in production render', async () => {
+    const prev = process.env.ALLOW_MOCKS;
+    process.env.ALLOW_MOCKS = 'false';
+    try {
+      await writeFile(path.join(episodeDir, '04-assets', 'slide-000.png'), Buffer.from([1, 2, 3, 4]));
+      const scenes = [scene('s0', 0, '')];
+      await expect(resolveSceneSlides(episodeDir, scenes)).rejects.toThrow(/Falta imagen real/);
+    } finally {
+      if (prev === undefined) delete process.env.ALLOW_MOCKS;
+      else process.env.ALLOW_MOCKS = prev;
+    }
   });
 });

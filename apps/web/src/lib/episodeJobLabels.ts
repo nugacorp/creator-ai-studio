@@ -71,6 +71,11 @@ export function jobStatusLabel(job: {
     (job.result?.stepKey as string | undefined) ??
     (job.result?.step as string | undefined);
   if (stepKey && PIPELINE_STEP_LABELS[stepKey]) {
+    const sceneIndex = job.result?.sceneIndex as number | undefined;
+    const totalScenes = job.result?.totalScenes as number | undefined;
+    if (stepKey === 'scene_images' && sceneIndex && totalScenes) {
+      return `Generando imagen ${sceneIndex}/${totalScenes}…`;
+    }
     return `${PIPELINE_STEP_LABELS[stepKey]} — ${job.progress}%`;
   }
   if (job.type === 'agent') {

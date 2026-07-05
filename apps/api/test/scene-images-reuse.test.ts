@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import type { Scene } from '@creator-ai-studio/shared';
 import { generateSceneImagesForEpisode } from '../src/media/scene-images.js';
+import { fakeSceneSlideBuffer } from './slide-fixtures.js';
 
 function scene(id: string, text: string): Scene {
   return {
@@ -32,7 +33,7 @@ describe('generateSceneImagesForEpisode reuse', () => {
 
   it('reuses slide-XXX.png on disk without regenerating when force is false', async () => {
     const slidePath = path.join(tmpDir, '04-assets', 'slide-000.png');
-    await writeFile(slidePath, Buffer.from([137, 80, 78, 71]));
+    await writeFile(slidePath, fakeSceneSlideBuffer());
 
     const scenes = [scene('s1', 'Escena existente')];
     const result = await generateSceneImagesForEpisode('ep-reuse', tmpDir, scenes, 'Título', {
@@ -45,7 +46,7 @@ describe('generateSceneImagesForEpisode reuse', () => {
 
   it('preserves existing imageUrl when slide file exists', async () => {
     const slidePath = path.join(tmpDir, '04-assets', 'slide-000.png');
-    await writeFile(slidePath, Buffer.from([137, 80, 78, 71]));
+    await writeFile(slidePath, fakeSceneSlideBuffer());
 
     const existingUrl = '/api/episodes/ep-reuse/scene-images/slide-000.png';
     const scenes = [{ ...scene('s1', 'Escena'), imageUrl: existingUrl }];

@@ -3,15 +3,21 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Scene } from '@creator-ai-studio/shared';
 import { withProvider } from '../ai/router.js';
+import { ProviderError } from '../ai/provider-error.js';
+import { areMocksAllowed } from '../config/mocks.js';
 import { downloadImage } from './render.js';
 import { resolveSceneImagePrompt } from './scene-image-refine.js';
+import { isRealSceneSlideFile, slideFilenameForIndex, MIN_REAL_SCENE_SLIDE_BYTES } from './slide-files.js';
 
 export interface GenerateSceneImagesResult {
   scenes: Scene[];
   generated: number;
+  /** 1-based index of the last processed scene when generating a subset. */
+  sceneIndex?: number;
+  totalScenes?: number;
 }
 
-/** Generate AI images for scenes missing imageUrl; saves PNGs under 04-assets/. */
+/** Generate AI images for scenes missing a real on-disk slide; saves PNGs under 04-assets/. */
 export async function generateSceneImagesForEpisode(
   episodeId: string,
   episodeDir: string,
@@ -25,6 +31,7 @@ export async function generateSceneImagesForEpisode(
   const targetIds = options?.sceneIds?.length ? new Set(options.sceneIds) : null;
   const updated: Scene[] = [];
   let generated = 0;
+  let lastProcessedIndex: number | undefined;
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i]!;
@@ -32,9 +39,12 @@ export async function generateSceneImagesForEpisode(
       updated.push(scene);
       continue;
     }
-    const dest = path.join(assetsDir, `slide-${String(i).padStart(3, '0')}.png`);
+
+    lastProcessedIndex = i + 1;
+    const dest = path.join(assetsDir, slideFilenameForIndex(i));
     const slideFilename = path.basename(dest);
-    if (existsSync(dest) && !options?.force) {
+
+    if (existsSync(dest) && isRealSceneSlideFile(dest) && !options?.force) {
       updated.push({
         ...scene,
         imageUrl:
@@ -48,20 +58,41 @@ export async function generateSceneImagesForEpisode(
       force: options?.force,
       skipLlmRefine: options?.skipLlmRefine,
     });
-    const imageUrl = await withProvider('image', p =>
-      p.generateImage(prompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
-    );
+
+    let imageUrl: string;
+    try {
+      imageUrl = await withProvider('image', p =>
+        p.generateImage(prompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Error desconocido';
+      throw new ProviderError({
+        provider: 'gemini',
+        operation: 'image',
+        statusCode: 502,
+        providerMessage: `No se pudo generar imagen para escena ${i + 1}/${scenes.length}: ${detail}. Revisa GEMINI_API_KEY en Coolify y vuelve a desplegar.`,
+        retryable: true,
+      });
+    }
 
     const saved = await downloadImage(imageUrl, dest);
-    if (!saved) {
-      updated.push({ ...scene, imageUrl, imagePrompt: prompt });
-      generated++;
-      continue;
+    if (!saved || !isRealSceneSlideFile(dest)) {
+      if (areMocksAllowed()) {
+        await writeFile(dest, Buffer.alloc(MIN_REAL_SCENE_SLIDE_BYTES, 0x41));
+      } else {
+        throw new ProviderError({
+          provider: 'gemini',
+          operation: 'image',
+          statusCode: 502,
+          providerMessage: `La imagen de la escena ${i + 1}/${scenes.length} no se guardó correctamente. Comprueba GEMINI_API_KEY / Imagen 4 y reintenta.`,
+          retryable: true,
+        });
+      }
     }
 
     updated.push({
       ...scene,
-      imageUrl: `/api/episodes/${episodeId}/scene-images/${path.basename(dest)}`,
+      imageUrl: `/api/episodes/${episodeId}/scene-images/${slideFilename}`,
       imagePrompt: prompt,
     });
     generated++;
@@ -73,5 +104,10 @@ export async function generateSceneImagesForEpisode(
     'utf8',
   );
 
-  return { scenes: updated, generated };
+  return {
+    scenes: updated,
+    generated,
+    sceneIndex: lastProcessedIndex,
+    totalScenes: scenes.length,
+  };
 }

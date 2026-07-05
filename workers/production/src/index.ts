@@ -207,15 +207,34 @@ async function runStoryboardJob(job: ProductionJob): Promise<void> {
 }
 
 async function runSceneImagesJob(job: ProductionJob): Promise<void> {
-  const res = await apiFetch(`/episodes/${job.episodeId}/scenes/generate-images`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-  await assertOk(res, 'scene images');
-  const data = (await res.json()) as { skipped?: boolean; generated?: number };
-  if (!data.skipped && (data.generated ?? 0) >= 0) {
-    await completeStage(job.episodeId, 'assets');
+  const episodeRes = await apiFetch(`/episodes/${job.episodeId}`);
+  await assertOk(episodeRes, 'load episode for scene images');
+  const episode = (await episodeRes.json()) as { content?: { scenes?: Array<{ id: string }> } };
+  const scenes = episode.content?.scenes ?? [];
+  if (scenes.length === 0) {
+    throw new Error('No hay escenas — genera el storyboard antes de las imágenes.');
   }
+
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i]!;
+    await patchJob(job.id, {
+      progress: Math.min(85, Math.round(((i + 0.5) / scenes.length) * 40)),
+      result: {
+        step: `Generando imagen ${i + 1}/${scenes.length}`,
+        stepKey: 'scene_images',
+        sceneIndex: i + 1,
+        totalScenes: scenes.length,
+      },
+    });
+
+    const res = await apiFetch(`/episodes/${job.episodeId}/scenes/generate-images`, {
+      method: 'POST',
+      body: JSON.stringify({ sceneIds: [scene.id], skipLlmRefine: true }),
+    });
+    await assertOk(res, `scene image ${i + 1}/${scenes.length}`);
+  }
+
+  await completeStage(job.episodeId, 'assets');
 }
 
 async function runSeoJob(job: ProductionJob): Promise<void> {
