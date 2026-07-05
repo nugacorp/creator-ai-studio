@@ -17,6 +17,7 @@ KEYS=(
   SUPABASE_SERVICE_ROLE_KEY
   CAS_API_KEY
   CAS_SECRETS_KEY
+  GEMINI_API_KEY
 )
 
 python3 <<'PY'
@@ -33,6 +34,7 @@ keys = [
     "SUPABASE_SERVICE_ROLE_KEY",
     "CAS_API_KEY",
     "CAS_SECRETS_KEY",
+    "GEMINI_API_KEY",
 ]
 
 existing: dict[str, str] = {}
@@ -69,3 +71,5 @@ for key, value in existing.items():
 env_file.write_text("\n".join(lines) + "\n")
 print(f"synced {updated} key(s) into {env_file}")
 PY
+
+chmod 600 "$ENV_FILE"

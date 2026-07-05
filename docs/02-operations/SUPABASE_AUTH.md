@@ -86,6 +86,17 @@ Endpoint público de diagnóstico: `GET /api/auth/status` → `{ authRequired, a
 
 Si la API tiene `SUPABASE_JWT_SECRET` pero la web se construyó **sin** `VITE_*`, verás la pantalla **«Configuración requerida — Inicio de sesión no disponible»** y `401` en rutas protegidas.
 
+### Checklist one-time (GitHub Actions)
+
+Antes del primer deploy con login, confirma en **Settings → Secrets and variables → Actions**:
+
+- [ ] `VPS_HOST`, `VPS_SSH_KEY` (y opcional `VPS_USER`)
+- [ ] `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET` (obligatorios si la API exige JWT)
+- [ ] `CAS_SECRETS_KEY`, `CAS_API_KEY` (recomendados en staging)
+- [ ] `GEMINI_API_KEY` (opcional; la API la recibe en runtime vía sync + compose)
+
+Sin `SUPABASE_ANON_KEY` / `SUPABASE_URL`, el job **Verify Supabase secrets** falla cuando `SUPABASE_JWT_SECRET` está definido.
+
 ### Opción A — GitHub Actions (recomendado)
 
 En el repo **Settings → Secrets and variables → Actions**, define:
@@ -98,6 +109,7 @@ En el repo **Settings → Secrets and variables → Actions**, define:
 | `SUPABASE_SERVICE_ROLE_KEY` | (opcional) service role |
 | `CAS_API_KEY` | (opcional) clave para el worker |
 | `CAS_SECRETS_KEY` | (opcional) cifrado de claves en UI |
+| `GEMINI_API_KEY` | (opcional) proveedor Gemini en API |
 
 Cada push a `staging` ejecuta `scripts/vps-sync-supabase-env.sh` (escribe `/root/creator-ai-studio/.env.supabase.local`) y `scripts/vps-redeploy.sh` (build con `--build-arg VITE_SUPABASE_*`).
 

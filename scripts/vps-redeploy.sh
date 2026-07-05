@@ -214,6 +214,7 @@ service_role = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 jwt_secret = os.environ.get("SUPABASE_JWT_SECRET", "")
 cas_api_key = os.environ.get("CAS_API_KEY", "")
 cas_secrets_key = os.environ.get("CAS_SECRETS_KEY", "")
+gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
 
 p = Path(compose_path)
 text = p.read_text()
@@ -277,6 +278,8 @@ if service_role:
 if cas_secrets_key:
     text = inject_env(text, "api", "CAS_SECRETS_KEY", cas_secrets_key, "LOCAL_STORAGE_PATH")
 text = inject_env(text, "api", "REDIS_URL", "redis://redis:6379", "CAS_SECRETS_KEY")
+if gemini_api_key:
+    text = inject_env(text, "api", "GEMINI_API_KEY", gemini_api_key, "LOCAL_STORAGE_PATH")
 if cas_api_key:
     text = inject_env(text, "api", "CAS_API_KEY", cas_api_key, "CAS_SECRETS_KEY")
     # Worker must share the API key; inject once, never duplicate (CAS-CURSOR-WO-0036).
@@ -285,7 +288,7 @@ if cas_api_key:
 # Idempotency guard: refuse to write a compose that declares a managed key twice
 # in the same service (this is the failure the work order fixes). No secret
 # values are printed -- only the offending service/key name.
-managed = ("CAS_API_KEY", "CAS_PUBLIC_URL", "CAS_SECRETS_KEY", "SUPABASE_URL", "SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "REDIS_URL")
+managed = ("CAS_API_KEY", "CAS_PUBLIC_URL", "CAS_SECRETS_KEY", "GEMINI_API_KEY", "SUPABASE_URL", "SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "REDIS_URL")
 for service in ("api", "worker"):
     blk = find_service_block(text, service)
     if blk is None:

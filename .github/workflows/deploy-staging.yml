@@ -10,6 +10,7 @@
 #   SUPABASE_JWT_SECRET       — Dashboard → API → JWT Secret
 #   SUPABASE_SERVICE_ROLE_KEY — optional Postgres sync
 #   CAS_API_KEY               — worker + machine-to-machine Bearer
+#   GEMINI_API_KEY              — API Gemini provider (optional)
 #
 # The VPS must have Docker, the Coolify app at /data/coolify/applications/...,
 # and /root/creator-ai-studio as sync target.
@@ -82,6 +83,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CAS_API_KEY: ${{ secrets.CAS_API_KEY }}
           CAS_SECRETS_KEY: ${{ secrets.CAS_SECRETS_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" bash -s <<EOF
@@ -91,11 +93,13 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY@Q} \
           CAS_API_KEY=${CAS_API_KEY@Q} \
           CAS_SECRETS_KEY=${CAS_SECRETS_KEY@Q} \
+          GEMINI_API_KEY=${GEMINI_API_KEY@Q} \
           bash /root/creator-ai-studio/scripts/vps-sync-supabase-env.sh
           EOF
 
       - name: Redeploy staging stack
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           VPS_USER: ${{ secrets.VPS_USER || 'root' }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           DEPLOY_TAG: e2e-pipeline-${{ github.sha }}
@@ -103,4 +107,4 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" \
-            "COMPOSE_FILE=deploy/docker-compose.staging.yml bash /root/creator-ai-studio/scripts/vps-redeploy.sh ${DEPLOY_TAG}"
+            "set -a; [ -f /root/creator-ai-studio/.env.supabase.local ] && . /root/creator-ai-studio/.env.supabase.local; set +a; COMPOSE_FILE=deploy/docker-compose.staging.yml bash /root/creator-ai-studio/scripts/vps-redeploy.sh ${DEPLOY_TAG}"
