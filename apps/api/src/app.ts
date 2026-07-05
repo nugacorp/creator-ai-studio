@@ -267,6 +267,15 @@ function registerRoutes(
       return { error: 'episode not found' };
     }
 
+    if (body.content) {
+      const { stagesToInvalidate } = await import('./media/production-locks.js');
+      const mergedContent = { ...existing.content, ...body.content };
+      const toReset = stagesToInvalidate(existing.content, mergedContent);
+      for (const stage of toReset) {
+        await storage.setStageStatus(id, stage, 'pending');
+      }
+    }
+
     const detail = await storage.updateEpisode(id, body);
     if (detail === null) {
       reply.code(404);
@@ -523,7 +532,7 @@ function registerRoutes(
   });
 
   app.post(route(prefix, '/integrations/elevenlabs/tts'), async (request, reply) => {
-    const body = (request.body ?? {}) as { text?: string; voiceId?: string; episodeId?: string };
+    const body = (request.body ?? {}) as { text?: string; voiceId?: string; episodeId?: string; force?: boolean };
     const { synthesizeEpisodeSpeech } = await import('./integrations/tts.js');
     let saveDir: string | undefined;
     if (body.episodeId) {
@@ -531,6 +540,22 @@ function registerRoutes(
       if (episode) {
         const pathMod = await import('node:path');
         saveDir = pathMod.join(resolveStoragePath(), episode.workspacePath, '05-audio');
+        const { isStageCompleted, hasAudioFile } = await import('./media/production-locks.js');
+        const episodeDir = await storage.getEpisodeDirectory(body.episodeId);
+        if (
+          !body.force &&
+          episodeDir &&
+          isStageCompleted(episode, 'audio') &&
+          hasAudioFile(episodeDir) &&
+          episode.content.audioUrl
+        ) {
+          return {
+            audioUrl: episode.content.audioUrl,
+            skipped: true,
+            provider: 'elevenlabs',
+            isDemo: false,
+          };
+        }
       }
     }
     try {
@@ -575,6 +600,7 @@ function registerRoutes(
 
   app.post(route(prefix, '/episodes/:id/render'), async (request, reply) => {
     const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { force?: boolean };
     const episode = await storage.getEpisode(id);
     if (!episode) {
       reply.code(404);
@@ -584,6 +610,10 @@ function registerRoutes(
     if (!dir) {
       reply.code(400);
       return { error: 'episodio archivado — restáuralo desde Drive para editar' };
+    }
+    const { isStageCompleted, hasVideoFile } = await import('./media/production-locks.js');
+    if (!body.force && isStageCompleted(episode, 'video') && hasVideoFile(dir) && episode.content.videoUrl) {
+      return { ok: true, skipped: true, videoUrl: episode.content.videoUrl };
     }
     const { renderEpisodeVideo } = await import('./media/render.js');
     const sceneUrls = episode.content.scenes.map(s => s.imageUrl).filter(Boolean);
@@ -601,25 +631,37 @@ function registerRoutes(
 
   app.post(route(prefix, '/episodes/:id/storyboard/from-script'), async (request, reply) => {
     const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { force?: boolean };
     const episode = await storage.getEpisode(id);
     if (!episode) {
       reply.code(404);
       return { error: 'episode not found' };
+    }
+    const { isStageCompleted } = await import('./media/production-locks.js');
+    if (
+      !body.force &&
+      isStageCompleted(episode, 'storyboard') &&
+      episode.content.scenes.length > 0
+    ) {
+      return { scenes: episode.content.scenes, episode, skipped: true };
     }
     const script = episode.content.script?.trim();
     if (!script) {
       reply.code(400);
       return { error: 'no_script', message: 'Escribe o genera un guion en la pestaña Guion primero.' };
     }
+    const dir = await storage.getEpisodeDirectory(id);
     const { parseScenesFromScript } = await import('./media/script-to-scenes.js');
-    const scenes = parseScenesFromScript(script, episode.title);
-    if (scenes.length === 0) {
+    const { mergeScenesWithExisting } = await import('./media/merge-scenes.js');
+    const parsed = parseScenesFromScript(script, episode.title);
+    if (parsed.length === 0) {
       reply.code(400);
       return {
         error: 'no_scenes_parsed',
         message: 'No se detectaron bloques de escena en el guion.',
       };
     }
+    const scenes = mergeScenesWithExisting(parsed, episode.content.scenes, dir ?? undefined);
     const updated = await storage.updateEpisode(id, { content: { scenes } });
     return { scenes, episode: updated };
   });
@@ -638,6 +680,19 @@ function registerRoutes(
       return { error: 'episodio archivado — restáuralo para generar imágenes' };
     }
     const { generateSceneImagesForEpisode } = await import('./media/scene-images.js');
+    const { isStageCompleted, allScenesHaveStoredImages } = await import('./media/production-locks.js');
+    if (
+      !body.force &&
+      isStageCompleted(episode, 'assets') &&
+      allScenesHaveStoredImages(dir, episode.content.scenes)
+    ) {
+      return {
+        scenes: episode.content.scenes,
+        generated: 0,
+        skipped: true,
+        episode,
+      };
+    }
     const result = await generateSceneImagesForEpisode(
       id,
       dir,
@@ -753,6 +808,7 @@ function registerRoutes(
 
   app.post(route(prefix, '/episodes/:id/thumbnail'), async (request, reply) => {
     const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { force?: boolean };
     const episode = await storage.getEpisode(id);
     if (!episode) {
       reply.code(404);
@@ -762,6 +818,15 @@ function registerRoutes(
     if (!dir) {
       reply.code(400);
       return { error: 'episodio no en disco local' };
+    }
+    const { isStageCompleted, hasThumbnailFile } = await import('./media/production-locks.js');
+    if (
+      !body.force &&
+      isStageCompleted(episode, 'thumbnail') &&
+      hasThumbnailFile(dir) &&
+      episode.content.thumbnailUrl
+    ) {
+      return { imageUrl: episode.content.thumbnailUrl, saved: true, skipped: true };
     }
     const { withProvider } = await import('./ai/router.js');
     const imageUrl = await withProvider('image', p =>

@@ -34,6 +34,8 @@ interface PipelinePanelProps {
 
 const STEP_LABELS: Record<string, string> = {
   script: 'Guion IA',
+  storyboard: 'Storyboard / escenas',
+  scene_images: 'Imágenes de escenas',
   seo: 'Metadatos SEO',
   tts: 'Narración',
   thumbnail: 'Miniatura',
@@ -286,6 +288,9 @@ export default function PipelinePanel({
       )}
 
       <div className="flex flex-wrap gap-2">
+        <p className="w-full text-[10px] text-slate-500 mb-1">
+          Las secciones aprobadas en el workspace no se regeneran. Edita el contenido para desbloquearlas.
+        </p>
         <button
           type="button"
           disabled={running}

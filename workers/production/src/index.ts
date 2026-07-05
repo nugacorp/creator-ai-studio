@@ -124,10 +124,49 @@ async function assertOk(res: Response, step: string): Promise<void> {
   throw new Error(message);
 }
 
+interface EpisodeSnapshot {
+  stages?: Array<{ stage: string; status: string }>;
+  content?: {
+    script?: string;
+    scenes?: unknown[];
+    audioUrl?: string;
+    videoUrl?: string;
+    thumbnailUrl?: string;
+    seoDescription?: string;
+  };
+}
+
+async function loadEpisode(episodeId: string): Promise<EpisodeSnapshot> {
+  const res = await apiFetch(`/episodes/${episodeId}`);
+  await assertOk(res, 'load episode');
+  return (await res.json()) as EpisodeSnapshot;
+}
+
+function isStageCompleted(episode: EpisodeSnapshot, stage: string): boolean {
+  return episode.stages?.find(s => s.stage === stage)?.status === 'completed';
+}
+
+async function completeStage(episodeId: string, stage: string): Promise<void> {
+  const res = await apiFetch(`/episodes/${episodeId}/stages/${stage}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'completed' }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.warn(`Could not mark stage ${stage} completed (${res.status}): ${text.slice(0, 120)}`);
+  }
+}
+
 async function runScriptJob(job: ProductionJob): Promise<void> {
+  const episode = await loadEpisode(job.episodeId);
+  if (isStageCompleted(episode, 'script') && (episode.content?.script?.trim().length ?? 0) > 50) {
+    console.log(`[pipeline] ${job.episodeId}: skip script (aprobado)`);
+    return;
+  }
+
   const episodeRes = await apiFetch(`/episodes/${job.episodeId}`);
   await assertOk(episodeRes, 'load episode for script');
-  const episode = (await episodeRes.json()) as {
+  const episodeFull = (await episodeRes.json()) as {
     title?: string;
     content?: { script?: string; outline?: string[] };
   };
@@ -135,7 +174,7 @@ async function runScriptJob(job: ProductionJob): Promise<void> {
   const res = await apiFetch('/ai/generate-script', {
     method: 'POST',
     body: JSON.stringify({
-      prompt: episode.title ?? 'Nuevo video',
+      prompt: episodeFull.title ?? 'Nuevo video',
       options: { theme: 'Reflexiones', style: 'Narrativo' },
     }),
   });
@@ -146,18 +185,24 @@ async function runScriptJob(job: ProductionJob): Promise<void> {
     body: JSON.stringify({
       content: {
         script: data.text ?? '',
-        outline: episode.content?.outline ?? [],
+        outline: episodeFull.content?.outline ?? [],
       },
     }),
   });
   await assertOk(patchRes, 'save script');
+  await completeStage(job.episodeId, 'script');
 }
 
 async function runStoryboardJob(job: ProductionJob): Promise<void> {
   const res = await apiFetch(`/episodes/${job.episodeId}/storyboard/from-script`, {
     method: 'POST',
+    body: JSON.stringify({}),
   });
   await assertOk(res, 'storyboard from script');
+  const data = (await res.json()) as { skipped?: boolean };
+  if (!data.skipped) {
+    await completeStage(job.episodeId, 'storyboard');
+  }
 }
 
 async function runSceneImagesJob(job: ProductionJob): Promise<void> {
@@ -166,9 +211,19 @@ async function runSceneImagesJob(job: ProductionJob): Promise<void> {
     body: JSON.stringify({}),
   });
   await assertOk(res, 'scene images');
+  const data = (await res.json()) as { skipped?: boolean; generated?: number };
+  if (!data.skipped && (data.generated ?? 0) >= 0) {
+    await completeStage(job.episodeId, 'assets');
+  }
 }
 
 async function runSeoJob(job: ProductionJob): Promise<void> {
+  const episode = await loadEpisode(job.episodeId);
+  if (isStageCompleted(episode, 'seo') && (episode.content?.seoDescription?.trim().length ?? 0) > 20) {
+    console.log(`[pipeline] ${job.episodeId}: skip SEO (aprobado)`);
+    return;
+  }
+
   const episodeRes = await apiFetch(`/episodes/${job.episodeId}`);
   await assertOk(episodeRes, 'load episode for SEO');
   const episode = (await episodeRes.json()) as {
@@ -196,6 +251,7 @@ async function runSeoJob(job: ProductionJob): Promise<void> {
     }),
   });
   await assertOk(patchRes, 'save SEO');
+  await completeStage(job.episodeId, 'seo');
 }
 
 async function runTtsJob(job: ProductionJob): Promise<void> {
@@ -210,16 +266,34 @@ async function runTtsJob(job: ProductionJob): Promise<void> {
     }),
   });
   await assertOk(res, 'TTS');
+  const data = (await res.json()) as { skipped?: boolean };
+  if (!data.skipped) {
+    await completeStage(job.episodeId, 'audio');
+  }
 }
 
 async function runThumbnailJob(job: ProductionJob): Promise<void> {
-  const res = await apiFetch(`/episodes/${job.episodeId}/thumbnail`, { method: 'POST' });
+  const res = await apiFetch(`/episodes/${job.episodeId}/thumbnail`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
   await assertOk(res, 'thumbnail');
+  const data = (await res.json()) as { skipped?: boolean };
+  if (!data.skipped) {
+    await completeStage(job.episodeId, 'thumbnail');
+  }
 }
 
 async function runRenderJob(job: ProductionJob): Promise<void> {
-  const res = await apiFetch(`/episodes/${job.episodeId}/render`, { method: 'POST' });
+  const res = await apiFetch(`/episodes/${job.episodeId}/render`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
   await assertOk(res, 'render');
+  const data = (await res.json()) as { skipped?: boolean };
+  if (!data.skipped) {
+    await completeStage(job.episodeId, 'video');
+  }
 }
 
 async function runShortsJob(job: ProductionJob): Promise<void> {

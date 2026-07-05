@@ -37,8 +37,10 @@ import {
   fetchElevenLabsVoices,
   generateSceneImages,
   generateStoryboardFromScript,
+  updateStageStatus,
   type ElevenLabsVoice,
 } from '../api';
+import type { EpisodeStage } from '@creator-ai-studio/shared';
 
 interface WorkspaceViewProps {
   project: VideoProject;
@@ -112,6 +114,39 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
   const timelineIntervalRef = useRef<any>(null);
 
   // Sync state changes back to parent
+  const STAGE_BY_TAB: Partial<
+    Record<typeof activeTab, EpisodeStage | EpisodeStage[]>
+  > = {
+    guion: 'script',
+    escenas: ['storyboard', 'assets'],
+    narracion: 'audio',
+    video: 'video',
+    thumbnail: 'thumbnail',
+    seo: 'seo',
+  };
+
+  const handleApproveSection = async () => {
+    const stages = STAGE_BY_TAB[activeTab];
+    if (!stages) {
+      triggerFeedback('error', 'No hay etapa de producción para aprobar en esta pestaña.');
+      return;
+    }
+    handleSaveChanges();
+    try {
+      const list = Array.isArray(stages) ? stages : [stages];
+      for (const stage of list) {
+        await updateStageStatus(project.id, stage, 'completed');
+      }
+      triggerFeedback(
+        'success',
+        `✓ Sección aprobada — el pipeline no regenerará ${list.join(' / ')} hasta que edites el contenido`,
+      );
+    } catch (err) {
+      console.error(err);
+      triggerFeedback('error', 'No se pudo aprobar la sección');
+    }
+  };
+
   const handleSaveChanges = () => {
     onUpdateProject({
       ...project,
@@ -177,6 +212,12 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
         if (data.generated > 0) generated += data.generated;
       }
       triggerFeedback('success', `✓ ${generated} imagen(es) generada(s)`);
+      try {
+        await updateStageStatus(project.id, 'storyboard', 'completed');
+        await updateStageStatus(project.id, 'assets', 'completed');
+      } catch {
+        // non-blocking
+      }
     } catch (err) {
       console.error(err);
       triggerFeedback(
@@ -378,6 +419,14 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void handleApproveSection()}
+            className="px-4 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-800/40 text-xs font-bold transition-all cursor-pointer"
+            title="Bloquea esta sección: el pipeline no la regenerará hasta que edites el contenido"
+          >
+            Aprobar sección
+          </button>
           <button
             onClick={handleSaveChanges}
             className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-950/20 active:scale-98 cursor-pointer"
