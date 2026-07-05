@@ -3,6 +3,8 @@ export interface Scene {
   text: string;
   imageUrl: string;
   voiceoverPrompt: string;
+  visualNote?: string;
+  imagePrompt?: string;
   musicTrack: string;
   duration: number; // in seconds
   transition: string;

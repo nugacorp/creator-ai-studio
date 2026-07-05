@@ -166,7 +166,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
     setIsProcessing(true);
     setProcessingMessage('Generando imágenes IA para todas las escenas…');
     try {
-      const data = await generateSceneImages(project.id);
+      const data = await generateSceneImages(project.id, undefined, { force: true });
       persistScenes(data.scenes);
       triggerFeedback('success', `✓ ${data.generated} imagen(es) generada(s)`);
     } catch (err) {

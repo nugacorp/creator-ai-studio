@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Scene } from '@creator-ai-studio/shared';
 import { withProvider } from '../ai/router.js';
 import { downloadImage } from './render.js';
-import { buildSceneImagePrompt } from './scene-image-prompt.js';
+import { resolveSceneImagePrompt } from './scene-image-refine.js';
 
 export interface GenerateSceneImagesResult {
   scenes: Scene[];
@@ -39,14 +39,16 @@ export async function generateSceneImagesForEpisode(
       continue;
     }
 
-    const prompt = buildSceneImagePrompt(scene, i, episodeTitle);
+    const prompt = await resolveSceneImagePrompt(scene, i, episodeTitle, {
+      force: options?.force,
+    });
     const imageUrl = await withProvider('image', p =>
       p.generateImage(prompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
     );
 
     const saved = await downloadImage(imageUrl, dest);
     if (!saved) {
-      updated.push({ ...scene, imageUrl });
+      updated.push({ ...scene, imageUrl, imagePrompt: prompt });
       generated++;
       continue;
     }
@@ -54,6 +56,7 @@ export async function generateSceneImagesForEpisode(
     updated.push({
       ...scene,
       imageUrl: `/api/episodes/${episodeId}/scene-images/${path.basename(dest)}`,
+      imagePrompt: prompt,
     });
     generated++;
   }

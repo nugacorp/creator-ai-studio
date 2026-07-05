@@ -612,7 +612,7 @@ function registerRoutes(
       return { error: 'no_script', message: 'Escribe o genera un guion en la pestaña Guion primero.' };
     }
     const { parseScenesFromScript } = await import('./media/script-to-scenes.js');
-    const scenes = parseScenesFromScript(script);
+    const scenes = parseScenesFromScript(script, episode.title);
     if (scenes.length === 0) {
       reply.code(400);
       return {

@@ -1,4 +1,5 @@
 import type { Scene } from '@creator-ai-studio/shared';
+import { buildSceneImagePrompt } from './scene-image-prompt.js';
 
 const STAGE_MARKERS = /\*\*\[([^\]]+)\]\*\*/g;
 
@@ -20,11 +21,35 @@ function visualFromLabel(label: string): string {
     .trim();
 }
 
+function buildScene(
+  index: number,
+  visual: string,
+  narration: string,
+  label: string,
+  episodeHint?: string,
+): Scene {
+  const visualNote = visual.trim();
+  const voiceover = narration.trim();
+  const sceneInput = { text: visualNote, voiceoverPrompt: voiceover, visualNote };
+
+  return {
+    id: `scene-${index + 1}`,
+    text: visualNote || voiceover.slice(0, 120),
+    imageUrl: '',
+    voiceoverPrompt: voiceover.slice(0, 240),
+    visualNote: visualNote || undefined,
+    imagePrompt: buildSceneImagePrompt(sceneInput, index, episodeHint),
+    musicTrack: /música|musica/i.test(label) ? 'ambient-soft' : '',
+    duration: Math.max(6, Math.min(20, Math.ceil((voiceover.length || 80) / 14))),
+    transition: 'Fade',
+  };
+}
+
 /**
  * Parse screenplay-style scripts into storyboard scenes.
  * Handles `**[ESCENA 1 - ...]**` blocks and falls back to paragraph splits.
  */
-export function parseScenesFromScript(script: string): Scene[] {
+export function parseScenesFromScript(script: string, episodeTitle?: string): Scene[] {
   const trimmed = script.trim();
   if (!trimmed) return [];
 
@@ -41,15 +66,7 @@ export function parseScenesFromScript(script: string): Scene[] {
       const visual = visualFromLabel(label);
       if (!narration && !visual) continue;
 
-      scenes.push({
-        id: `scene-${i + 1}`,
-        text: visual ? `${visual}${narration ? ` — ${narration.slice(0, 180)}` : ''}` : narration.slice(0, 280),
-        imageUrl: '',
-        voiceoverPrompt: narration.slice(0, 240),
-        musicTrack: /música|musica/i.test(label) ? 'ambient-soft' : '',
-        duration: Math.max(6, Math.min(20, Math.ceil((narration.length || 80) / 14))),
-        transition: 'Fade',
-      });
+      scenes.push(buildScene(i, visual, narration, label, episodeTitle));
     }
     if (scenes.length > 0) return scenes;
   }
@@ -60,13 +77,8 @@ export function parseScenesFromScript(script: string): Scene[] {
     .filter(p => p.length > 20 && !/^\*\*Título:/i.test(p));
 
   const chunks = paragraphs.length > 0 ? paragraphs : [trimmed.slice(0, 500)];
-  return chunks.slice(0, 12).map((text, i) => ({
-    id: `scene-${i + 1}`,
-    text: extractNarration(text).slice(0, 280) || text.slice(0, 280),
-    imageUrl: '',
-    voiceoverPrompt: extractNarration(text).slice(0, 240),
-    musicTrack: '',
-    duration: 10,
-    transition: 'Fade',
-  }));
+  return chunks.slice(0, 12).map((text, i) => {
+    const narration = extractNarration(text);
+    return buildScene(i, '', narration || text.slice(0, 120), '', episodeTitle);
+  });
 }

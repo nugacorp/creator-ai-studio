@@ -13,7 +13,7 @@ import type {
 } from '@creator-ai-studio/shared';
 import { HUMAN_APPROVAL_AGENT_IDS, isJobType } from '@creator-ai-studio/shared';
 import { withProvider } from '../ai/router.js';
-import { buildSceneImagePrompt } from '../media/scene-image-prompt.js';
+import { resolveSceneImagePrompt } from '../media/scene-image-refine.js';
 import { parseScenesFromScript } from '../media/script-to-scenes.js';
 import { createJob } from '../jobs/store.js';
 import { enqueueJob } from '../jobs/queue.js';
@@ -559,16 +559,23 @@ async function runStoryboardDesigner(
   const rawScenes = (parsed?.scenes as Array<Record<string, unknown>> | undefined) ?? [];
   const scenes: Scene[] =
     rawScenes.length > 0
-      ? rawScenes.map((s, i) => ({
-          id: String(s.id ?? `scene-${i + 1}`),
-          text: String(s.text ?? ''),
-          imageUrl: '',
-          voiceoverPrompt: String(s.voiceoverPrompt ?? s.text ?? ''),
-          musicTrack: 'ambient-soft',
-          duration: Number(s.duration ?? 8),
-          transition: String(s.transition ?? 'fade'),
-        }))
-      : fallbackScenesFromScript(script);
+      ? rawScenes.map((s, i) => {
+          const visualNote = String(s.visualNote ?? s.text ?? '');
+          const voiceover = String(s.voiceoverPrompt ?? '');
+          const imagePrompt = String(s.imagePrompt ?? '');
+          return {
+            id: String(s.id ?? `scene-${i + 1}`),
+            text: visualNote || voiceover.slice(0, 120),
+            imageUrl: '',
+            voiceoverPrompt: voiceover,
+            visualNote: visualNote || undefined,
+            imagePrompt: imagePrompt || undefined,
+            musicTrack: 'ambient-soft',
+            duration: Number(s.duration ?? 8),
+            transition: String(s.transition ?? 'fade'),
+          };
+        })
+      : fallbackScenesFromScript(script, title);
 
   await mkdir(path.join(dir, '03-storyboard'), { recursive: true });
   const storyboardMd = scenes.map((s, i) => `## Escena ${i + 1} (${s.duration}s)\n${s.text}\n`).join('\n');
@@ -587,8 +594,8 @@ async function runStoryboardDesigner(
   };
 }
 
-function fallbackScenesFromScript(script: string): Scene[] {
-  return parseScenesFromScript(script);
+function fallbackScenesFromScript(script: string, episodeTitle?: string): Scene[] {
+  return parseScenesFromScript(script, episodeTitle);
 }
 
 async function runSceneAssetDesigner(
@@ -624,14 +631,16 @@ async function runSceneAssetDesigner(
   const assets = (parsed?.assets as Array<{ sceneId?: string; imagePrompt?: string }> | undefined) ?? [];
 
   const updatedScenes: Scene[] = [];
-  for (const scene of scenes) {
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i]!;
     const asset = assets.find(a => a.sceneId === scene.id);
     const imagePrompt =
-      asset?.imagePrompt ?? buildSceneImagePrompt(scene, updatedScenes.length);
+      asset?.imagePrompt ??
+      (await resolveSceneImagePrompt(scene, i));
     const imageUrl = await withProvider('image', p =>
       p.generateImage(imagePrompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
     );
-    updatedScenes.push({ ...scene, imageUrl });
+    updatedScenes.push({ ...scene, imageUrl, imagePrompt });
     logs.push(`[Assets] Imagen generada para ${scene.id}`);
   }
 
