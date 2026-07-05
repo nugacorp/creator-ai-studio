@@ -97,7 +97,7 @@ export const AGENT_REGISTRY: AgentDefinition[] = [
     id: 'audio_engineer',
     name: 'Ingeniero de Audio',
     role: 'Audio Engineer Agent',
-    description: 'Valida narración generada y documenta requisitos de mezcla/mastering.',
+    description: 'Genera música de fondo con Lyria, valida narración y documenta mezcla/mastering.',
     episodeStage: 'audio',
     expertise: ['audio', 'niveles', 'limpieza', 'mezcla'],
     allowedJobTypes: ['agent', 'tts'],

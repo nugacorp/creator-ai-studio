@@ -9,6 +9,7 @@ import {
   Download,
   Film,
   Mic,
+  Music,
   RefreshCw,
   FolderOpen,
   Layers,
@@ -19,6 +20,8 @@ import {
   fetchEpisodeAssets,
   fetchEpisodeDetail,
   fetchEpisodes,
+  generateEpisodeMusic,
+  fetchEpisodeAssetObjectUrl,
 } from '../api';
 import type { WorkspaceTab } from '../lib/dashboardNavigation';
 import {
@@ -37,7 +40,7 @@ interface LibraryViewProps {
   onOpenWorkspace: (episodeId: string, initialTab?: WorkspaceTab) => void;
 }
 
-type LibraryTab = 'browse' | 'templates';
+type LibraryTab = 'browse' | 'templates' | 'music';
 
 const FILTER_OPTIONS: { id: LibraryFilter; label: string }[] = [
   { id: 'all', label: 'Todos' },
@@ -66,6 +69,62 @@ export default function LibraryView({ onAddNewScript, onOpenWorkspace }: Library
   const [emotion, setEmotion] = useState('Esperanza');
   const [customIdea, setCustomIdea] = useState('El Sermón del Monte en Mateo 5');
   const [generatedScript, setGeneratedScript] = useState<string | null>(null);
+
+  const [musicPrompt, setMusicPrompt] = useState(
+    'Orquestal dramática para historia bíblica épica, con coros latinos y flauta de viento antigua, tempo medio, instrumental sin voces',
+  );
+  const [musicModel, setMusicModel] = useState<'lyria-3-clip-preview' | 'lyria-3-pro-preview'>(
+    'lyria-3-clip-preview',
+  );
+  const [musicEpisodeId, setMusicEpisodeId] = useState('');
+  const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
+  const [musicLabel, setMusicLabel] = useState<string | null>(null);
+  const [musicError, setMusicError] = useState<string | null>(null);
+  const [musicSkipped, setMusicSkipped] = useState(false);
+
+  useEffect(() => {
+    if (!musicEpisodeId && entries.length > 0) {
+      setMusicEpisodeId(entries[0]!.episode.id);
+    }
+  }, [entries, musicEpisodeId]);
+
+  useEffect(() => {
+    return () => {
+      if (generatedAudioUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(generatedAudioUrl);
+      }
+    };
+  }, [generatedAudioUrl]);
+
+  const handleGenerateMusic = async () => {
+    if (!musicPrompt.trim()) return;
+    setIsGenerating(true);
+    setProgressText('Sintetizando composición musical de Lyria...');
+    setMusicError(null);
+    setMusicSkipped(false);
+    try {
+      if (musicEpisodeId) {
+        const data = await generateEpisodeMusic(musicEpisodeId, {
+          prompt: musicPrompt,
+          model: musicModel,
+        });
+        setMusicLabel(data.label);
+        setMusicSkipped(Boolean(data.skipped));
+        const previewUrl = await fetchEpisodeAssetObjectUrl(musicEpisodeId, 'music');
+        if (previewUrl) {
+          if (generatedAudioUrl?.startsWith('blob:')) URL.revokeObjectURL(generatedAudioUrl);
+          setGeneratedAudioUrl(previewUrl);
+        }
+        await loadLibrary();
+      }
+    } catch (e) {
+      setMusicError(e instanceof Error ? e.message : 'Error al generar música');
+      console.error(e);
+    } finally {
+      setIsGenerating(false);
+      setProgressText('');
+    }
+  };
 
   const loadLibrary = useCallback(async () => {
     setLoading(true);
@@ -183,6 +242,7 @@ export default function LibraryView({ onAddNewScript, onOpenWorkspace }: Library
         {[
           { id: 'browse' as const, label: 'Explorar activos', icon: FolderOpen },
           { id: 'templates' as const, label: 'Plantillas de guion', icon: Sliders },
+          { id: 'music' as const, label: 'Generador Lyria', icon: Music },
         ].map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -288,6 +348,22 @@ export default function LibraryView({ onAddNewScript, onOpenWorkspace }: Library
               </div>
             )}
           </div>
+        ) : activeTab === 'music' ? (
+          <MusicGeneratorPanel
+            entries={entries}
+            musicPrompt={musicPrompt}
+            setMusicPrompt={setMusicPrompt}
+            musicModel={musicModel}
+            setMusicModel={setMusicModel}
+            musicEpisodeId={musicEpisodeId}
+            setMusicEpisodeId={setMusicEpisodeId}
+            generatedAudioUrl={generatedAudioUrl}
+            musicLabel={musicLabel}
+            musicError={musicError}
+            musicSkipped={musicSkipped}
+            onGenerate={() => void handleGenerateMusic()}
+            onOpenWorkspace={onOpenWorkspace}
+          />
         ) : (
           <ScriptTemplatePanel
             topic={topic}
@@ -334,7 +410,7 @@ function EpisodeAssetCard({
   const scenes = assets.sceneImages ?? [];
   const availableScenes = scenes.filter(s => s.available);
   const mediaFiles = assets.files.filter(
-    f => ['video', 'short', 'thumbnail', 'audio'].includes(f.key) && f.available,
+    f => ['video', 'short', 'thumbnail', 'audio', 'music'].includes(f.key) && f.available,
   );
   const hasScript = hasScriptAsset(entry);
   const preview = scriptPreview(entry);
@@ -465,13 +541,21 @@ function EpisodeAssetCard({
               <div className="flex flex-wrap gap-2">
                 {mediaFiles.map(file => {
                   const Icon =
-                    file.key === 'audio' ? Mic : file.key === 'thumbnail' ? ImageIcon : Play;
+                    file.key === 'audio'
+                      ? Mic
+                      : file.key === 'music'
+                        ? Music
+                        : file.key === 'thumbnail'
+                          ? ImageIcon
+                          : Play;
                   const workspaceTab: WorkspaceTab =
                     file.key === 'thumbnail'
                       ? 'thumbnail'
                       : file.key === 'audio'
                         ? 'narracion'
-                        : 'video';
+                        : file.key === 'music'
+                          ? 'video'
+                          : 'video';
                   return (
                     <div
                       key={file.key}
@@ -503,6 +587,132 @@ function EpisodeAssetCard({
 
           {assets.storageLocation === 'remote' && assets.message ? (
             <p className="text-[10px] text-amber-400/90">{assets.message}</p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MusicGeneratorPanel({
+  entries,
+  musicPrompt,
+  setMusicPrompt,
+  musicModel,
+  setMusicModel,
+  musicEpisodeId,
+  setMusicEpisodeId,
+  generatedAudioUrl,
+  musicLabel,
+  musicError,
+  musicSkipped,
+  onGenerate,
+  onOpenWorkspace,
+}: {
+  entries: EpisodeLibraryEntry[];
+  musicPrompt: string;
+  setMusicPrompt: (v: string) => void;
+  musicModel: 'lyria-3-clip-preview' | 'lyria-3-pro-preview';
+  setMusicModel: (v: 'lyria-3-clip-preview' | 'lyria-3-pro-preview') => void;
+  musicEpisodeId: string;
+  setMusicEpisodeId: (v: string) => void;
+  generatedAudioUrl: string | null;
+  musicLabel: string | null;
+  musicError: string | null;
+  musicSkipped: boolean;
+  onGenerate: () => void;
+  onOpenWorkspace: (episodeId: string, initialTab?: WorkspaceTab) => void;
+}) {
+  return (
+    <div className="max-w-2xl mx-auto space-y-6 text-center py-6">
+      <Music className="w-12 h-12 text-indigo-400 mx-auto" />
+      <div className="space-y-2">
+        <h3 className="font-display font-bold text-lg text-white">Generación de Música con Google Lyria</h3>
+        <p className="text-xs text-[#8B949E] max-w-md mx-auto leading-relaxed">
+          Compone soundtracks ambiente con lyria-3-clip-preview (30s) o lyria-3-pro-preview. Se guarda en
+          05-audio/background-music.mp3 y se asigna a las escenas del episodio.
+        </p>
+      </div>
+
+      <div className="space-y-4 bg-[#0B0F14] p-5 border border-[rgba(255,255,255,0.05)] rounded-2xl max-w-md mx-auto text-left">
+        <div>
+          <label className="text-[9px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">
+            Episodio destino
+          </label>
+          <select
+            value={musicEpisodeId}
+            onChange={e => setMusicEpisodeId(e.target.value)}
+            className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-2 py-1.5 text-xs text-white"
+          >
+            <option value="">Selecciona un episodio…</option>
+            {entries.map(e => (
+              <option key={e.episode.id} value={e.episode.id}>
+                {e.episode.title}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="text-[9px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">
+            Prompt musical
+          </label>
+          <textarea
+            value={musicPrompt}
+            onChange={e => setMusicPrompt(e.target.value)}
+            rows={3}
+            className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl p-2 text-xs text-white focus:outline-none focus:border-indigo-500/30 resize-none"
+          />
+        </div>
+
+        <div>
+          <label className="text-[9px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">
+            Modelo Lyria
+          </label>
+          <select
+            value={musicModel}
+            onChange={e =>
+              setMusicModel(e.target.value as 'lyria-3-clip-preview' | 'lyria-3-pro-preview')
+            }
+            className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-2 py-1.5 text-xs text-white"
+          >
+            <option value="lyria-3-clip-preview">Lyria Clip (30s)</option>
+            <option value="lyria-3-pro-preview">Lyria Pro (canción completa)</option>
+          </select>
+        </div>
+
+        {musicError ? <p className="text-[10px] text-rose-400">{musicError}</p> : null}
+
+        <button
+          type="button"
+          disabled={!musicEpisodeId}
+          onClick={onGenerate}
+          className="w-full py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>Componer Soundtrack</span>
+        </button>
+      </div>
+
+      {generatedAudioUrl ? (
+        <div className="bg-indigo-950/20 border border-indigo-800/30 p-4.5 rounded-2xl max-w-md mx-auto space-y-3">
+          <div className="text-left text-xs font-bold text-indigo-400">
+            {musicSkipped
+              ? '✓ Pista existente reutilizada (prompt similar)'
+              : '✓ Composición musical de Lyria lista'}
+          </div>
+          {musicLabel ? (
+            <p className="text-[10px] text-left text-[#8B949E] truncate">{musicLabel}</p>
+          ) : null}
+          <audio src={generatedAudioUrl} controls className="w-full outline-none" />
+          {musicEpisodeId ? (
+            <button
+              type="button"
+              onClick={() => onOpenWorkspace(musicEpisodeId, 'video')}
+              className="w-full py-2 rounded-2xl border border-indigo-500/30 text-indigo-300 text-xs font-bold cursor-pointer hover:bg-indigo-950/30"
+            >
+              Abrir timeline de video del episodio
+            </button>
           ) : null}
         </div>
       ) : null}

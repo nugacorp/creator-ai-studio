@@ -54,6 +54,7 @@ import {
   fetchJob,
   fetchSecrets,
   generateEpisodeThumbnail,
+  generateEpisodeMusic,
   generateSceneImages,
   generateStoryboardFromScript,
   generateSubtitles,
@@ -123,6 +124,8 @@ export default function WorkspaceView({
   const [audioPlaybackUrl, setAudioPlaybackUrl] = useState<string | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [musicPlaybackUrl, setMusicPlaybackUrl] = useState<string | null>(null);
+  const [musicSourceUrl, setMusicSourceUrl] = useState(project.musicUrl || '');
 
   // Escenas State
   const [scenes, setScenes] = useState<Scene[]>(project.scenes);
@@ -271,6 +274,36 @@ export default function WorkspaceView({
   }, [audioBase64, project.id]);
 
   useEffect(() => {
+    if (!musicSourceUrl?.trim()) {
+      setMusicPlaybackUrl(null);
+      return;
+    }
+    const resolved = resolveEpisodeMediaUrl(project.id, musicSourceUrl);
+    if (!resolved?.startsWith('/')) {
+      setMusicPlaybackUrl(resolved);
+      return;
+    }
+    let objectUrl: string | null = null;
+    let cancelled = false;
+    void loadAuthenticatedMediaUrl(resolved)
+      .then(url => {
+        if (cancelled) {
+          if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setMusicPlaybackUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setMusicPlaybackUrl(null);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl?.startsWith('blob:')) URL.revokeObjectURL(objectUrl);
+    };
+  }, [musicSourceUrl, project.id]);
+
+  useEffect(() => {
     if (!videoSourceUrl?.trim()) {
       setVideoPlaybackUrl(null);
       return;
@@ -308,7 +341,9 @@ export default function WorkspaceView({
   const totalSceneDuration =
     scenes.reduce((sum, s) => sum + (s.duration || 0), 0) || scenes.length * 8;
   const primaryMusicTrack =
-    scenes.find(s => s.musicTrack?.trim())?.musicTrack ?? 'Sin pista de música definida';
+    scenes.find(s => s.musicTrack?.trim() && s.musicTrack !== 'ambient-soft')?.musicTrack ??
+    (musicSourceUrl ? 'Música de fondo (Lyria)' : 'Sin pista de música definida');
+  const hasMusicTrack = Boolean(musicPlaybackUrl);
   const hasNarrationTrack = Boolean(audioPlaybackUrl && audioBase64 !== 'demo_active');
   const previewDuration = videoDuration > 0 ? videoDuration : totalSceneDuration;
   const activeSubtitlePreview =
@@ -363,6 +398,8 @@ export default function WorkspaceView({
         if (detail.content.subtitlesSrt) setSubtitlesSrt(detail.content.subtitlesSrt);
         if (detail.content.thumbnailUrl) setThumbnailUrl(detail.content.thumbnailUrl);
         if (detail.content.videoUrl) setVideoSourceUrl(detail.content.videoUrl);
+        if (detail.content.musicUrl) setMusicSourceUrl(detail.content.musicUrl);
+        if (detail.content.scenes.length > 0) setScenes(detail.content.scenes);
       })
       .catch(() => {
         // non-blocking — badges fall back to pending
@@ -385,6 +422,7 @@ export default function WorkspaceView({
       seoTags,
       subtitlesSrt,
       videoUrl: videoSourceUrl,
+      musicUrl: musicSourceUrl,
       ...patch,
     });
   };
@@ -1704,16 +1742,64 @@ export default function WorkspaceView({
                   </div>
                 </div>
 
-                {/* 4. Track: Música */}
                 <div className="flex items-center gap-4">
                   <div className="w-24 text-[10px] font-bold text-[#8B949E] uppercase tracking-wider font-mono flex items-center gap-1 shrink-0">
                     <Music className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Música</span>
                   </div>
-                  <div className="flex-1 h-9 bg-emerald-950/20 border border-emerald-900/30 rounded-xl p-1.5 flex items-center relative overflow-hidden">
-                    <div className="absolute inset-y-0 left-0 bg-emerald-600/25 rounded-md border border-emerald-500/30 w-[95%] flex items-center px-2.5">
-                      <span className="text-[10px] font-bold text-emerald-300 truncate">{primaryMusicTrack}</span>
+                  <div className="flex-1 h-9 bg-emerald-950/20 border border-emerald-900/30 rounded-xl p-1.5 flex items-center relative overflow-hidden gap-2">
+                    <div
+                      className={`absolute inset-y-0 left-0 bg-emerald-600/25 rounded-md border border-emerald-500/30 flex items-center px-2.5 ${
+                        hasMusicTrack ? 'w-[95%]' : 'w-1/3'
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold text-emerald-300 truncate relative z-10">
+                        {primaryMusicTrack}
+                      </span>
                     </div>
+                    {hasMusicTrack ? (
+                      <audio src={musicPlaybackUrl!} controls className="relative z-20 h-7 ml-auto max-w-[45%]" />
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isProcessing}
+                        onClick={() => {
+                          setIsProcessing(true);
+                          setProcessingMessage('Generando música con Lyria…');
+                          void generateEpisodeMusic(project.id, {
+                            prompt: `Música instrumental ambiente para documental cristiano: ${project.title}`,
+                          })
+                            .then(result => {
+                              setMusicSourceUrl(result.musicUrl);
+                              if (result.label) {
+                                setScenes(prev =>
+                                  prev.map(s => ({ ...s, musicTrack: result.label })),
+                                );
+                              }
+                              triggerFeedback(
+                                'success',
+                                result.skipped
+                                  ? 'Pista existente reutilizada (prompt similar).'
+                                  : 'Música de fondo generada y guardada.',
+                              );
+                              persistProject({ musicUrl: result.musicUrl, scenes });
+                            })
+                            .catch(() => {
+                              triggerFeedback(
+                                'error',
+                                'No se pudo generar música. Configura GEMINI_API_KEY en Ajustes.',
+                              );
+                            })
+                            .finally(() => {
+                              setIsProcessing(false);
+                              setProcessingMessage('');
+                            });
+                        }}
+                        className="relative z-20 ml-auto px-2 py-0.5 rounded-lg bg-emerald-700/40 text-[9px] font-bold text-emerald-200 cursor-pointer hover:bg-emerald-600/40 disabled:opacity-50"
+                      >
+                        Generar Lyria
+                      </button>
+                    )}
                   </div>
                 </div>
 

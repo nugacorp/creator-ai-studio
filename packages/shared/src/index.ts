@@ -95,7 +95,7 @@ export const STAGE_EXPECTED_FILES: Partial<Record<EpisodeStage, string[]>> = {
   script: ['02-script/script.md'],
   storyboard: ['03-storyboard/storyboard.md', '03-storyboard/scenes.json'],
   assets: ['04-assets/scene-assets.json'],
-  audio: ['05-audio/voiceover.mp3'],
+  audio: ['05-audio/voiceover.mp3', '05-audio/background-music.mp3'],
   video: ['06-video/episode.mp4'],
   subtitles: ['06-subtitles/subtitles.srt'],
   thumbnail: ['07-thumbnail/thumbnail.png'],
@@ -141,6 +141,8 @@ export interface EpisodeContent {
   seoTags: string[];
   thumbnailUrl?: string;
   audioUrl?: string;
+  /** Authenticated URL for Lyria background music (05-audio/background-music.mp3). */
+  musicUrl?: string;
   /** SRT subtitle track generated from scenes or script timing. */
   subtitlesSrt?: string;
   videoUrl?: string;

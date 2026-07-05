@@ -1,6 +1,6 @@
 import type { EpisodeContent, EpisodeDetail } from '@creator-ai-studio/shared';
 
-export type EpisodeFileAsset = 'audio' | 'video' | 'short' | 'thumbnail';
+export type EpisodeFileAsset = 'audio' | 'music' | 'video' | 'short' | 'thumbnail';
 
 /** Canonical authenticated URL for episode binary assets. */
 export function episodeFileUrl(episodeId: string, asset: EpisodeFileAsset): string {

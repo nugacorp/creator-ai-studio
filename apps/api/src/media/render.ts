@@ -43,6 +43,42 @@ async function resolveAudioPath(episodeDir: string): Promise<string | null> {
   return null;
 }
 
+async function resolveBackgroundMusicPath(episodeDir: string): Promise<string | null> {
+  const p = path.join(episodeDir, '05-audio', 'background-music.mp3');
+  return existsSync(p) ? p : null;
+}
+
+/** Mix narration with optional background music at ~-15 dB; returns path to use for mux. */
+async function resolveMuxAudioPath(episodeDir: string, videoDir: string): Promise<string> {
+  const narration = await resolveAudioPath(episodeDir);
+  if (!narration) {
+    throw new Error('narration missing');
+  }
+  const music = await resolveBackgroundMusicPath(episodeDir);
+  if (!music) return narration;
+
+  const mixed = path.join(videoDir, '_mixed-audio.mp3');
+  await execFileAsync(
+    'ffmpeg',
+    [
+      '-y',
+      '-i',
+      narration,
+      '-i',
+      music,
+      '-filter_complex',
+      '[1:a]volume=0.18[music];[0:a][music]amix=inputs=2:duration=first:dropout_transition=2',
+      '-c:a',
+      'libmp3lame',
+      '-q:a',
+      '4',
+      mixed,
+    ],
+    { timeout: 300_000 },
+  );
+  return mixed;
+}
+
 async function createPlaceholderSlide(dest: string): Promise<void> {
   await execFileAsync(
     'ffmpeg',
@@ -216,6 +252,13 @@ export async function renderEpisodeVideo(
   await mkdir(videoDir, { recursive: true });
   const outputPath = path.join(videoDir, 'episode.mp4');
 
+  let muxAudioPath: string;
+  try {
+    muxAudioPath = await resolveMuxAudioPath(episodeDir, videoDir);
+  } catch {
+    muxAudioPath = audioPath;
+  }
+
   const slides = await buildSlideList(
     episodeDir,
     options.sceneImageUrls ?? [],
@@ -271,7 +314,7 @@ export async function renderEpisodeVideo(
     '-i',
     silentVideo,
     '-i',
-    audioPath,
+    muxAudioPath,
     '-c:v',
     'libx264',
     '-pix_fmt',

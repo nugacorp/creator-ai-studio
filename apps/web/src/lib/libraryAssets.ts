@@ -23,7 +23,7 @@ export function sceneImageCount(entry: EpisodeLibraryEntry): number {
 }
 
 export function mediaAssetCount(entry: EpisodeLibraryEntry): number {
-  const mediaKeys = new Set(['video', 'short', 'thumbnail', 'audio']);
+  const mediaKeys = new Set(['video', 'short', 'thumbnail', 'audio', 'music']);
   return entry.assets.files.filter(f => mediaKeys.has(f.key) && f.available).length;
 }
 

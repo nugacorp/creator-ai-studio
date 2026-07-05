@@ -52,6 +52,11 @@ export function stagesToInvalidate(
     pending.add('shorts');
   }
 
+  if ((before.musicUrl ?? '') !== (after.musicUrl ?? '')) {
+    pending.add('video');
+    pending.add('shorts');
+  }
+
   if ((before.audioUrl ?? '') !== (after.audioUrl ?? '')) {
     pending.add('subtitles');
     pending.add('video');
@@ -112,6 +117,10 @@ export function hasSubtitlesFile(episodeDir: string): boolean {
 
 export function hasThumbnailFile(episodeDir: string): boolean {
   return existsSync(path.join(episodeDir, '07-thumbnail', 'thumbnail.png'));
+}
+
+export function hasBackgroundMusicFile(episodeDir: string): boolean {
+  return existsSync(path.join(episodeDir, '05-audio', 'background-music.mp3'));
 }
 
 export function hasScriptContent(content: EpisodeContent): boolean {

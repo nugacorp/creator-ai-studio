@@ -30,6 +30,7 @@ export interface VideoProject {
   outline: string[];
   scenes: Scene[];
   audioUrl?: string;
+  musicUrl?: string;
   subtitlesSrt?: string;
   videoUrl?: string;
   thumbnailUrl?: string;

@@ -143,6 +143,40 @@ function registerAIRoutes(app: FastifyInstance, prefix: '' | '/api'): void {
       if (result === undefined) return;
       return result;
     },
+    generateMusic: async (
+      body: {
+        prompt?: string;
+        model?: 'lyria-3-clip-preview' | 'lyria-3-pro-preview';
+      },
+      reply: FastifyReply,
+    ) => {
+      const prompt = body.prompt?.trim();
+      if (!prompt) {
+        reply.code(400);
+        return { error: 'missing_prompt', message: 'Indica un prompt musical.' };
+      }
+      try {
+        const { generateMusicWithLyria } = await import('../integrations/lyria.js');
+        const result = await generateMusicWithLyria(prompt, body.model ?? 'lyria-3-clip-preview');
+        return {
+          audio: result.audio.toString('base64'),
+          mimeType: result.mimeType,
+          model: result.model,
+          lyrics: result.lyrics,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'music generation failed';
+        if (message.includes('LYRIA_NOT_CONFIGURED')) {
+          reply.code(503);
+          return {
+            error: 'lyria_not_configured',
+            message:
+              'Configura GEMINI_API_KEY o conecta Google OAuth (Gemini) en Ajustes para usar Lyria.',
+          };
+        }
+        sendAIError(reply, err);
+      }
+    },
   };
 
   for (const [geminiPath, canonicalPath, handler] of [
@@ -152,6 +186,7 @@ function registerAIRoutes(app: FastifyInstance, prefix: '' | '/api'): void {
     ['/generate-image', '/generate-image', handlers.generateImage],
     ['/tts', '/tts', handlers.tts],
     ['/seo', '/seo', handlers.seo],
+    ['/generate-music', '/generate-music', handlers.generateMusic],
   ] as const) {
     app.post(`${geminiBase}${geminiPath}`, { schema: { body: aiBody } }, async (request, reply) => {
       return handler(request.body as Parameters<typeof handler>[0], reply);

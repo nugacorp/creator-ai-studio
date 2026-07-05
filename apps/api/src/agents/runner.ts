@@ -15,6 +15,7 @@ import { HUMAN_APPROVAL_AGENT_IDS, isJobType } from '@creator-ai-studio/shared';
 import { withProvider } from '../ai/router.js';
 import { areMocksAllowed } from '../config/mocks.js';
 import { resolveSceneImagePrompt } from '../media/scene-image-refine.js';
+import { generateEpisodeMusic, applyMusicLabelToScenes } from '../media/music.js';
 import { parseScenesFromScript } from '../media/script-to-scenes.js';
 import { createJob } from '../jobs/store.js';
 import { enqueueJob } from '../jobs/queue.js';
@@ -267,7 +268,7 @@ async function executeAgent(
     case 'narrator':
       return runNarrator(script, system, logs);
     case 'audio_engineer':
-      return runAudioEngineer(episode.content.audioUrl, script, system, logs);
+      return runAudioEngineer(storage, options.episodeId, dir, episode, system, logs);
     case 'video_editor':
       return runVideoEditor(episode.content.scenes, script, system, logs);
     case 'thumbnail_designer':
@@ -318,7 +319,9 @@ async function runHermes(
       reason = 'Generar dirección de voz / TTS';
     } else if (agentId === 'audio_engineer' && hasScript) {
       needed = true;
-      reason = 'Validar narración y audio';
+      reason = episode.content.musicUrl
+        ? 'Validar narración, mezcla y música de fondo'
+        : 'Generar música Lyria y validar audio';
     } else if (agentId === 'seo_optimizer' && hasScript) {
       needed = true;
       reason = 'Optimizar metadatos SEO y paquete de publicación';
@@ -697,32 +700,83 @@ async function runNarrator(script: string, system: string, logs: string[]): Prom
 }
 
 async function runAudioEngineer(
-  audioUrl: string | undefined,
-  script: string,
+  storage: EpisodeStorage,
+  episodeId: string,
+  dir: string,
+  episode: NonNullable<Awaited<ReturnType<typeof getEpisodeForUser>>>,
   system: string,
   logs: string[],
 ): Promise<AgentExecutionResult> {
+  const script = episode.content.script ?? '';
+  const audioUrl = episode.content.audioUrl;
+  const scenes = episode.content.scenes;
+
   const text = await withProvider('chat', p =>
     p.chat([
       { role: 'system', content: system },
       {
         role: 'user',
-        content: `Script length: ${script.length}. Audio present: ${Boolean(audioUrl)}`,
+        content: `Título: ${episode.title}
+Script length: ${script.length}
+Narración presente: ${Boolean(audioUrl)}
+Música de fondo presente: ${Boolean(episode.content.musicUrl)}
+Escenas: ${scenes.length}
+Sugerencia musicTrack en escenas: ${scenes.map(s => s.musicTrack).filter(Boolean).join(', ') || 'ninguna'}`,
       },
     ]),
   );
   const parsed = parseJsonBlock(text);
-  const ready = parsed?.ready === true || Boolean(audioUrl);
-  logs.push(`[Audio] ready=${ready}, hasAudio=${Boolean(audioUrl)}`);
+  const musicPrompt =
+    String(parsed?.musicPrompt ?? parsed?.backgroundMusicPrompt ?? '').trim() ||
+    scenes.find(s => s.musicTrack?.trim() && s.musicTrack !== 'ambient-soft')?.musicTrack ||
+    `Música instrumental ambiente suave para documental cristiano: ${episode.title}`;
+
+  let musicGenerated = Boolean(episode.content.musicUrl);
+  let musicLabel = scenes.find(s => s.musicTrack?.trim())?.musicTrack ?? '';
+  try {
+    const musicResult = await generateEpisodeMusic(episodeId, dir, {
+      prompt: musicPrompt,
+      title: episode.title,
+      script,
+      force: false,
+    });
+    musicGenerated = true;
+    musicLabel = musicResult.label;
+    const updatedScenes = applyMusicLabelToScenes(scenes, musicLabel);
+    await storage.updateEpisode(episodeId, {
+      content: { musicUrl: musicResult.musicUrl, scenes: updatedScenes },
+    });
+    logs.push(
+      musicResult.skipped
+        ? `[Audio] Música existente reutilizada (${musicLabel})`
+        : `[Audio] Música Lyria generada (${musicResult.meta.model})`,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'music generation failed';
+    logs.push(`[Audio] Música no generada: ${message}`);
+  }
+
+  const ready = (parsed?.ready === true || Boolean(audioUrl)) && musicGenerated;
+  logs.push(`[Audio] ready=${ready}, hasAudio=${Boolean(audioUrl)}, hasMusic=${musicGenerated}`);
 
   return {
-    output: parsed ?? { raw: text },
-    handoff: { nextAgentId: 'video_editor', nextStage: 'video', notes: ready ? 'Audio OK' : 'Ejecutar TTS primero' },
+    output: {
+      ...(parsed ?? { raw: text }),
+      musicPrompt,
+      musicLabel,
+      musicGenerated,
+    },
+    handoff: {
+      nextAgentId: 'video_editor',
+      nextStage: 'video',
+      notes: ready ? 'Audio y música listos' : 'Ejecutar TTS y/o generar música',
+    },
     qualityGate: {
-      passed: script.length > 0,
+      passed: script.length > 0 && Boolean(audioUrl),
       checks: [
         { key: 'script', label: 'Guion presente', ok: script.length > 0 },
         { key: 'audio', label: 'Narración generada', ok: Boolean(audioUrl) },
+        { key: 'music', label: 'Música de fondo (Lyria)', ok: musicGenerated },
       ],
     },
   };
