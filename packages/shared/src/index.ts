@@ -239,15 +239,35 @@ export function isEpisodeStatus(value: unknown): value is EpisodeStatus {
 /** Job types processed by the production worker. */
 export const JOB_TYPES = [
   'script',
+  'seo',
   'tts',
   'render',
   'thumbnail',
   'shorts',
   'publish',
+  'publish_package',
   'archive',
   'pipeline',
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
+
+/**
+ * Pipeline execution modes.
+ * - `production-draft`: run every content stage but never touch YouTube.
+ * - `ready-for-review`: draft stages + publish package, ends awaiting review.
+ * - `publish-authorized`: full pipeline including YouTube upload; requires an
+ *   explicit human authorization flag on the job payload.
+ */
+export const PIPELINE_MODES = [
+  'production-draft',
+  'ready-for-review',
+  'publish-authorized',
+] as const;
+export type PipelineMode = (typeof PIPELINE_MODES)[number];
+
+export function isPipelineMode(value: unknown): value is PipelineMode {
+  return typeof value === 'string' && (PIPELINE_MODES as readonly string[]).includes(value);
+}
 
 /** Job lifecycle statuses. */
 export const JOB_STATUSES = ['pending', 'active', 'completed', 'failed'] as const;
@@ -260,6 +280,8 @@ export interface ProductionJob {
   type: JobType;
   status: JobStatus;
   progress: number;
+  /** Optional job parameters (e.g. pipeline mode, publish authorization). */
+  payload?: Record<string, unknown>;
   result?: Record<string, unknown>;
   error?: string;
   createdAt: string;

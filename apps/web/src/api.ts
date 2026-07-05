@@ -137,6 +137,7 @@ export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
 }
 
 export interface AnalyticsData {
+  isDemo?: boolean;
   kpis: { views: number; subscribers: number; watchTimeHours: number; engagement: string };
   chartData: number[];
   channelDistribution?: Array<{ name: string; views: number; percentage: number }>;
@@ -284,9 +285,52 @@ export async function fetchStorageStats(): Promise<StorageStats> {
   return apiFetch<StorageStats>('/system/storage');
 }
 
+export type PipelineMode = 'production-draft' | 'ready-for-review' | 'publish-authorized';
+
 export async function runEpisodePipeline(episodeId: string): Promise<ProductionJob> {
-  return apiFetch<ProductionJob>(`/episodes/${encodeURIComponent(episodeId)}/pipeline`, {
+  return runSafePipeline(episodeId, 'production-draft');
+}
+
+export async function runSafePipeline(
+  episodeId: string,
+  mode: PipelineMode = 'production-draft',
+): Promise<ProductionJob> {
+  return apiFetch<ProductionJob>(`/episodes/${encodeURIComponent(episodeId)}/run-safe-pipeline`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+}
+
+export interface PublishChecklistItem {
+  key: string;
+  label: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface PublishPackageResult {
+  ok: boolean;
+  ready: boolean;
+  metadataPath: string;
+  checklistPath: string;
+  checklist: PublishChecklistItem[];
+}
+
+export async function buildPublishPackage(episodeId: string): Promise<PublishPackageResult> {
+  return apiFetch<PublishPackageResult>(
+    `/episodes/${encodeURIComponent(episodeId)}/publish-package`,
+    { method: 'POST' },
+  );
+}
+
+export async function authorizePublish(
+  episodeId: string,
+): Promise<{ job: ProductionJob; checklist: PublishChecklistItem[] }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/authorize-publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true }),
   });
 }
 

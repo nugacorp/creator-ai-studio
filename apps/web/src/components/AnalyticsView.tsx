@@ -29,20 +29,20 @@ function buildChartPaths(data: number[], width = 500, height = 200) {
 export default function AnalyticsView() {
   const [activeChannelTab, setActiveChannelTab] = useState<ChannelTab>('Todos');
   const [analytics, setAnalytics] = useState({
-    views: 142500,
-    subscribers: 3120,
-    watchTimeHours: 12840,
-    engagement: '6.4%',
-    chartData: [120, 180, 150, 220, 280, 310, 290] as number[],
-    channelDistribution: [
-      { name: 'YouTube Principal', views: 84000, percentage: 100 },
-    ],
+    isDemo: false,
+    views: 0,
+    subscribers: 0,
+    watchTimeHours: 0,
+    engagement: '0%',
+    chartData: [0] as number[],
+    channelDistribution: [{ name: 'YouTube', views: 0, percentage: 100 }],
   });
 
   useEffect(() => {
     void fetchAnalytics()
       .then(data =>
         setAnalytics({
+          isDemo: data.isDemo ?? false,
           views: data.kpis.views,
           subscribers: data.kpis.subscribers,
           watchTimeHours: data.kpis.watchTimeHours,
@@ -109,6 +109,11 @@ export default function AnalyticsView() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {analytics.isDemo && (
+        <p className="text-xs rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-amber-200">
+          Datos de demostración — conecta YouTube OAuth en Configuración para métricas reales.
+        </p>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#15191E] p-4.5 rounded-2xl border border-[rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-indigo-500/10 rounded-2xl text-indigo-400">

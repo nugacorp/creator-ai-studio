@@ -106,6 +106,7 @@ export interface YouTubeAnalyticsResult {
   engagement: string;
   chartData: number[];
   channelDistribution: Array<{ name: string; views: number; percentage: number }>;
+  isDemo?: boolean;
 }
 
 function formatEngagement(views: number, likes: number, comments: number): string {
@@ -133,6 +134,11 @@ export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTube
   };
 
   if (!accessToken) {
+    // FASE 8: fake analytics numbers are a mock — only in dev environments.
+    const { areMocksAllowed } = await import('../config/mocks.js');
+    if (!areMocksAllowed()) {
+      return empty;
+    }
     return {
       views: 12500,
       subscribers: 125000,
@@ -140,6 +146,7 @@ export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTube
       engagement: '4.2%',
       chartData: [120, 180, 150, 220, 280, 310, 290],
       channelDistribution: [{ name: 'YouTube', views: 12500, percentage: 100 }],
+      isDemo: true,
     };
   }
 

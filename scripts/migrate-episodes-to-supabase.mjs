@@ -47,6 +47,7 @@ async function main() {
         workspace_path: entry.name,
         content,
         stages,
+        user_id: summary.userId ?? null,
         created_at: summary.createdAt,
         updated_at: summary.updatedAt,
       }),
