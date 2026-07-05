@@ -10,13 +10,17 @@ export async function resolveSceneImagePrompt(
   scene: SceneImageInput,
   index: number,
   episodeTitle?: string,
-  options?: { force?: boolean },
+  options?: { force?: boolean; skipLlmRefine?: boolean },
 ): Promise<string> {
   if (scene.imagePrompt?.trim() && !options?.force) {
     return scene.imagePrompt.trim();
   }
 
   const draft = buildSceneImagePrompt(scene, index, episodeTitle);
+
+  if (options?.skipLlmRefine) {
+    return draft;
+  }
 
   try {
     const refined = await withProvider('chat', p =>

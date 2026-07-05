@@ -185,7 +185,7 @@ export async function generateStoryboardFromScript(
 export async function generateSceneImages(
   episodeId: string,
   sceneIds?: string[],
-  options?: { force?: boolean },
+  options?: { force?: boolean; skipLlmRefine?: boolean },
 ): Promise<{ scenes: import('@creator-ai-studio/shared').Scene[]; generated: number }> {
   return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/scenes/generate-images`, {
     method: 'POST',
@@ -193,6 +193,7 @@ export async function generateSceneImages(
     body: JSON.stringify({
       ...(sceneIds?.length ? { sceneIds } : {}),
       ...(options?.force ? { force: true } : {}),
+      ...(options?.skipLlmRefine ? { skipLlmRefine: true } : {}),
     }),
   });
 }

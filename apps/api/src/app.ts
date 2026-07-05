@@ -626,7 +626,7 @@ function registerRoutes(
 
   app.post(route(prefix, '/episodes/:id/scenes/generate-images'), async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { sceneIds?: string[]; force?: boolean };
+    const body = (request.body ?? {}) as { sceneIds?: string[]; force?: boolean; skipLlmRefine?: boolean };
     const episode = await storage.getEpisode(id);
     if (!episode) {
       reply.code(404);
@@ -643,7 +643,7 @@ function registerRoutes(
       dir,
       episode.content.scenes,
       episode.title,
-      { sceneIds: body.sceneIds, force: body.force },
+      { sceneIds: body.sceneIds, force: body.force, skipLlmRefine: body.skipLlmRefine },
     );
     const updated = await storage.updateEpisode(id, { content: { scenes: result.scenes } });
     return { scenes: result.scenes, generated: result.generated, episode: updated };

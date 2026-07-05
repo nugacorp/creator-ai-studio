@@ -164,16 +164,30 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
       return;
     }
     setIsProcessing(true);
-    setProcessingMessage('Generando imágenes IA para todas las escenas…');
+    let generated = 0;
     try {
-      const data = await generateSceneImages(project.id, undefined, { force: true });
-      persistScenes(data.scenes);
-      triggerFeedback('success', `✓ ${data.generated} imagen(es) generada(s)`);
+      for (let i = 0; i < scenes.length; i++) {
+        const scene = scenes[i]!;
+        setProcessingMessage(`Generando imagen ${i + 1} de ${scenes.length}…`);
+        const data = await generateSceneImages(project.id, [scene.id], {
+          force: true,
+          skipLlmRefine: true,
+        });
+        persistScenes(data.scenes);
+        if (data.generated > 0) generated += data.generated;
+      }
+      triggerFeedback('success', `✓ ${generated} imagen(es) generada(s)`);
     } catch (err) {
       console.error(err);
-      triggerFeedback('error', 'Error generando imágenes — revisa API de imagen en Configuración');
+      triggerFeedback(
+        'error',
+        generated > 0
+          ? `Se generaron ${generated} imagen(es) antes del error — puedes reintentar las restantes`
+          : 'Error generando imágenes — revisa API de imagen en Configuración',
+      );
     } finally {
       setIsProcessing(false);
+      setProcessingMessage('');
     }
   };
 

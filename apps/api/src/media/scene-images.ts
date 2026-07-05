@@ -17,7 +17,7 @@ export async function generateSceneImagesForEpisode(
   episodeDir: string,
   scenes: Scene[],
   episodeTitle: string,
-  options?: { sceneIds?: string[]; force?: boolean },
+  options?: { sceneIds?: string[]; force?: boolean; skipLlmRefine?: boolean },
 ): Promise<GenerateSceneImagesResult> {
   const assetsDir = path.join(episodeDir, '04-assets');
   await mkdir(assetsDir, { recursive: true });
@@ -41,6 +41,7 @@ export async function generateSceneImagesForEpisode(
 
     const prompt = await resolveSceneImagePrompt(scene, i, episodeTitle, {
       force: options?.force,
+      skipLlmRefine: options?.skipLlmRefine,
     });
     const imageUrl = await withProvider('image', p =>
       p.generateImage(prompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
