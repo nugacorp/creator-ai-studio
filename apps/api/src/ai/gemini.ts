@@ -1,3 +1,4 @@
+import process from 'node:process';
 import type {
   AIProvider,
   ChatMessage,
@@ -8,8 +9,9 @@ import type {
 } from './types.js';
 import type { GeminiAuth } from '../secrets/google-auth.js';
 import { googleOAuthHeaders } from '../secrets/google-auth.js';
-import { providerErrorFromResponse } from './provider-error.js';
+import { providerErrorFromResponse, ProviderError } from './provider-error.js';
 import { getGeminiImageModel, getGeminiTextModel } from './models.js';
+import { areMocksAllowed } from '../config/mocks.js';
 
 async function geminiGenerate(
   auth: GeminiAuth,
@@ -99,8 +101,70 @@ export class GeminiAIProvider implements AIProvider {
 
   async generateImage(prompt: string, options?: ImageOptions): Promise<string> {
     const aspect = options?.aspectRatio ?? '16:9';
-    const model = getGeminiImageModel();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
+    const style = options?.style ? `${options.style}, ` : '';
+    const englishPrompt = `${style}${prompt}`.trim();
+
+    const models = [
+      getGeminiImageModel(),
+      'imagen-4.0-fast-generate-001',
+      'imagen-4.0-generate-001',
+    ].filter((m, i, arr) => arr.indexOf(m) === i);
+
+    for (const model of models) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const requestUrl =
+        this.auth.mode === 'api_key'
+          ? `${url}?key=${encodeURIComponent(this.auth.value)}`
+          : url;
+      if (this.auth.mode === 'oauth') {
+        Object.assign(headers, await googleOAuthHeaders(this.auth.accessToken));
+      } else {
+        headers['x-goog-api-key'] = this.auth.value;
+      }
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          instances: [{ prompt: englishPrompt }],
+          parameters: { sampleCount: 1, aspectRatio: aspect },
+        }),
+      });
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const data = (await response.json()) as {
+        predictions?: Array<{ bytesBase64Encoded?: string }>;
+      };
+      const b64 = data.predictions?.[0]?.bytesBase64Encoded;
+      if (b64) {
+        return `data:image/png;base64,${b64}`;
+      }
+    }
+
+    const native = await this.generateImageViaGeminiNative(englishPrompt);
+    if (native) return native;
+
+    if (!areMocksAllowed()) {
+      throw new ProviderError({
+        provider: 'gemini',
+        operation: 'image',
+        statusCode: 502,
+        providerMessage:
+          'No se pudo generar imagen (Imagen 4 / Gemini Image). Revisa GEMINI_API_KEY o usa OpenAI en Configuración.',
+        retryable: true,
+      });
+    }
+
+    return `https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=800&sig=${encodeURIComponent(englishPrompt.slice(0, 40))}`;
+  }
+
+  private async generateImageViaGeminiNative(prompt: string): Promise<string | null> {
+    const model = process.env.GEMINI_NATIVE_IMAGE_MODEL ?? 'gemini-2.5-flash-preview-image-generation';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const requestUrl =
       this.auth.mode === 'api_key'
@@ -114,23 +178,24 @@ export class GeminiAIProvider implements AIProvider {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        instances: [{ prompt: `${prompt} (aspect ratio ${aspect})` }],
-        parameters: { sampleCount: 1 },
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ['IMAGE'] },
       }),
     });
 
-    if (!response.ok) {
-      throw await providerErrorFromResponse('gemini', 'image', response);
-    }
+    if (!response.ok) return null;
 
     const data = (await response.json()) as {
-      predictions?: Array<{ bytesBase64Encoded?: string }>;
+      candidates?: Array<{
+        content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> };
+      }>;
     };
-    const b64 = data.predictions?.[0]?.bytesBase64Encoded;
-    if (b64) {
-      return `data:image/png;base64,${b64}`;
+    const inline = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData?.data)?.inlineData;
+    if (inline?.data) {
+      const mime = inline.mimeType ?? 'image/png';
+      return `data:${mime};base64,${inline.data}`;
     }
-    return `https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=800`;
+    return null;
   }
 
   async textToSpeech(text: string, voice: string): Promise<TTSResult> {

@@ -151,6 +151,17 @@ export async function generateStoryboardFromScript(
   });
 }
 
+export async function generateSceneImages(
+  episodeId: string,
+  sceneIds?: string[],
+): Promise<{ scenes: import('@creator-ai-studio/shared').Scene[]; generated: number }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/scenes/generate-images`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(sceneIds?.length ? { sceneIds } : {}),
+  });
+}
+
 export async function updateStageStatus(
   id: string,
   stage: EpisodeStage,
@@ -338,7 +349,7 @@ export async function aiGenerateImage(body: {
   imageSize?: string;
   style?: string;
 }): Promise<{ imageUrl: string }> {
-  return apiFetch<{ imageUrl: string }>('/gemini/generate-image', {
+  return apiFetch<{ imageUrl: string }>('/ai/generate-image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

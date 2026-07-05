@@ -17,7 +17,7 @@ export async function checkFfmpeg(): Promise<boolean> {
   }
 }
 
-async function downloadImage(url: string, dest: string): Promise<boolean> {
+export async function downloadImage(url: string, dest: string): Promise<boolean> {
   try {
     if (url.startsWith('data:image')) {
       const match = url.match(/^data:image\/[^;]+;base64,(.+)$/);
@@ -55,6 +55,17 @@ async function buildSlideList(
   let i = 0;
   for (const url of urls) {
     if (!url) continue;
+
+    const sceneImageMatch = url.match(/\/scene-images\/(slide-\d{3}\.png)$/);
+    if (sceneImageMatch) {
+      const local = path.join(episodeDir, '04-assets', sceneImageMatch[1]!);
+      if (existsSync(local)) {
+        slides.push(local);
+        i++;
+        continue;
+      }
+    }
+
     const dest = path.join(assetsDir, `slide-${String(i).padStart(3, '0')}.png`);
     if (await downloadImage(url, dest)) {
       slides.push(dest);

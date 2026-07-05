@@ -7,7 +7,7 @@ export function getGeminiTextModel(): string {
 
 /** Image generation model for Gemini. Override with GEMINI_IMAGE_MODEL. */
 export function getGeminiImageModel(): string {
-  return process.env.GEMINI_IMAGE_MODEL ?? 'imagen-3.0-generate-002';
+  return process.env.GEMINI_IMAGE_MODEL ?? 'imagen-4.0-fast-generate-001';
 }
 
 /** Chat/completions model for OpenAI. Override with OPENAI_MODEL. */

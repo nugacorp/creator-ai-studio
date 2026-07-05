@@ -13,6 +13,7 @@ import type {
 } from '@creator-ai-studio/shared';
 import { HUMAN_APPROVAL_AGENT_IDS, isJobType } from '@creator-ai-studio/shared';
 import { withProvider } from '../ai/router.js';
+import { buildSceneImagePrompt } from '../media/scene-image-prompt.js';
 import { parseScenesFromScript } from '../media/script-to-scenes.js';
 import { createJob } from '../jobs/store.js';
 import { enqueueJob } from '../jobs/queue.js';
@@ -626,8 +627,7 @@ async function runSceneAssetDesigner(
   for (const scene of scenes) {
     const asset = assets.find(a => a.sceneId === scene.id);
     const imagePrompt =
-      asset?.imagePrompt ??
-      `Escena bíblica cinematográfica: ${scene.text.slice(0, 120)}, estilo reverente, sin texto en imagen`;
+      asset?.imagePrompt ?? buildSceneImagePrompt(scene, updatedScenes.length);
     const imageUrl = await withProvider('image', p =>
       p.generateImage(imagePrompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
     );

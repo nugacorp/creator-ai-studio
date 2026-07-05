@@ -28,7 +28,7 @@ import {
   Plus
 } from 'lucide-react';
 import { VideoProject, Scene } from '../types';
-import { aiGenerateImage, aiRewrite, aiSeo, aiTts, fetchElevenLabsVoices, generateStoryboardFromScript } from '../api';
+import { aiGenerateImage, aiRewrite, aiSeo, aiTts, fetchElevenLabsVoices, generateSceneImages, generateStoryboardFromScript } from '../api';
 import type { ElevenLabsVoice } from '../api';
 
 interface WorkspaceViewProps {
@@ -123,6 +123,12 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
   };
 
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+  const [generatingSceneId, setGeneratingSceneId] = useState<string | null>(null);
+
+  const persistScenes = (nextScenes: Scene[]) => {
+    setScenes(nextScenes);
+    onUpdateProject({ ...project, scenes: nextScenes, script: scriptText });
+  };
 
   const handleGenerateScenesFromScript = async () => {
     if (!scriptText.trim()) {
@@ -132,15 +138,33 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
     setIsGeneratingScenes(true);
     try {
       const data = await generateStoryboardFromScript(project.id);
-      setScenes(data.scenes);
+      persistScenes(data.scenes);
       if (data.scenes[0]) setSelectedSceneId(data.scenes[0].id);
-      onUpdateProject({ ...project, scenes: data.scenes, script: scriptText });
       triggerFeedback('success', `✓ ${data.scenes.length} escenas generadas desde el guion`);
     } catch (err) {
       console.error(err);
       triggerFeedback('error', 'No se pudieron extraer escenas — revisa el formato del guion');
     } finally {
       setIsGeneratingScenes(false);
+    }
+  };
+
+  const handleGenerateAllSceneImages = async () => {
+    if (scenes.length === 0) {
+      triggerFeedback('error', 'Genera escenas primero desde el guion.');
+      return;
+    }
+    setIsProcessing(true);
+    setProcessingMessage('Generando imágenes IA para todas las escenas…');
+    try {
+      const data = await generateSceneImages(project.id);
+      persistScenes(data.scenes);
+      triggerFeedback('success', `✓ ${data.generated} imagen(es) generada(s)`);
+    } catch (err) {
+      console.error(err);
+      triggerFeedback('error', 'Error generando imágenes — revisa API de imagen en Configuración');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -232,22 +256,19 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
   };
 
   // 3. AI Scene Image generation
-  const handleGenerateSceneImage = async (sceneId: string, textDescription: string) => {
-    setIsProcessing(true);
+  const handleGenerateSceneImage = async (sceneId: string) => {
+    setGeneratingSceneId(sceneId);
     setProcessingMessage('IA está modelando y generando la toma visual...');
     try {
-      const data = await aiGenerateImage({ prompt: textDescription, aspectRatio: '16:9' });
-      if (data.imageUrl) {
-        setScenes(prev =>
-          prev.map(sc => (sc.id === sceneId ? { ...sc, imageUrl: data.imageUrl } : sc))
-        );
-        triggerFeedback('success', '✓ Imagen generada por IA para la escena');
-      }
+      const data = await generateSceneImages(project.id, [sceneId]);
+      persistScenes(data.scenes);
+      triggerFeedback('success', '✓ Imagen generada para la escena');
     } catch (err) {
       console.error(err);
-      triggerFeedback('error', 'Error generando imagen');
+      triggerFeedback('error', 'Error generando imagen — revisa Gemini/OpenAI en Configuración');
     } finally {
-      setIsProcessing(false);
+      setGeneratingSceneId(null);
+      setProcessingMessage('');
     }
   };
 
@@ -567,6 +588,17 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>{isGeneratingScenes ? 'Generando…' : 'Desde guion'}</span>
                 </button>
+                {scenes.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateAllSceneImages()}
+                    disabled={isProcessing}
+                    className="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    <span>Imágenes IA (todas)</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     const newSc: Scene = {
@@ -637,11 +669,12 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                       {/* Hover Overlay Generate Button */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-150">
                         <button
-                          onClick={() => handleGenerateSceneImage(scene.id, scene.text)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold cursor-pointer"
+                          onClick={() => void handleGenerateSceneImage(scene.id)}
+                          disabled={generatingSceneId === scene.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold cursor-pointer disabled:opacity-60"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>Generar Imagen IA</span>
+                          <span>{generatingSceneId === scene.id ? 'Generando…' : 'Generar Imagen IA'}</span>
                         </button>
                       </div>
                     </div>

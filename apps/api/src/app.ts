@@ -624,6 +624,53 @@ function registerRoutes(
     return { scenes, episode: updated };
   });
 
+  app.post(route(prefix, '/episodes/:id/scenes/generate-images'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { sceneIds?: string[] };
+    const episode = await storage.getEpisode(id);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'episodio archivado — restáuralo para generar imágenes' };
+    }
+    const { generateSceneImagesForEpisode } = await import('./media/scene-images.js');
+    const result = await generateSceneImagesForEpisode(
+      id,
+      dir,
+      episode.content.scenes,
+      episode.title,
+      { sceneIds: body.sceneIds },
+    );
+    const updated = await storage.updateEpisode(id, { content: { scenes: result.scenes } });
+    return { scenes: result.scenes, generated: result.generated, episode: updated };
+  });
+
+  app.get(route(prefix, '/episodes/:id/scene-images/:filename'), async (request, reply) => {
+    const { id, filename } = request.params as { id: string; filename: string };
+    if (!/^slide-\d{3}\.png$/.test(filename)) {
+      reply.code(400);
+      return { error: 'invalid filename' };
+    }
+    const { existsSync, createReadStream } = await import('node:fs');
+    const pathMod = await import('node:path');
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    const filePath = pathMod.join(dir, '04-assets', filename);
+    if (!existsSync(filePath)) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    reply.type('image/png');
+    return reply.send(createReadStream(filePath));
+  });
+
   app.post(route(prefix, '/episodes/:id/shorts'), async (request, reply) => {
     const { id } = request.params as { id: string };
     const dir = await storage.getEpisodeDirectory(id);
