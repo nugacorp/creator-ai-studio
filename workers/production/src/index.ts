@@ -226,7 +226,7 @@ async function runSeoJob(job: ProductionJob): Promise<void> {
 
   const episodeRes = await apiFetch(`/episodes/${job.episodeId}`);
   await assertOk(episodeRes, 'load episode for SEO');
-  const episode = (await episodeRes.json()) as {
+  const episodeFull = (await episodeRes.json()) as {
     title?: string;
     content?: { script?: string };
   };
@@ -234,8 +234,8 @@ async function runSeoJob(job: ProductionJob): Promise<void> {
   const res = await apiFetch('/ai/seo', {
     method: 'POST',
     body: JSON.stringify({
-      title: episode.title ?? '',
-      script: episode.content?.script ?? '',
+      title: episodeFull.title ?? '',
+      script: episodeFull.content?.script ?? '',
     }),
   });
   await assertOk(res, 'generate SEO');
