@@ -489,9 +489,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             <AgentsView
               episodeId={activeProject?.id}
               episodeTitle={activeProject?.title}
-              onEpisodeRefresh={
-                activeProject?.id ? () => reloadEpisode(activeProject.id) : undefined
-              }
+              onEpisodeRefresh={reloadEpisode}
               onOpenWorkspace={
                 activeProject?.id
                   ? () => {

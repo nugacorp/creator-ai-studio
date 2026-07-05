@@ -44,6 +44,8 @@ const AGENT_COLORS: Record<string, string> = {
   analytics_agent: 'text-lime-400 bg-lime-500/10 border-lime-500/20',
 };
 
+const AGENT_POLL_MS = 15_000;
+
 type AgentCardStatus = 'working' | 'idle' | 'completed' | 'failed' | 'awaiting_approval';
 
 interface AgentCard {
@@ -63,7 +65,8 @@ interface AgentCard {
 interface AgentsViewProps {
   episodeId?: string;
   episodeTitle?: string;
-  onEpisodeRefresh?: () => Promise<void>;
+  /** Reload episode in parent app — receives episode id. */
+  onEpisodeRefresh?: (episodeId: string) => Promise<void>;
   onOpenWorkspace?: () => void;
 }
 
@@ -129,6 +132,13 @@ function mergeAgentsWithRuns(defs: AgentDefinition[], runs: AgentRunRecord[]): A
   });
 }
 
+function previewUrlsEqual(
+  a: { thumbnail?: string; video?: string; audio?: string },
+  b: { thumbnail?: string; video?: string; audio?: string },
+): boolean {
+  return a.thumbnail === b.thumbnail && a.video === b.video && a.audio === b.audio;
+}
+
 export default function AgentsView({
   episodeId,
   episodeTitle,
@@ -139,6 +149,7 @@ export default function AgentsView({
   const [agents, setAgents] = useState<AgentCard[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('hermes');
   const [loading, setLoading] = useState(true);
+  const [loadingPreviews, setLoadingPreviews] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
@@ -152,6 +163,12 @@ export default function AgentsView({
     audio?: string;
   }>({});
   const previewUrlsRef = useRef(previewUrls);
+  const definitionsRef = useRef<AgentDefinition[]>([]);
+  const onEpisodeRefreshRef = useRef(onEpisodeRefresh);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  onEpisodeRefreshRef.current = onEpisodeRefresh;
 
   const revokePreviewUrls = useCallback((urls: typeof previewUrls) => {
     for (const url of Object.values(urls)) {
@@ -159,27 +176,9 @@ export default function AgentsView({
     }
   }, []);
 
-  const loadPreviews = useCallback(
-    async (id: string, detail: EpisodeDetail, assetList: EpisodeAssetsResponse | null) => {
-      const next: typeof previewUrls = {};
-      const thumbFile = assetList?.files.find(f => f.key === 'thumbnail' && f.available);
-      const videoFile = assetList?.files.find(f => f.key === 'video' && f.available);
-      const audioFile = assetList?.files.find(f => f.key === 'audio' && f.available);
-
-      if (thumbFile) {
-        next.thumbnail = (await fetchEpisodeAssetObjectUrl(id, 'thumbnail')) ?? undefined;
-      } else if (detail.content.thumbnailUrl) {
-        next.thumbnail = detail.content.thumbnailUrl;
-      }
-      if (videoFile) {
-        next.video = (await fetchEpisodeAssetObjectUrl(id, 'video')) ?? undefined;
-      }
-      if (audioFile) {
-        next.audio = (await fetchEpisodeAssetObjectUrl(id, 'audio')) ?? undefined;
-      } else if (detail.content.audioUrl) {
-        next.audio = detail.content.audioUrl;
-      }
-
+  const applyPreviewUrls = useCallback(
+    (next: typeof previewUrls) => {
+      if (previewUrlsEqual(previewUrlsRef.current, next)) return;
       revokePreviewUrls(previewUrlsRef.current);
       previewUrlsRef.current = next;
       setPreviewUrls(next);
@@ -187,41 +186,116 @@ export default function AgentsView({
     [revokePreviewUrls],
   );
 
+  const loadPreviews = useCallback(
+    async (id: string, detail: EpisodeDetail, assetList: EpisodeAssetsResponse | null) => {
+      const audioPlaying = audioRef.current && !audioRef.current.paused;
+      const videoPlaying = videoRef.current && !videoRef.current.paused;
+
+      const next: typeof previewUrls = { ...previewUrlsRef.current };
+      const thumbFile = assetList?.files.find(f => f.key === 'thumbnail' && f.available);
+      const videoFile = assetList?.files.find(f => f.key === 'video' && f.available);
+      const audioFile = assetList?.files.find(f => f.key === 'audio' && f.available);
+
+      if (!videoPlaying) {
+        if (videoFile) {
+          next.video = (await fetchEpisodeAssetObjectUrl(id, 'video')) ?? undefined;
+        } else {
+          next.video = undefined;
+        }
+      }
+
+      if (!audioPlaying) {
+        if (audioFile) {
+          next.audio = (await fetchEpisodeAssetObjectUrl(id, 'audio')) ?? undefined;
+        } else if (detail.content.audioUrl) {
+          next.audio = detail.content.audioUrl;
+        } else {
+          next.audio = undefined;
+        }
+      }
+
+      if (thumbFile) {
+        next.thumbnail = (await fetchEpisodeAssetObjectUrl(id, 'thumbnail')) ?? undefined;
+      } else if (detail.content.thumbnailUrl) {
+        next.thumbnail = detail.content.thumbnailUrl;
+      } else {
+        next.thumbnail = undefined;
+      }
+
+      applyPreviewUrls(next);
+    },
+    [applyPreviewUrls],
+  );
+
+  const refreshAgentRuns = useCallback(
+    async (defs: AgentDefinition[]) => {
+      if (!episodeId) return;
+      const runsData = await fetchAgentRuns(episodeId);
+      const cards = mergeAgentsWithRuns(defs, runsData.runs);
+      setAgents(cards);
+      setSelectedAgentId(prev => (cards.some(c => c.id === prev) ? prev : (cards[0]?.id ?? 'hermes')));
+      setLastRefreshedAt(
+        new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      );
+      return cards;
+    },
+    [episodeId],
+  );
+
+  const loadEpisodeBundle = useCallback(
+    async (opts?: { includePreviews?: boolean }) => {
+      if (!episodeId) return;
+      if (opts?.includePreviews) setLoadingPreviews(true);
+      try {
+        const [detail, assetsData] = await Promise.all([
+          fetchEpisodeDetail(episodeId),
+          fetchEpisodeAssets(episodeId).catch(() => null),
+        ]);
+        setEpisode(detail);
+        setAssets(assetsData);
+        if (opts?.includePreviews) {
+          await loadPreviews(episodeId, detail, assetsData);
+        }
+      } finally {
+        setLoadingPreviews(false);
+      }
+    },
+    [episodeId, loadPreviews],
+  );
+
   const refresh = useCallback(
-    async (opts?: { silent?: boolean }) => {
+    async (opts?: { silent?: boolean; agentsOnly?: boolean; syncParent?: boolean }) => {
       const silent = opts?.silent ?? false;
+      const agentsOnly = opts?.agentsOnly ?? false;
       if (!silent) setRefreshing(true);
       setError(null);
       try {
-        const { agents: defs } = await fetchAgents();
-        setDefinitions(defs);
+        let defs = definitionsRef.current;
+        if (defs.length === 0) {
+          const res = await fetchAgents();
+          defs = res.agents;
+          definitionsRef.current = defs;
+          setDefinitions(defs);
+        }
 
-        let runs: AgentRunRecord[] = [];
         if (episodeId) {
-          const [runsData, detail, assetsData] = await Promise.all([
-            fetchAgentRuns(episodeId),
-            fetchEpisodeDetail(episodeId),
-            fetchEpisodeAssets(episodeId).catch(() => null),
-          ]);
-          runs = runsData.runs;
-          setEpisode(detail);
-          setAssets(assetsData);
-          await loadPreviews(episodeId, detail, assetsData);
-          if (onEpisodeRefresh) await onEpisodeRefresh();
+          if (agentsOnly) {
+            await refreshAgentRuns(defs);
+          } else {
+            await refreshAgentRuns(defs);
+            await loadEpisodeBundle({ includePreviews: true });
+            if (opts?.syncParent && onEpisodeRefreshRef.current) {
+              await onEpisodeRefreshRef.current(episodeId);
+            }
+          }
         } else {
           setEpisode(null);
           setAssets(null);
           revokePreviewUrls(previewUrlsRef.current);
           previewUrlsRef.current = {};
           setPreviewUrls({});
+          setAgents(mergeAgentsWithRuns(defs, []));
         }
-
-        const cards = mergeAgentsWithRuns(defs, runs);
-        setAgents(cards);
-        setSelectedAgentId(prev => (cards.some(c => c.id === prev) ? prev : (cards[0]?.id ?? 'hermes')));
-        setLastRefreshedAt(
-          new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        );
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error cargando agentes');
       } finally {
@@ -229,12 +303,39 @@ export default function AgentsView({
         if (!silent) setRefreshing(false);
       }
     },
-    [episodeId, onEpisodeRefresh, loadPreviews, revokePreviewUrls],
+    [episodeId, refreshAgentRuns, loadEpisodeBundle, revokePreviewUrls],
   );
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { agents: defs } = await fetchAgents();
+        if (cancelled) return;
+        definitionsRef.current = defs;
+        setDefinitions(defs);
+        if (episodeId) {
+          await refreshAgentRuns(defs);
+          if (cancelled) return;
+          setLoading(false);
+          await loadEpisodeBundle({ includePreviews: true });
+        } else {
+          setAgents(mergeAgentsWithRuns(defs, []));
+          setLoading(false);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Error cargando agentes');
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [episodeId, refreshAgentRuns, loadEpisodeBundle]);
 
   useEffect(() => {
     return () => revokePreviewUrls(previewUrlsRef.current);
@@ -244,7 +345,9 @@ export default function AgentsView({
     if (!episodeId) return;
     const hasActive = agents.some(a => a.status === 'working');
     if (!hasActive) return;
-    const timer = window.setInterval(() => void refresh({ silent: true }), 5000);
+    const timer = window.setInterval(() => {
+      void refresh({ silent: true, agentsOnly: true });
+    }, AGENT_POLL_MS);
     return () => window.clearInterval(timer);
   }, [episodeId, agents, refresh]);
 
@@ -256,7 +359,7 @@ export default function AgentsView({
     setError(null);
     try {
       await approveAgentRun(episodeId, runId);
-      await refresh({ silent: true });
+      await refresh({ silent: true, syncParent: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo aprobar el agente');
     } finally {
@@ -273,7 +376,7 @@ export default function AgentsView({
     setError(null);
     try {
       await runEpisodeAgent(episodeId, agentId, { autoEnqueuePlan });
-      await refresh({ silent: true });
+      await refresh({ silent: true, agentsOnly: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo encolar el agente');
     } finally {
@@ -330,7 +433,7 @@ export default function AgentsView({
           <button
             type="button"
             disabled={refreshing}
-            onClick={() => void refresh()}
+            onClick={() => void refresh({ syncParent: true })}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border border-white/10 text-xs text-slate-300 hover:text-white disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -355,6 +458,9 @@ export default function AgentsView({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
               Producción del episodio
+              {loadingPreviews ? (
+                <span className="ml-2 text-[10px] text-slate-500 font-normal normal-case">cargando previews…</span>
+              ) : null}
             </h3>
             {onOpenWorkspace && (
               <button
@@ -416,7 +522,7 @@ export default function AgentsView({
                 Narración
               </div>
               {previewUrls.audio ? (
-                <audio controls src={previewUrls.audio} className="w-full h-8" />
+                <audio ref={audioRef} controls src={previewUrls.audio} className="w-full h-8" />
               ) : (
                 <p className="text-[10px] text-slate-500 italic py-4">Sin audio — job TTS pendiente</p>
               )}
@@ -428,7 +534,12 @@ export default function AgentsView({
                 Video
               </div>
               {previewUrls.video ? (
-                <video controls src={previewUrls.video} className="w-full aspect-video rounded-lg border border-white/10" />
+                <video
+                  ref={videoRef}
+                  controls
+                  src={previewUrls.video}
+                  className="w-full aspect-video rounded-lg border border-white/10"
+                />
               ) : (
                 <p className="text-[10px] text-slate-500 italic py-8 text-center">Sin render — ejecuta pipeline video</p>
               )}
