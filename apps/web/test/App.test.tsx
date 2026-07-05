@@ -66,7 +66,7 @@ describe('Official dashboard shell', () => {
     renderApp('home');
 
     expect(screen.getByText(/Buenos días|Buenas tardes|Buenas noches/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Abrir proyecto/i })).toBeInTheDocument();
+    expect(document.getElementById('quick-actions-fab')).toBeInTheDocument();
   });
 
   it('loads real episodes from the backend into the Projects view', async () => {

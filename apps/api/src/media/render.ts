@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { areMocksAllowed } from '../config/mocks.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -218,6 +219,28 @@ export async function saveThumbnailToDisk(
   const dest = path.join(thumbDir, 'thumbnail.png');
   if (await downloadImage(imageUrl, dest)) {
     return dest;
+  }
+  // Placeholder only in dev/demo — production must use a real image provider.
+  if (areMocksAllowed() && (await checkFfmpeg())) {
+    try {
+      await execFileAsync(
+        'ffmpeg',
+        [
+          '-y',
+          '-f',
+          'lavfi',
+          '-i',
+          'color=c=0x1a2332:s=1280x720:d=1',
+          '-frames:v',
+          '1',
+          dest,
+        ],
+        { timeout: 30_000 },
+      );
+      return dest;
+    } catch {
+      return null;
+    }
   }
   return null;
 }

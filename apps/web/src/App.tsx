@@ -24,7 +24,6 @@ import { useAuth } from './context/AuthContext';
 import {
   INITIAL_CHANNELS,
   INITIAL_NOTIFICATIONS,
-  INITIAL_PROJECTS,
   INITIAL_SERIES,
   TEAM_MEMBERS,
 } from './data';
@@ -76,23 +75,22 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   });
   const [channels, setChannels] = useState<Channel[]>(INITIAL_CHANNELS);
   const [selectedChannel, setSelectedChannel] = useState<Channel>(INITIAL_CHANNELS[0]);
-  const [projects, setProjects] = useState<VideoProject[]>(INITIAL_PROJECTS);
+  const [projects, setProjects] = useState<VideoProject[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
-  const [activeProjectId, setActiveProjectId] = useState<string>('ansiedad_biblia');
+  const [activeProjectId, setActiveProjectId] = useState<string>('');
+  const [workspaceRefreshToken, setWorkspaceRefreshToken] = useState(0);
   const [team, setTeam] = useState<TeamMember[]>(TEAM_MEMBERS);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
 
-  const activeProject = projects.find(p => p.id === activeProjectId) || projects[0];
+  const activeProject = projects.find(p => p.id === activeProjectId);
 
   const loadProjects = useCallback(async () => {
     try {
       const episodes = await fetchEpisodes();
       if (episodes.length === 0) {
-        setProjects(INITIAL_PROJECTS);
-        setActiveProjectId(prev =>
-          INITIAL_PROJECTS.some(p => p.id === prev) ? prev : 'ansiedad_biblia',
-        );
+        setProjects([]);
+        setActiveProjectId('');
         return;
       }
 
@@ -107,16 +105,16 @@ export function App({ initialView = 'home' }: AppProps = {}) {
         }),
       );
       setProjects(details);
-      setActiveProjectId(prev =>
-        details.some(p => p.id === prev) ? prev : details[0].id,
-      );
+      setActiveProjectId(prev => (prev && details.some(p => p.id === prev) ? prev : details[0].id));
     } catch {
-      setProjects(INITIAL_PROJECTS);
-      setActiveProjectId(prev =>
-        INITIAL_PROJECTS.some(p => p.id === prev) ? prev : 'ansiedad_biblia',
-      );
+      setProjects([]);
     }
   }, []);
+
+  const handlePipelineComplete = useCallback(async () => {
+    await loadProjects();
+    setWorkspaceRefreshToken(t => t + 1);
+  }, [loadProjects]);
 
   useEffect(() => {
     void loadProjects();
@@ -213,6 +211,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
       const created = await createEpisode({ title });
       await loadProjects();
       setActiveProjectId(created.id);
+      setCurrentView('workspace');
       handleAddNotification(`✓ Episodio "${title}" creado en el backend`, 'success');
     } catch {
       handleAddNotification('✕ No se pudo crear el episodio', 'error');
@@ -302,7 +301,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             (activeProject ? (
               // key={id} remounts the workspace per episode so its editable state
               // always reflects the selected episode (not the previously opened one).
-              <div key={activeProject.id} className="space-y-6">
+              <div key={`${activeProject.id}-${workspaceRefreshToken}`} className="space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-3 bg-[#15191E] border border-white/5 rounded-2xl px-4 py-3">
                   <button
                     type="button"
@@ -324,7 +323,11 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                     </span>
                   </div>
                 </div>
-                <PipelinePanel episodeId={activeProject.id} episodeTitle={activeProject.title} />
+                <PipelinePanel
+                  episodeId={activeProject.id}
+                  episodeTitle={activeProject.title}
+                  onPipelineComplete={() => void handlePipelineComplete()}
+                />
                 <ProductionStagesPanel episodeId={activeProject.id} />
                 <WorkspaceView project={activeProject} onUpdateProject={handleUpdateProject} />
               </div>

@@ -420,7 +420,7 @@ function registerRoutes(
         };
       }
     }
-    if (body.episodeId && result.audioUrl && !result.isDemo) {
+    if (body.episodeId && (result.savedPath || (result.audioUrl && !result.isDemo))) {
       const episode = await storage.getEpisode(body.episodeId);
       if (episode) {
         await storage.updateEpisode(body.episodeId, {
@@ -554,11 +554,19 @@ function registerRoutes(
       p.generateImage(`Miniatura YouTube: ${episode.title}`, { aspectRatio: '16:9' }),
     );
     const { saveThumbnailToDisk } = await import('./media/render.js');
-    await saveThumbnailToDisk(dir, imageUrl);
+    const savedPath = await saveThumbnailToDisk(dir, imageUrl);
+    if (!savedPath && !areMocksAllowed()) {
+      reply.code(502);
+      return {
+        error: 'thumbnail_save_failed',
+        message:
+          'No se pudo guardar la miniatura en disco. Verifica el proveedor de imágenes y conectividad.',
+      };
+    }
     await storage.updateEpisode(id, {
       content: { thumbnailUrl: imageUrl },
     });
-    return { imageUrl, saved: true };
+    return { imageUrl, saved: Boolean(savedPath) };
   });
 
   app.post(route(prefix, '/episodes/:id/pipeline'), async (request, reply) => {
