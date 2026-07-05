@@ -735,7 +735,11 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                       <span className="text-[10px] text-[#8B949E] italic">Transition: {scene.transition}</span>
                       <button
                         onClick={() => {
-                          setScenes(prev => prev.filter(sc => sc.id !== scene.id));
+                          const nextScenes = scenes.filter(sc => sc.id !== scene.id);
+                          persistScenes(nextScenes);
+                          if (selectedSceneId === scene.id) {
+                            setSelectedSceneId(nextScenes[0]?.id ?? null);
+                          }
                           triggerFeedback('success', '✓ Escena removida');
                         }}
                         className="p-1 rounded text-[#8B949E] hover:text-rose-400 hover:bg-rose-950/20 transition-colors cursor-pointer"
