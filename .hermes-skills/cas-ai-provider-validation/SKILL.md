@@ -1,51 +1,47 @@
 ---
 name: cas-ai-provider-validation
-description: Validate real OpenAI/Claude/Gemini providers for Creator AI Studio — /api/ai/providers/status, per-provider smoke, demoMode=false, sanitized errors. Use before agent runs or E2E on staging.
+description: "Validate real Creator AI Studio AI providers without exposing secrets or running the pipeline."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [creator-ai-studio, ai-providers, openai, claude, gemini, staging]
 ---
 
 # CAS AI Provider Validation
 
-Confirm **real** AI providers work; demo fallback must not mask failures on staging/production validation.
+Use when validating real AI providers in staging/production readiness.
 
-## Environment flags
+## Inputs needed
+- Staging/production URL.
+- Expected commit.
+- Authorization to call provider smoke endpoints.
 
-| Flag | Staging validation | Production |
-|------|-------------------|------------|
-| `AI_ALLOW_DEMO_FALLBACK` | `false` | `false` |
-| `demoMode` in settings | `false` | `false` |
+## Safety rules
+- Never print API keys, OAuth tokens, CAS_API_KEY, cookies, or Authorization headers.
+- Run API probes from inside API container or secure authenticated context.
+- Report only sanitized provider messages/status codes.
+- Do not persist content unless explicitly authorized.
+- Do not execute pipeline, TTS, render, shorts, publish, or confirm-publish.
 
-## Steps
+## Required preflight
+1. `GET /api/health`.
+2. `GET /api/system/mode`.
+3. `GET /api/ai/providers/status`.
+4. Confirm `demoMode=false`.
+5. Confirm `AI_ALLOW_DEMO_FALLBACK=false`.
+6. Confirm fallback setting/order without printing secrets.
 
-1. **Status endpoint** (authenticated):
+## Provider smoke endpoints
+- `POST /api/ai/providers/openai/test` with operation `script` and marker prompt.
+- `POST /api/ai/providers/claude/test` with operation `script` and marker prompt.
+- `POST /api/ai/providers/gemini/test` with operation `script` and marker prompt.
 
-   `GET /api/ai/providers/status`
+Test only configured providers. Prefer OpenAI, then Claude, then Gemini for `AI_SCRIPT_PROVIDER` if a provider responds OK.
 
-   Expect configured providers listed without exposing key material.
+## Generate-script smoke
+Only after/alongside provider validation, call `/api/ai/generate-script` with a very short non-persistent prompt. Validate: HTTP success, text generated, provider used, not demo, not mock, no quota/scope/saldo error.
 
-2. **Settings UI smoke** (preferred for operators):
-
-   Configuración → proveedor (OpenAI/Gemini/Claude) → **Probar**  
-   Expect success message, not demo placeholder text.
-
-3. **Minimal chat smoke** (if WO allows):
-
-   `POST /api/ai/chat` with short prompt — response must be real model output when keys valid.
-
-4. **Failure case**: invalid/missing key → HTTP error with **sanitized** message (no key substrings, no stack with env vars).
-
-## Provider-specific notes
-
-- **OpenAI**: default on staging after CAS-HERMES-VAL; verify billing active if 429/quota errors.
-- **Gemini**: requires `GEMINI_API_KEY` or Settings UI key with `CAS_SECRETS_KEY`.
-- **Claude**: requires Anthropic key in secrets store.
-
-## Do not
-
-- Run full agent pipeline or Hermes orchestration as part of this skill unless WO extends scope.
-- Set `AI_ALLOW_DEMO_FALLBACK=true` to "pass" validation.
-- Log Authorization headers or request bodies containing keys.
-
-## References
-
-- [docs/02-operations/AI_PROVIDER_DIAGNOSTICS.md](../../docs/02-operations/AI_PROVIDER_DIAGNOSTICS.md)
-- [docs/02-operations/AI_CREDENTIALS_CHECKLIST.md](../../docs/02-operations/AI_CREDENTIALS_CHECKLIST.md)
+## Delivery format
+Status, commit, services, health, mode, providers status, OpenAI/Claude/Gemini results, selected provider, `AI_SCRIPT_PROVIDER` configured yes/no, generate-script result, sanitized errors, next recommendation.

@@ -1,48 +1,47 @@
 ---
 name: cas-youtube-release-safety
-description: Safe YouTube release for Creator AI Studio — OAuth scopes, final video/metadata/thumbnail checks, explicit human authorization before upload, private/unlisted test uploads, prevent double publish.
+description: "Creator AI Studio YouTube release safety gate requiring explicit human authorization."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [creator-ai-studio, youtube, oauth, release, safety]
 ---
 
 # CAS YouTube Release Safety
 
-YouTube upload is **high risk**. This skill applies only when a Work Order **explicitly authorizes** publication.
+Use before any YouTube upload, release, or publish confirmation.
 
-## Hard gates
+## Inputs needed
+- Episode ID.
+- Explicit human authorization to upload/publish.
+- Desired visibility: private, unlisted, or public.
+- Confirmation of final metadata and thumbnail.
 
-1. **Written authorization** in WO: episode id, channel, visibility (private/unlisted/public).
-2. **Human confirmation** before any upload API call.
-3. **Video artifact exists** — final render on disk, not placeholder.
-4. **Metadata complete** — title, description, tags from SEO agent or manual review.
-5. **Thumbnail attached** — final asset, not stock placeholder.
-6. **OAuth valid** — Google OAuth with YouTube scopes; token refresh working.
+## Safety rules
+- Never print OAuth tokens, refresh tokens, client secrets, cookies, or Authorization headers.
+- Never publish automatically.
+- Never confirm publish automatically.
+- Use private or unlisted for tests unless public release is explicitly authorized.
+- Prevent duplicate publication.
 
-## Pre-upload checklist
+## Checklist
+1. Confirm video artefact exists and is final.
+2. Confirm title/description/tags/thumbnail are final.
+3. Confirm YouTube OAuth connected.
+4. Confirm required scopes are present.
+5. Confirm target channel/account.
+6. Confirm no existing `videoId`/published record for the episode.
+7. Confirm human approval text explicitly authorizes upload.
+8. Upload with requested visibility.
+9. Do not call confirm-publish unless separately authorized after verifying upload result.
+10. Record sanitized video ID/URL only if allowed.
 
-| Item | Verify |
-|------|--------|
-| OAuth | Settings → YouTube connected |
-| Scopes | Upload + manage videos |
-| Duplicate | Episode not already `published` with `youtubeVideoId` |
-| Visibility | Default **private** or **unlisted** for test WO |
-| `authorized: true` | Required on publish-confirm endpoint |
+## Prohibited actions
+- Upload without explicit authorization.
+- Public publish for tests unless explicitly authorized.
+- Re-upload same episode without duplicate-safety check.
 
-## API behavior
-
-Publish endpoints must require explicit confirmation flag — never auto-chain from `publish_package` job without human step.
-
-## Test strategy
-
-1. First upload: **private** video on test channel or unlisted.
-2. Verify video in YouTube Studio before any public visibility change.
-3. Document YouTube video id in episode metadata — no second upload for same episode.
-
-## Do not
-
-- Call confirm-publish without operator approval.
-- Publish from CI, agent autoEnqueue, or smoke tests.
-- Log OAuth refresh tokens or Google client secrets.
-
-## References
-
-- [docs/02-operations/GOOGLE_OAUTH_PRODUCTION.md](../../docs/02-operations/GOOGLE_OAUTH_PRODUCTION.md)
-- [docs/02-operations/E2E_STAGING_CHECKLIST.md](../../docs/02-operations/E2E_STAGING_CHECKLIST.md)
+## Delivery format
+Status, OAuth/scopes yes/no, artefacts yes/no, metadata yes/no, authorization yes/no, upload executed yes/no, visibility, duplicate check, next recommendation.

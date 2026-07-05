@@ -1,50 +1,47 @@
 ---
 name: cas-ui-smoke-test
-description: UI smoke test for Creator AI Studio web dashboard — login, sidebar, header, projects, workspace, episode creation if authorized. No IA pipeline. Use after deploy or frontend changes.
+description: "Creator AI Studio public UI smoke validation without running AI or production pipeline."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [creator-ai-studio, ui, smoke, staging, browser]
 ---
 
 # CAS UI Smoke Test
 
-Manual or browser-automation smoke of the **web dashboard** without invoking AI production pipeline.
+Use when validating the public staging UI after deploys or UI fixes.
 
-## Staging URL
+## Inputs needed
+- Public URL.
+- Expected commit/deploy context.
+- Safe login method or authorization for temporary smoke account.
 
-`https://creator-ai-studio.217.76.56.66.sslip.io`
+## Safety rules
+- Never print passwords, session tokens, cookies, JWTs, API keys, or Authorization headers.
+- Do not execute IA, TTS, render, shorts, publish, or pipeline.
+- Do not delete production data unless explicitly authorized.
 
-Use Playwright skill (`playwright` hub skill) or browser tools when automating.
+## UI checklist
+1. Open public URL.
+2. Confirm login/signup screen assets load.
+3. Login or create temporary smoke account safely.
+4. Confirm dashboard loads.
+5. Confirm sidebar and header/session indicator.
+6. Open Proyectos.
+7. Confirm episodes/cards visible.
+8. Open Workspace from heading or Editar Workspace.
+9. Confirm breadcrumb, title, status, and Volver a Proyectos.
+10. Create episode only if Work Order authorizes it.
+11. Change stage only if Work Order authorizes it.
+12. Check console for critical errors.
+13. Confirm assets/network do not show auth failures.
 
-## Checklist
+## API companion checks
+- `/api/health` public 200.
+- `/api/episodes` with auth 200 if scoped.
+- `/api/episodes/:id` with auth 200 if scoped.
 
-| # | Step | Pass |
-|---|------|------|
-| 1 | Load home / dashboard | Greeting + Panel del Creador visible |
-| 2 | Sidebar | All nav items render; click Proyectos, Agentes, Configuración |
-| 3 | Header | Channel selector, notifications area present |
-| 4 | Login (if auth required) | Supabase login → dashboard accessible |
-| 5 | Proyectos | Pipeline board loads; columns visible |
-| 6 | Dashboard stats | Clickable cards navigate (episodios → proyectos, programados → calendario) |
-| 7 | Open workspace | Select episode → workspace tabs (Guion, Narración, etc.) |
-| 8 | Create episode | Only if WO authorizes — new episode appears in list |
-| 9 | Move stage | Only if WO authorizes — card moves between columns |
-| 10 | Console | No uncaught errors on critical paths |
-| 11 | Network | `/api/health` 200; authenticated `/api/episodes` 200 |
-
-## Do not
-
-- Trigger Hermes agent runs, TTS, render, or YouTube publish.
-- Store or log Supabase session tokens in reports.
-
-## Clickable dashboard (v0.4+)
-
-Home stats map to:
-
-- Episodios activos → Proyectos (filtered)
-- Con guion → Workspace guion tab (single episode) or filtered board
-- En producción → Proyectos / workspace production tabs
-- Miniaturas listas → Miniatura tab or filtered board
-- Programados → Calendario
-
-## References
-
-- [apps/web/src/components/HomeView.tsx](../../apps/web/src/components/HomeView.tsx)
-- `.claude/skills/playwright-web-testing/SKILL.md` (Cursor/Claude Playwright)
+## Delivery format
+Status, URL, login yes/no, dashboard/sidebar/header/projects/workspace markers, created/changed entities, console errors, API smoke, prohibited actions confirmation, next recommendation.

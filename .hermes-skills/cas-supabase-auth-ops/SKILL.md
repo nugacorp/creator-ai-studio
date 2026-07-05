@@ -1,47 +1,43 @@
 ---
 name: cas-supabase-auth-ops
-description: Supabase auth operations for Creator AI Studio — login flow, health, JWT usage without printing tokens, settings/profile, key rotation before production.
+description: "Creator AI Studio Supabase/Auth operational validation without token disclosure."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [creator-ai-studio, supabase, auth, jwt, operations]
 ---
 
-# CAS Supabase Auth Operations
+# CAS Supabase Auth Ops
 
-Operate and validate **Supabase authentication** for the CAS web app and API.
+Use for Supabase health, authentication, JWT, and profile/settings operations.
 
-## Configuration (names only)
+## Inputs needed
+- Environment URL.
+- Safe login method or test account authorization.
+- Scope of auth routes/settings to validate.
 
-| Variable | Service |
-|----------|---------|
-| `SUPABASE_URL` | API, Web build (`VITE_SUPABASE_URL`) |
-| `SUPABASE_ANON_KEY` | Web client |
-| `SUPABASE_SERVICE_ROLE_KEY` | API server only — never expose to browser |
-| `SUPABASE_JWT_SECRET` | API JWT verification (if used) |
+## Safety rules
+- Never print JWTs, refresh tokens, cookies, passwords, service_role key, anon key, or Authorization headers.
+- Do not change Supabase settings or secrets unless explicitly authorized.
+- Do not create/delete users unless the Work Order authorizes it.
 
-Never print values. Confirm **set/non-empty** via deploy env UI or `hermes doctor`-style presence checks.
+## Checklist
+1. Validate `/api/health` reports Supabase OK.
+2. Validate public auth/status/mode routes as expected.
+3. Validate login through UI or safe API path.
+4. Validate protected route without auth returns 401.
+5. Validate protected route with auth returns expected data without printing token.
+6. Validate JWT priority/sync behavior if in scope.
+7. Validate settings/profile endpoints if present.
+8. Confirm no service_role leakage in logs or responses.
+9. Confirm production rotation checklist before launch.
 
-## Validation steps
+## Allowed commands
+- Browser UI login smoke.
+- API calls using tokens stored only in runtime variables and never echoed.
+- Container-internal checks that do not dump env.
 
-1. **Web login**: LoginView → email/password or magic link → session established.
-2. **Protected API**: `fetch('/api/episodes', { headers: { Authorization: 'Bearer <session>' } })` → 200.
-3. **Without token**: 401 when `authRequired: true`.
-4. **Profile**: Settings profile loads display name; updates persist.
-5. **Health**: Supabase project reachable; no CORS misconfig on staging URL.
-
-## JWT handling
-
-- Use session `access_token` from Supabase client for API calls.
-- Reports may say "JWT present" or "JWT rejected" — **never paste token strings**.
-- Rotate anon/service keys before production per [SUPABASE_AUTH.md](../../docs/02-operations/SUPABASE_AUTH.md).
-
-## Misconfiguration
-
-If Supabase env missing on web build → `AuthMisconfiguredView` blocks app. Fix Coolify build args / env and redeploy web.
-
-## Scripts
-
-- `scripts/supabase-setup.ps1` — local/dev setup (not for printing secrets)
-- `scripts/vps-sync-supabase-env.sh` — VPS env sync (sanitized output only)
-
-## References
-
-- [docs/02-operations/SUPABASE_AUTH.md](../../docs/02-operations/SUPABASE_AUTH.md)
-- [apps/web/src/context/AuthContext.tsx](../../apps/web/src/context/AuthContext.tsx)
+## Delivery format
+Status, health, login, protected route without/with auth, settings/profile result, sanitized errors, rotation reminders, next recommendation.

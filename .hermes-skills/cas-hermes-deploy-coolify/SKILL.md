@@ -1,69 +1,56 @@
 ---
 name: cas-hermes-deploy-coolify
-description: Safe deploy of Creator AI Studio to Coolify/VPS staging — validate branch/commit, run gates, use vps-redeploy.sh, verify api/web/worker/redis health. Use for staging redeploys only unless explicitly authorized for production.
+description: "Safe Creator AI Studio staging deploy via Coolify/VPS redeploy script."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [creator-ai-studio, coolify, deploy, docker-compose]
 ---
 
-# CAS Hermes Deploy (Coolify / VPS)
+# CAS Hermes Deploy Coolify
 
-Deploy **staging** branch changes to the VPS Coolify stack safely.
+Use for Creator AI Studio deploy validation to staging/Coolify.
 
-## Preconditions
+## Inputs needed
+- Branch and expected commit SHA.
+- Target URL.
+- Explicit authorization to deploy.
 
-- Target branch: `staging` (not `main` unless promotion WO says otherwise)
-- CI green on the commit to deploy
-- Work Order authorizes deploy (no silent production changes)
+## Safety rules
+- Never print secrets, tokens, CAS_API_KEY, API keys, or Authorization headers.
+- Stay off `main` unless production promotion is explicitly authorized.
+- Stop on merge conflicts.
+- Do not modify Coolify variables or environment secrets.
 
-## Pre-deploy gates (local or CI)
+## Allowed commands
+- `git fetch --all --prune`, checkout target branch, `git pull --ff-only`.
+- `npm run test`, `npm run typecheck`, `npm run build`.
+- `bash -n scripts/vps-redeploy.sh scripts/patch-worker-cas-key.sh`.
+- `scripts/vps-redeploy.sh <commit>` when deployment is authorized.
+- `docker compose config` and `docker ps` on target host, without env dumps.
+- `GET /api/health` and public UI smoke.
 
-```bash
-npm run typecheck
-npm run test
-npm run build
-```
+## Prohibited actions
+- No force push.
+- No raw `env`/`printenv` output.
+- No manual service start unless script fails and user authorizes follow-up.
+- No pipeline/TTS/render/publish.
 
-Record commit SHA; do not deploy uncommitted VPS-only changes.
+## Checklist
+1. Confirm current branch and clean working tree.
+2. Confirm expected commit.
+3. Run tests/typecheck/build.
+4. Syntax-check redeploy scripts.
+5. Sync validated tree if VPS cannot fetch GitHub.
+6. Ensure deploy scripts executable on VPS if needed.
+7. Run redeploy with final SHA.
+8. Confirm compose includes api, web, redis, worker.
+9. Confirm containers: api healthy, web up, redis up, worker up.
+10. Confirm image tags equal final SHA.
+11. Confirm `/api/health` HTTP 200.
+12. Confirm UI/auth smoke if scoped.
 
-## Staging stack
-
-| Service | Role |
-|---------|------|
-| `api` | Fastify `/api/*`, episode storage |
-| `web` | nginx + Vite static, proxies `/api` |
-| `worker` | Production job runner |
-| `redis` | Job queue |
-
-Compose: `deploy/docker-compose.staging.yml`  
-Public URL: `https://creator-ai-studio.217.76.56.66.sslip.io`
-
-## VPS redeploy
-
-On the VPS (as root or deploy user with docker access):
-
-```bash
-cd /root/creator-ai-studio   # or synced clone path
-git fetch origin staging
-git checkout staging
-git pull origin staging
-bash scripts/vps-redeploy.sh <short-commit-label>
-```
-
-Script: [scripts/vps-redeploy.sh](../../scripts/vps-redeploy.sh) — idempotent env injection, full service enumeration via `docker compose config --services`.
-
-## Post-deploy verification
-
-1. `GET /api/health` → success (no auth required).
-2. Web UI loads; login works if Supabase auth enabled.
-3. Confirm `api`, `web`, `worker`, `redis` running (script prints sanitized status only).
-4. Optional: `node scripts/cas-hermes-val-staging.mjs` with `CAS_STAGING_TOKEN` (never log token).
-
-## Rules
-
-- Do **not** print `CAS_API_KEY`, service role keys, or `.env` contents.
-- Do **not** modify Coolify project settings without explicit WO.
-- Do **not** run IA pipeline or YouTube publish as part of deploy smoke unless WO says so.
-- Rollback: redeploy previous Coolify deployment; episode data persists on volume.
-
-## References
-
-- [docs/01-architecture/DEPLOYMENT_STAGING.md](../../docs/01-architecture/DEPLOYMENT_STAGING.md)
-- [docs/02-operations/RUNBOOK.md](../../docs/02-operations/RUNBOOK.md)
+## Delivery format
+Status, summary, branch/commit, local gates, deploy executed, service states, URL, health, problems, next recommendation.

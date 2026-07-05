@@ -1,55 +1,48 @@
 ---
 name: cas-security-validation
-description: Security validation for Creator AI Studio — protected routes 401, no fail-open auth, no secrets in logs, OAuth returnUrl blocking, path traversal on jobs, rate limits. Use before production promotion or after auth changes.
+description: "Creator AI Studio security validation gates: auth, fail-closed behavior, OAuth, jobs, logs, and secrets hygiene."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [creator-ai-studio, security, auth, oauth, hardening]
 ---
 
 # CAS Security Validation
 
-Structured security checks for the CAS API and worker. **Never print secret values** — verify presence and behavior only.
+Use for security-hardening smoke tests and production security gates.
 
-## Authentication
+## Inputs needed
+- Target URL/environment.
+- Authorized scope.
+- Expected commit.
+- Safe authenticated method if protected routes must be tested.
 
-| Test | Expected |
-|------|----------|
-| `GET /api/episodes` without auth when `authRequired` | `401` |
-| Same request with valid Supabase JWT or `CAS_API_KEY` | `200` |
-| Invalid/expired token | `401`, no stack trace with env |
-| Auth misconfigured (Supabase URL missing) | UI shows misconfiguration, API does not fail-open to anonymous write |
+## Safety rules
+- Never print secrets, tokens, CAS_API_KEY, cookies, or Authorization headers.
+- Do not run destructive scans or broad pentests unless separately authorized.
+- Do not change environment variables or Coolify config.
+- Do not run pipeline/publish.
 
-## Authorization & data isolation
+## Checklist
+1. Public health works: `/api/health` returns 200.
+2. Protected routes without auth return 401, not 200/500.
+3. Protected routes with valid auth work without printing tokens.
+4. Production fail-open is disabled.
+5. `demoMode=false` for production gates.
+6. Secret values are masked in settings/status outputs.
+7. Logs do not expose secrets or Authorization headers.
+8. OAuth external/unsafe `returnUrl` is blocked.
+9. Job IDs reject path traversal and invalid UUIDs.
+10. Rate limit/security headers are active where expected.
+11. Error handler does not leak internals/stacks in production responses.
+12. Secret scan uses redaction and never prints matched values.
 
-- Users only see episodes they own (when Supabase metadata enabled).
-- Admin/settings routes require authenticated session.
+## Allowed commands
+- Targeted curl/API checks with redacted headers.
+- Container logs filtered for error markers, not raw env.
+- Test suite and security-specific tests.
 
-## OAuth safety
-
-- External `returnUrl` parameters rejected or allowlisted.
-- `CAS_PUBLIC_URL` matches browser origin for Google OAuth redirect.
-
-## Job & filesystem safety
-
-- Job payloads cannot escape `LOCAL_STORAGE_PATH` (path traversal attempts → rejected).
-- Worker uses same `CAS_API_KEY` as API — verify header required, never log key.
-
-## Error handling
-
-- Global error handler returns generic messages to clients.
-- Server logs must not contain API keys, tokens, or full Authorization headers.
-
-## Rate limiting
-
-- If enabled, verify excessive requests throttled (status 429) without leaking internals.
-
-## Secret scan (repo / responses)
-
-Search for **patterns only** — do not paste matches that look like real keys:
-
-- `sk-`, `AIza`, `Bearer eyJ`, `service_role`
-- Files: `.env`, `auth.json` must not be committed
-
-Use grep with count/redaction; report file paths and line numbers without values.
-
-## References
-
-- [docs/02-operations/SUPABASE_AUTH.md](../../docs/02-operations/SUPABASE_AUTH.md)
-- [apps/api/src/auth/](../../apps/api/src/auth/)
+## Delivery format
+Status, commit, routes tested, auth results, OAuth/jobs/rate-limit/logs results, sanitized issues, next recommendation.

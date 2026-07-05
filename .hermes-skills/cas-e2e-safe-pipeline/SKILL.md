@@ -1,60 +1,55 @@
 ---
 name: cas-e2e-safe-pipeline
-description: Run Creator AI Studio E2E production pipeline safely through publish package — SEO, TTS, thumbnail, render, shorts — stopping before YouTube publish. Use for staging validation Work Orders.
+description: "Run Creator AI Studio safe E2E production-draft pipeline through publish package, never YouTube publish."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [creator-ai-studio, e2e, pipeline, safe, no-publish]
 ---
 
 # CAS E2E Safe Pipeline
 
-Execute the **full production pipeline** on a test episode through **publish package** generation. **Stop before YouTube upload** unless a separate WO authorizes `cas-youtube-release-safety`.
+Use only when a Work Order explicitly authorizes safe E2E pipeline validation.
 
-## Scope
+## Inputs needed
+- Environment URL and expected commit.
+- Test episode title/theme.
+- Confirmation that publish is not authorized.
 
-Includes: research/script (optional), SEO, TTS/narration, thumbnail, FFmpeg render, shorts, publish package assembly.  
-Excludes: `confirm-publish`, YouTube OAuth upload, public visibility changes.
+## Safety rules
+- Never print secrets/tokens/Authorization headers.
+- Do not publish to YouTube.
+- Do not call `publish`, `confirm-publish`, or authorized upload endpoints.
+- Use private/non-final test content only.
+- Stop before YouTube publish.
 
-## Preconditions
+## Allowed operations when explicitly scoped
+1. Create or select a test episode.
+2. Generate real script.
+3. Generate SEO.
+4. Generate TTS/narration.
+5. Generate thumbnail.
+6. Render video.
+7. Generate shorts.
+8. Create publish package.
+9. Validate artefacts under episode workspace, e.g. `/data/episodes` on VPS.
 
-- Worker + Redis up ([cas-worker-redis-ops](../cas-worker-redis-ops/SKILL.md))
-- Real AI provider ([cas-ai-provider-validation](../cas-ai-provider-validation/SKILL.md))
-- TTS configured (ElevenLabs or Piper)
-- Test episode ID documented in WO
+## Prohibited operations
+- YouTube upload/publish.
+- Confirm publish.
+- Public release.
+- Reusing final production content unless authorized.
 
-## Paths
+## Checklist
+1. Confirm production-draft or ready-for-review mode only.
+2. Confirm demo/mocks disabled if production-readiness validation.
+3. Confirm services api/web/worker/redis are up.
+4. Enqueue/execute only scoped jobs.
+5. Validate job completion and artefact paths.
+6. Validate publish package metadata/checklist.
+7. Confirm YouTube was not called.
 
-**Agent System v1.1** (preferred):
-
-1. `POST /api/episodes/:id/agents/hermes/run` with `autoEnqueuePlan: true` (async via worker) OR step through agents manually.
-2. Approve human gates: `doctrine_reviewer`, `editorial_reviewer` via UI or `POST .../agent-runs/:runId/approve`.
-3. Verify enqueue chain: `tts` → `render` → `publish_package` jobs in `/api/jobs`.
-
-**Legacy safe pipeline**:
-
-- `POST /api/episodes/:id/run-safe-pipeline` or `scripts/local-e2e-pipeline.mjs` (local only with WO permission).
-
-## Artifact checks (on disk under episode workspace)
-
-| Stage | Expected |
-|-------|----------|
-| Script | `02-script/script.md` or content API |
-| Audio | narration file / `audioUrl` |
-| Thumbnail | image in `06-thumbnail/` or content |
-| Video | rendered mp4 |
-| Publish package | bundle ready, not uploaded |
-
-## Staging script
-
-```bash
-# Requires CAS_STAGING_TOKEN — never echo it
-node scripts/cas-hermes-val-staging.mjs
-```
-
-## Stop conditions
-
-- Any job `failed` → capture sanitized error, do not retry publish.
-- YouTube upload requested → halt; escalate to `cas-youtube-release-safety` with explicit authorization.
-
-## References
-
-- [docs/02-operations/CAS-HERMES-VAL.md](../../docs/02-operations/CAS-HERMES-VAL.md)
-- [docs/02-operations/E2E_STAGING_CHECKLIST.md](../../docs/02-operations/E2E_STAGING_CHECKLIST.md)
-- [docs/02-operations/E2E_LOCAL_FINDINGS.md](../../docs/02-operations/E2E_LOCAL_FINDINGS.md)
+## Delivery format
+Status, episode ID, jobs run, artefacts created, publish package result, blocked steps, confirmation that YouTube publish did not run, next recommendation.

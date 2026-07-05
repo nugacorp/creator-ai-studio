@@ -1,48 +1,55 @@
 ---
 name: cas-production-readiness
-description: Assess Creator AI Studio production readiness — real auth, real AI/TTS/render, worker/Redis, no demo mode. Use before promoting staging to production or signing off a release.
+description: "Creator AI Studio: production readiness checklist for real production, no mocks/demo fallback."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [creator-ai-studio, production, readiness, ops]
 ---
 
 # CAS Production Readiness
 
-Evaluate whether Creator AI Studio is ready for **real production**, not demo or mock operation.
+Use when preparing or validating Creator AI Studio for real production.
 
-## When to use
+## Inputs needed
+- Target environment: staging or production.
+- Expected commit SHA.
+- Public URL.
+- Explicit Work Order scope.
 
-- Before production Coolify app or custom domain go-live
-- After major pipeline or auth changes
-- When Hermes or Cursor needs a structured readiness gate
+## Safety rules
+- Never print secrets, API keys, OAuth tokens, CAS_API_KEY, cookies, or Authorization headers.
+- Do not touch `main` unless the Work Order explicitly authorizes production promotion.
+- Do not use mocks, demo mode, or demo fallback for production gates.
+- Do not publish to YouTube without explicit human authorization.
 
-## Hard requirements (must pass)
+## Allowed commands/checks
+- `git status`, `git log`, `git rev-parse`, `git fetch` when repo inspection is needed.
+- `npm run test`, `npm run typecheck`, `npm run build`.
+- Public health checks such as `GET /api/health`.
+- Container/service status checks that do not reveal env values.
 
-| Area | Check |
-|------|-------|
-| Auth | Supabase login required when `authRequired`; protected routes return 401 without token |
-| AI | `demoMode=false`, `AI_ALLOW_DEMO_FALLBACK=false` on target environment |
-| Providers | At least one real provider (OpenAI/Gemini/Claude) passes smoke via Settings or `/api/ai/providers/status` |
-| TTS | ElevenLabs or Piper configured; narration job produces real audio file on disk |
-| Render | FFmpeg render produces video artifact under episode workspace |
-| Worker | `worker` + `redis` containers running; jobs move pending → active → completed |
-| Storage | `LOCAL_STORAGE_PATH` on persistent volume; episodes survive redeploy |
-| YouTube | OAuth configured; publish only via explicit `authorized: true` gate |
-| Secrets | `CAS_SECRETS_KEY` set; no keys in logs or API error responses |
-| HTTPS | Production domain with valid TLS for OAuth |
+## Prohibited commands/actions
+- No pipeline, TTS, render, shorts, publish, or confirm-publish unless the Work Order explicitly scopes it.
+- No environment variable changes.
+- No secret printing or raw env dumps.
+- No force push.
 
-## Explicitly reject
+## Checklist
+1. Confirm deployed commit meets minimum expected SHA.
+2. Confirm `demoMode=false`.
+3. Confirm `AI_ALLOW_DEMO_FALLBACK=false`.
+4. Confirm mocks are not allowed for production gates.
+5. Confirm auth-required routes fail closed with 401 when unauthenticated.
+6. Confirm API, web, worker, and Redis are up.
+7. Validate real AI provider before any production pipeline.
+8. Validate real TTS before render readiness.
+9. Validate render artefact exists before publish readiness.
+10. Validate YouTube OAuth/scopes and human publish authorization gate.
+11. Validate Google Drive/rclone/archive path and rollback plan.
+12. Confirm domain/HTTPS and rollback procedure.
 
-- Mock agents or fake pipeline success without disk artifacts
-- Demo mode fallback masking provider failures
-- Publishing to YouTube without written authorization
-- Deploying from `main` without promotion checklist
-
-## Procedure
-
-1. Read [docs/00-governance/PROJECT_STATE.md](../../docs/00-governance/PROJECT_STATE.md) and [docs/02-operations/PRODUCTION_PROMOTION.md](../../docs/02-operations/PRODUCTION_PROMOTION.md).
-2. Run `npm run test`, `npm run typecheck`, `npm run build` on the commit to deploy.
-3. On staging: `curl -sS "$CAS_PUBLIC_URL/api/health"` → `ok`.
-4. Validate auth, AI, worker (use sibling skills: `cas-ai-provider-validation`, `cas-worker-redis-ops`, `cas-security-validation`).
-5. Document gaps in runbook — **never paste secret values**.
-
-## Output
-
-Structured checklist: pass/fail per area, blockers, recommended next Work Order.
+## Delivery format
+Report: Status, commit, services, health, mode flags, provider/TTS/render/publish readiness, blockers, next recommendation.

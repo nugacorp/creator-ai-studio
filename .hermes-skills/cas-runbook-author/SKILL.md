@@ -1,60 +1,48 @@
 ---
 name: cas-runbook-author
-description: Author and update Creator AI Studio operational docs — CHANGELOG, RUNBOOK, DEPLOYMENT_STAGING, PRODUCTION_READINESS — variable names without values, no secrets, rollback and backup procedures.
+description: "Author and maintain Creator AI Studio operational documentation and runbooks without secrets."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [creator-ai-studio, documentation, runbook, changelog, operations]
 ---
 
 # CAS Runbook Author
 
-Create or update **operational documentation** for Creator AI Studio. Documentation is versioned in `docs/`; this skill defines quality bars.
+Use when updating Creator AI Studio operational documentation.
 
-## Documents you may update (when WO authorizes)
+## Inputs needed
+- Work Order ID.
+- Files authorized for documentation updates.
+- Source facts/evidence from validation or deploy.
 
-| Doc | Path |
-|-----|------|
-| CHANGELOG | [docs/00-governance/CHANGELOG.md](../../docs/00-governance/CHANGELOG.md) |
-| RUNBOOK | [docs/02-operations/RUNBOOK.md](../../docs/02-operations/RUNBOOK.md) |
-| DEPLOYMENT_STAGING | [docs/01-architecture/DEPLOYMENT_STAGING.md](../../docs/01-architecture/DEPLOYMENT_STAGING.md) |
-| PRODUCTION_PROMOTION | [docs/02-operations/PRODUCTION_PROMOTION.md](../../docs/02-operations/PRODUCTION_PROMOTION.md) |
-| PROJECT_STATE | [docs/00-governance/PROJECT_STATE.md](../../docs/00-governance/PROJECT_STATE.md) |
-| E2E checklists | [docs/02-operations/E2E_STAGING_CHECKLIST.md](../../docs/02-operations/E2E_STAGING_CHECKLIST.md) |
+## Safety rules
+- Never write secrets, tokens, passwords, API keys, CAS_API_KEY, or Authorization headers into docs.
+- Do not modify protected/source docs unless authorized.
+- Do not invent validation results; cite actual tool output or mark unknown.
+- Do not change architecture/business decisions without Product Owner or Architect authorization.
 
-## Writing rules
+## Documents commonly maintained
+- CHANGELOG.
+- RUNBOOK.
+- DEPLOYMENT_STAGING.
+- PRODUCTION_READINESS.
+- rollback instructions.
+- backup/restore procedures.
+- environment variable inventory with names only, no values.
+- DOCUMENT_REGISTRY and ADRs when scoped.
 
-1. **Variable names only** — e.g. `CAS_API_KEY`, `GEMINI_API_KEY`; never example real keys.
-2. **Placeholders** — `<your-domain>`, `<episode-id>`, `<Bearer token>`.
-3. **Commands** — copy-paste safe; no embedded secrets.
-4. **Version headers** — bump `Last Updated` and semver where doc template requires.
-5. **Rollback** — every deploy doc mentions Coolify rollback + persistent volume path.
-6. **Backup** — episode data at `LOCAL_STORAGE_PATH`; note Supabase sync if enabled.
+## Checklist
+1. Confirm authorized files and scope.
+2. Read current docs before editing.
+3. Apply minimal, traceable updates.
+4. Include date, Work Order ID, commit/environment when relevant.
+5. Document rollback and operational risks.
+6. Do not include secret values.
+7. Verify markdown formatting.
+8. Report files created/modified.
 
-## Standard sections for runbook entries
-
-- Purpose / scope
-- Preconditions
-- Steps (numbered)
-- Verification
-- Rollback
-- Related docs
-
-## After doc changes
-
-If WO includes repo commit:
-
-```bash
-npm run test
-npm run typecheck
-npm run build
-```
-
-Docs-only changes should still pass gates (no runtime breakage).
-
-## Do not
-
-- Commit `.env`, credentials, or auth.json.
-- Document secret values "for convenience".
-- Change production Coolify config in the same WO unless explicitly scoped.
-
-## References
-
-- [docs/templates/document-template.md](../../docs/templates/document-template.md)
-- [docs/00-governance/DOCUMENT_REGISTRY.md](../../docs/00-governance/DOCUMENT_REGISTRY.md)
+## Delivery format
+Estado, Resumen, Archivos creados, Archivos modificados, Documentación actualizada, Inconsistencias detectadas, Siguiente paso recomendado.
