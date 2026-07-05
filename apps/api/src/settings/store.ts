@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AppSettings } from '@creator-ai-studio/shared';
 import { DEFAULT_PUBLISH_SCHEDULE } from '@creator-ai-studio/shared';
@@ -41,14 +41,36 @@ async function ensureSettingsMigrated(): Promise<void> {
   }
 }
 
+function corruptBackupPath(file: string): string {
+  const suffix = new Date().toISOString().replace(/[:.]/g, '-');
+  return `${file}.corrupt.${suffix}`;
+}
+
+async function readSettingsFile(file: string): Promise<AppSettings> {
+  const raw = await readFile(file, 'utf8');
+  if (!raw.trim()) {
+    return { ...DEFAULT_SETTINGS };
+  }
+  try {
+    return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as AppSettings) };
+  } catch (err) {
+    const backup = corruptBackupPath(file);
+    await rename(file, backup).catch(() => undefined);
+    console.warn(
+      `[settings] corrupt settings.json backed up to ${backup}:`,
+      err instanceof Error ? err.message : err,
+    );
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
 export async function getSettings(): Promise<AppSettings> {
   await ensureSettingsMigrated();
   const file = settingsPath();
   if (!existsSync(file)) {
     return { ...DEFAULT_SETTINGS };
   }
-  const raw = await readFile(file, 'utf8');
-  return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as AppSettings) };
+  return readSettingsFile(file);
 }
 
 export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
@@ -59,7 +81,6 @@ export async function saveSettings(patch: Partial<AppSettings>): Promise<AppSett
   // Atomic write so a crash mid-write never corrupts settings.json.
   const tmp = `${file}.tmp`;
   await writeFile(tmp, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
-  const { rename } = await import('node:fs/promises');
   await rename(tmp, file);
   return merged;
 }
