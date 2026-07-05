@@ -27,6 +27,7 @@ import {
   runEpisodeAgent,
   updateStageStatus,
 } from '../api';
+import type { EpisodeSyncState } from '../hooks/useEpisodeSync';
 
 const STATUS_LABEL: Record<EpisodeStageStatus, string> = {
   pending: 'Pendiente',
@@ -87,6 +88,7 @@ function stepperChipClass(step: PipelineStep, index: number, currentIndex: numbe
 interface ProjectPipelinePanelProps {
   episodeId: string;
   projectStatus: ProjectStatus;
+  episodeSync?: EpisodeSyncState;
   onGoToTab: (tab: WorkspaceTab) => void;
 }
 
@@ -99,6 +101,7 @@ function latestRunForAgent(runs: AgentRunRecord[] | undefined, agentId: string):
 export default function ProjectPipelinePanel({
   episodeId,
   projectStatus,
+  episodeSync,
   onGoToTab,
 }: ProjectPipelinePanelProps) {
   const currentStep = stepForColumn(projectStatus);
@@ -148,12 +151,13 @@ export default function ProjectPipelinePanel({
   const stepAgents = agentsForStep(viewingStep);
 
   useEffect(() => {
-    if (activeRun?.status !== 'running') return;
+    if (activeRun?.status !== 'running' && !episodeSync?.isBackgroundActive) return;
     const interval = window.setInterval(() => {
       void load();
+      void episodeSync?.refresh();
     }, 4000);
     return () => window.clearInterval(interval);
-  }, [activeRun?.status, load]);
+  }, [activeRun?.status, episodeSync?.isBackgroundActive, load, episodeSync]);
 
   const handleSelectStep = (step: PipelineStep) => {
     setViewingStep(step);
@@ -170,10 +174,12 @@ export default function ProjectPipelinePanel({
     setRunning(true);
     setError(null);
     try {
-      await runEpisodeAgent(episodeId, agentId, {
+      const { job } = await runEpisodeAgent(episodeId, agentId, {
         autoEnqueuePlan: agentId === 'hermes',
       });
+      episodeSync?.trackJob(job.id);
       await load();
+      void episodeSync?.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo ejecutar el agente');
     } finally {

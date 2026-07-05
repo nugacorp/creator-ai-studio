@@ -73,10 +73,13 @@ import {
 } from '../api';
 import type { EpisodeStage, EpisodeStageStatus } from '@creator-ai-studio/shared';
 import { suggestNextPublishSlot, DEFAULT_PUBLISH_SCHEDULE, formatNextPublishSlot } from '@creator-ai-studio/shared';
+import type { EpisodeSyncState } from '../hooks/useEpisodeSync';
+import { AGENT_LABELS } from '../lib/episodeJobLabels';
 
 interface WorkspaceViewProps {
   project: VideoProject;
   onUpdateProject: (updated: VideoProject) => void;
+  episodeSync?: EpisodeSyncState;
   initialTab?: WorkspaceTab;
   forcedTab?: WorkspaceTab;
   forcedTabRequest?: number;
@@ -104,6 +107,7 @@ const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: typeof FileText }
 export default function WorkspaceView({
   project,
   onUpdateProject,
+  episodeSync,
   initialTab,
   forcedTab,
   forcedTabRequest = 0,
@@ -416,11 +420,18 @@ export default function WorkspaceView({
         const map = new Map<EpisodeStage, EpisodeStageStatus>();
         for (const s of detail.stages) map.set(s.stage, s.status);
         setStageStatuses(map);
+        if (detail.content.script?.trim()) setScriptText(detail.content.script);
+        if (detail.content.outline?.length) setOutline(detail.content.outline);
         if (detail.content.subtitlesSrt) setSubtitlesSrt(detail.content.subtitlesSrt);
         if (detail.content.thumbnailUrl) setThumbnailUrl(detail.content.thumbnailUrl);
         if (detail.content.videoUrl) setVideoSourceUrl(detail.content.videoUrl);
         if (detail.content.musicUrl) setMusicSourceUrl(detail.content.musicUrl);
         if (detail.content.scenes.length > 0) setScenes(detail.content.scenes);
+        if (detail.content.seoTitles?.length) setSeoTitles(detail.content.seoTitles);
+        if (detail.content.seoDescription) setSeoDescription(detail.content.seoDescription);
+        if (detail.content.seoTags?.length) setSeoTags(detail.content.seoTags);
+        if (detail.content.shorts?.length) setEpisodeShorts(detail.content.shorts);
+        if (detail.content.audioUrl) setAudioBase64(detail.content.audioUrl);
       })
       .catch(() => {
         // non-blocking — badges fall back to pending
@@ -429,6 +440,48 @@ export default function WorkspaceView({
       active = false;
     };
   }, [project.id, stageRefreshToken]);
+
+  const remoteScriptwriterActive = episodeSync?.activeJobs.some(
+    job =>
+      job.type === 'agent' &&
+      job.payload?.agentId === 'scriptwriter' &&
+      (job.status === 'pending' || job.status === 'active'),
+  );
+  const remoteScriptJobActive = episodeSync?.activeJobs.some(
+    job =>
+      job.type === 'script' && (job.status === 'pending' || job.status === 'active'),
+  );
+  const isRemoteGeneratingScript = Boolean(remoteScriptwriterActive || remoteScriptJobActive);
+  const scriptGenerationActive = isGeneratingScript || isRemoteGeneratingScript;
+  const remoteScriptMessage =
+    episodeSync?.jobMessage ??
+    (isRemoteGeneratingScript ? `${AGENT_LABELS.scriptwriter}…` : null);
+
+  useEffect(() => {
+    if (!episodeSync?.detail) return;
+    const shouldApply =
+      episodeSync.isBackgroundActive ||
+      Date.now() < episodeSync.applyServerContentUntil;
+    if (!shouldApply) return;
+
+    const c = episodeSync.detail.content;
+    const map = new Map<EpisodeStage, EpisodeStageStatus>();
+    for (const s of episodeSync.detail.stages) map.set(s.stage, s.status);
+    setStageStatuses(map);
+
+    if (c.script?.trim()) setScriptText(c.script);
+    if (c.outline?.length) setOutline(c.outline);
+    if (c.scenes.length > 0) setScenes(c.scenes);
+    if (c.subtitlesSrt) setSubtitlesSrt(c.subtitlesSrt);
+    if (c.thumbnailUrl) setThumbnailUrl(c.thumbnailUrl);
+    if (c.videoUrl) setVideoSourceUrl(c.videoUrl);
+    if (c.musicUrl) setMusicSourceUrl(c.musicUrl);
+    if (c.audioUrl) setAudioBase64(c.audioUrl);
+    if (c.seoTitles?.length) setSeoTitles(c.seoTitles);
+    if (c.seoDescription) setSeoDescription(c.seoDescription);
+    if (c.seoTags?.length) setSeoTags(c.seoTags);
+    if (c.shorts?.length) setEpisodeShorts(c.shorts);
+  }, [episodeSync?.revision, episodeSync?.isBackgroundActive, episodeSync?.applyServerContentUntil, episodeSync?.detail]);
 
   // Sync state changes back to parent
   const persistProject = (patch: Partial<VideoProject> = {}) => {
@@ -608,6 +661,12 @@ export default function WorkspaceView({
     setTimeout(() => setFeedbackMsg(null), 4000);
   };
 
+  useEffect(() => {
+    if (!episodeSync?.notice) return;
+    triggerFeedback('success', episodeSync.notice.text);
+    episodeSync.clearNotice();
+  }, [episodeSync?.notice, episodeSync]);
+
   const toggleTimelinePlayback = () => {
     if (videoPlaybackUrl && videoRef.current) {
       if (isPlayingTimeline) {
@@ -756,6 +815,7 @@ export default function WorkspaceView({
       });
 
       const { job } = await runEpisodeAgent(project.id, 'scriptwriter');
+      episodeSync?.trackJob(job.id);
 
       await new Promise<void>((resolve, reject) => {
         const poll = window.setInterval(async () => {
@@ -787,6 +847,7 @@ export default function WorkspaceView({
       setStageStatuses(map);
 
       persistProject({ script: newScript, outline: newOutline });
+      void episodeSync?.refresh();
 
       triggerFeedback(
         'success',
@@ -1273,16 +1334,16 @@ export default function WorkspaceView({
                 <div className="flex flex-col items-stretch sm:items-end gap-1.5 shrink-0">
                   <button
                     type="button"
-                    disabled={isGeneratingScript}
+                    disabled={scriptGenerationActive}
                     onClick={() => void handleGenerateScript()}
                     className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer"
                   >
-                    {isGeneratingScript ? (
+                    {scriptGenerationActive ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <Sparkles className="w-3.5 h-3.5" />
                     )}
-                    <span>{isGeneratingScript ? 'Generando guion…' : 'Generar guion con IA'}</span>
+                    <span>{scriptGenerationActive ? 'Generando guion…' : 'Generar guion con IA'}</span>
                   </button>
                   <button
                     type="button"
@@ -1320,8 +1381,8 @@ export default function WorkspaceView({
                 </span>
               ) : showGenerateScriptCta ? (
                 <span className="text-[10px] font-mono text-indigo-300/90 border border-indigo-500/20 bg-indigo-950/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                  {isGeneratingScript && <Loader2 className="w-3 h-3 animate-spin shrink-0" />}
-                  {isGeneratingScript ? 'Generando guion…' : 'Outline listo — genera arriba'}
+                  {scriptGenerationActive && <Loader2 className="w-3 h-3 animate-spin shrink-0" />}
+                  {scriptGenerationActive ? 'Generando guion…' : 'Outline listo — genera arriba'}
                 </span>
               ) : (
                 <span className="text-[10px] font-mono text-amber-300/90 border border-amber-500/20 bg-amber-950/20 px-2.5 py-1 rounded-full">
@@ -1433,12 +1494,19 @@ export default function WorkspaceView({
             {/* Center: Notion style script editor */}
             <div className="space-y-3 lg:col-span-2">
               <h4 className="text-[11px] font-bold text-[#8B949E] uppercase tracking-wider font-mono">Editor de Guiones tipo Notion</h4>
+              {isRemoteGeneratingScript && !isGeneratingScript && (
+                <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/25 px-3 py-2 flex items-center gap-2 text-[11px] text-indigo-200">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                  <span>El Guionista está escribiendo… {remoteScriptMessage ? `(${remoteScriptMessage})` : ''}</span>
+                </div>
+              )}
               <div className="relative">
                 <textarea
                   ref={scriptEditorRef}
                   value={scriptText}
                   onChange={e => setScriptText(e.target.value)}
-                  className="w-full h-[350px] bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-xl p-5 text-sm text-[#E6EDF2] leading-relaxed focus:outline-none focus:border-indigo-500/40 resize-none font-sans"
+                  disabled={scriptGenerationActive}
+                  className="w-full h-[350px] bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-xl p-5 text-sm text-[#E6EDF2] leading-relaxed focus:outline-none focus:border-indigo-500/40 resize-none font-sans disabled:opacity-60 disabled:cursor-wait"
                   placeholder="Comienza a redactar tu guion bíblico..."
                 />
                 <div className="absolute bottom-3 right-3 text-[10px] text-[#8B949E] font-mono bg-[#0B0F14]/90 px-2.5 py-1 rounded border border-[rgba(255,255,255,0.05)]">

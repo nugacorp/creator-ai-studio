@@ -53,6 +53,9 @@ function mockApi(opts: { detailFails?: boolean } = {}) {
     if (url.includes('/storage/stats')) {
       return jsonResponse({ episodes: 1, totalBytes: 0, diskFreeBytes: 1_000_000 });
     }
+    if (url.includes(`/episodes/${episode.id}/jobs`)) {
+      return jsonResponse([]);
+    }
     if (url.includes(`/episodes/${episode.id}/assets`)) {
       return jsonResponse({
         episodeId: episode.id,

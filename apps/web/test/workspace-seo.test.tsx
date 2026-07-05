@@ -71,6 +71,7 @@ describe('Workspace SEO optimize', () => {
       if (url.includes('/gemini/seo') && method === 'POST') {
         return jsonResponse(seoResponse);
       }
+      if (url.includes(`/episodes/${episode.id}/jobs`)) return jsonResponse([]);
       if (url.includes(`/episodes/${episode.id}/assets`)) {
         return jsonResponse({
           episodeId: episode.id,

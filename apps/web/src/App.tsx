@@ -55,6 +55,7 @@ import {
   type WorkspaceTab,
 } from './lib/dashboardNavigation';
 import { filterProjectsByChannel } from './lib/channelScope';
+import { useEpisodeSync } from './hooks/useEpisodeSync';
 
 const ACTIVE_CHANNEL_STORAGE_KEY = 'cas_active_channel_id';
 
@@ -144,6 +145,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const mainRef = useRef<HTMLElement>(null);
 
   const activeProject = projects.find(p => p.id === activeProjectId);
+  const episodeSync = useEpisodeSync(
+    currentView === 'workspace' && activeProjectId ? activeProjectId : null,
+  );
   const authRequired = authStatus?.authRequired ?? false;
   const canAccessApi =
     !authRequired || (authEnabled && Boolean(session?.access_token));
@@ -198,10 +202,13 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     }
   }, []);
 
+  const refreshEpisodeSync = episodeSync.refresh;
+
   const handlePipelineComplete = useCallback(async () => {
+    await refreshEpisodeSync();
     await loadProjects();
     setWorkspaceRefreshToken(t => t + 1);
-  }, [loadProjects]);
+  }, [refreshEpisodeSync, loadProjects]);
 
   const reloadEpisode = useCallback(async (episodeId: string) => {
     const detail = await fetchEpisodeDetail(episodeId);
@@ -577,16 +584,19 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                 <PipelinePanel
                   episodeId={activeProject.id}
                   episodeTitle={activeProject.title}
+                  episodeSync={episodeSync}
                   onPipelineComplete={() => void handlePipelineComplete()}
                 />
                 <ProjectPipelinePanel
                   episodeId={activeProject.id}
                   projectStatus={activeProject.status}
+                  episodeSync={episodeSync}
                   onGoToTab={handleGoToWorkspaceTab}
                 />
                 <WorkspaceView
                   project={activeProject}
                   onUpdateProject={handleUpdateProject}
+                  episodeSync={episodeSync}
                   initialTab={workspaceInitialTab ?? undefined}
                   forcedTab={workspaceForcedTab}
                   forcedTabRequest={workspaceForcedTabRequest}

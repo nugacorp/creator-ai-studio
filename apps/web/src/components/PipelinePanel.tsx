@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Clapperboard,
   CloudUpload,
@@ -21,36 +21,23 @@ import {
   fetchStorageStats,
   runSafePipeline,
   fetchJob,
-  type EpisodeAssetsResponse,
-  type PipelineMode,
   type PublishChecklistItem,
   type StorageStats,
 } from '../api';
+import type { EpisodeSyncState } from '../hooks/useEpisodeSync';
+import { inProgressAssetKeys, PIPELINE_STEP_LABELS } from '../lib/episodeJobLabels';
 
 interface PipelinePanelProps {
   episodeId: string;
   episodeTitle: string;
+  episodeSync?: EpisodeSyncState;
   onPipelineComplete?: () => void;
 }
-
-const STEP_LABELS: Record<string, string> = {
-  script: 'Guion IA',
-  storyboard: 'Storyboard / escenas',
-  scene_images: 'Imágenes de escenas',
-  seo: 'Metadatos SEO',
-  tts: 'Narración',
-  thumbnail: 'Miniatura',
-  render: 'Render de video',
-  shorts: 'Short vertical',
-  publish_package: 'Paquete de publicación',
-  review: 'Listo para revisión',
-  publish: 'Subida a YouTube',
-  confirm: 'Confirmar publicación',
-};
 
 export default function PipelinePanel({
   episodeId,
   episodeTitle,
+  episodeSync,
   onPipelineComplete,
 }: PipelinePanelProps) {
   const [running, setRunning] = useState(false);
@@ -61,29 +48,80 @@ export default function PipelinePanel({
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [checklist, setChecklist] = useState<PublishChecklistItem[] | null>(null);
   const [publishReady, setPublishReady] = useState(false);
-  const [assets, setAssets] = useState<EpisodeAssetsResponse | null>(null);
+  const [localAssets, setLocalAssets] = useState<EpisodeSyncState['assets']>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
 
+  const assets = episodeSync?.assets ?? localAssets;
+  const syncProgress = episodeSync?.jobProgress ?? 0;
+  const syncMessage = episodeSync?.jobMessage ?? null;
+  const isSyncActive = episodeSync?.isBackgroundActive ?? false;
+
+  const assetProgress = useMemo(
+    () => inProgressAssetKeys(episodeSync?.activeJobs ?? []),
+    [episodeSync?.activeJobs],
+  );
+
   const loadAssets = useCallback(() => {
+    if (episodeSync) {
+      void episodeSync.refresh();
+      return;
+    }
     void fetchEpisodeAssets(episodeId)
       .then(data => {
-        if (data && Array.isArray(data.files)) {
-          setAssets(data);
-        } else {
-          setAssets(null);
-        }
+        if (data && Array.isArray(data.files)) setLocalAssets(data);
+        else setLocalAssets(null);
       })
-      .catch(() => setAssets(null));
-  }, [episodeId]);
+      .catch(() => setLocalAssets(null));
+  }, [episodeId, episodeSync]);
 
   useEffect(() => {
     void fetchStorageStats()
       .then(setStorage)
       .catch(() => setStorage(null));
-    loadAssets();
-  }, [episodeId, loadAssets]);
+    if (!episodeSync) loadAssets();
+  }, [episodeId, loadAssets, episodeSync]);
 
-  const startPipeline = async (mode: PipelineMode, label: string) => {
+  const displayProgress = running ? progress : isSyncActive ? syncProgress : 0;
+  const displayMessage =
+    message ?? (isSyncActive && !running ? syncMessage : null);
+
+  const pollJob = (jobId: string, onDone: (updated: Awaited<ReturnType<typeof fetchJob>>) => void) => {
+    episodeSync?.trackJob(jobId);
+    const poll = setInterval(async () => {
+      try {
+        const updated = await fetchJob(jobId);
+        setProgress(updated.progress);
+        const step =
+          (updated.result?.step as string | undefined) ??
+          PIPELINE_STEP_LABELS[(updated.result?.stepKey as string | undefined) ?? ''] ??
+          updated.type;
+        setMessage(`${step} — ${updated.progress}%`);
+
+        if (updated.status === 'completed') {
+          clearInterval(poll);
+          setRunning(false);
+          onDone(updated);
+          onPipelineComplete?.();
+          void fetchStorageStats().then(setStorage);
+          void episodeSync?.refresh();
+          if (!episodeSync) loadAssets();
+        }
+        if (updated.status === 'failed') {
+          clearInterval(poll);
+          setRunning(false);
+          setError(updated.error ?? 'El pipeline falló');
+          setMessage(null);
+        }
+      } catch {
+        clearInterval(poll);
+        setRunning(false);
+        setError('Error al consultar el progreso del job');
+        setMessage(null);
+      }
+    }, 2000);
+  };
+
+  const startPipeline = async (mode: import('../api').PipelineMode, label: string) => {
     setRunning(true);
     setError(null);
     setYoutubeUrl(null);
@@ -91,43 +129,15 @@ export default function PipelinePanel({
     setProgress(5);
     try {
       const job = await runSafePipeline(episodeId, mode);
-      const poll = setInterval(async () => {
-        try {
-          const updated = await fetchJob(job.id);
-          setProgress(updated.progress);
-          const step =
-            (updated.result?.step as string | undefined) ??
-            STEP_LABELS[(updated.result?.stepKey as string | undefined) ?? ''] ??
-            updated.type;
-          setMessage(`${step} — ${updated.progress}%`);
-
-          if (updated.status === 'completed') {
-            clearInterval(poll);
-            setRunning(false);
-            const url = updated.result?.youtubeUrl as string | undefined;
-            if (url) setYoutubeUrl(url);
-            setMessage(
-              url
-                ? '✓ Video subido a YouTube (privado). Revisa en Studio.'
-                : '✓ Pipeline completado sin publicar en YouTube.',
-            );
-            onPipelineComplete?.();
-            void fetchStorageStats().then(setStorage);
-            loadAssets();
-          }
-          if (updated.status === 'failed') {
-            clearInterval(poll);
-            setRunning(false);
-            setError(updated.error ?? 'El pipeline falló');
-            setMessage(null);
-          }
-        } catch {
-          clearInterval(poll);
-          setRunning(false);
-          setError('Error al consultar el progreso del job');
-          setMessage(null);
-        }
-      }, 2000);
+      pollJob(job.id, updated => {
+        const url = updated.result?.youtubeUrl as string | undefined;
+        if (url) setYoutubeUrl(url);
+        setMessage(
+          url
+            ? '✓ Video subido a YouTube (privado). Revisa en Studio.'
+            : '✓ Pipeline completado sin publicar en YouTube.',
+        );
+      });
     } catch (err) {
       setRunning(false);
       setError(
@@ -151,6 +161,7 @@ export default function PipelinePanel({
           ? '✓ Paquete listo para revisión humana.'
           : 'Paquete generado — faltan artefactos (ver checklist).',
       );
+      void episodeSync?.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al generar paquete');
       setMessage(null);
@@ -169,25 +180,11 @@ export default function PipelinePanel({
     try {
       const { job, checklist: pkgChecklist } = await authorizePublish(episodeId);
       setChecklist(pkgChecklist);
-      const poll = setInterval(async () => {
-        const updated = await fetchJob(job.id);
-        setProgress(updated.progress);
-        setMessage(`${updated.result?.step ?? updated.type} — ${updated.progress}%`);
-        if (updated.status === 'completed') {
-          clearInterval(poll);
-          setRunning(false);
-          const url = updated.result?.youtubeUrl as string | undefined;
-          if (url) setYoutubeUrl(url);
-          setMessage('✓ Video subido a YouTube (privado).');
-          onPipelineComplete?.();
-        }
-        if (updated.status === 'failed') {
-          clearInterval(poll);
-          setRunning(false);
-          setError(updated.error ?? 'Publicación falló');
-          setMessage(null);
-        }
-      }, 2000);
+      pollJob(job.id, updated => {
+        const url = updated.result?.youtubeUrl as string | undefined;
+        if (url) setYoutubeUrl(url);
+        setMessage('✓ Video subido a YouTube (privado).');
+      });
     } catch (err) {
       setRunning(false);
       setError(err instanceof Error ? err.message : 'No se pudo autorizar publicación');
@@ -215,7 +212,8 @@ export default function PipelinePanel({
       }
       setMessage(`✓ ${result.message}`);
       void fetchStorageStats().then(setStorage);
-      loadAssets();
+      void episodeSync?.refresh();
+      if (!episodeSync) loadAssets();
       onPipelineComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al archivar');
@@ -233,6 +231,7 @@ export default function PipelinePanel({
       await confirmPublish(episodeId);
       setMessage('✓ Publicación confirmada.');
       void fetchStorageStats().then(setStorage);
+      void episodeSync?.refresh();
     } catch {
       setError('Error al confirmar publicación');
       setMessage(null);
@@ -242,7 +241,10 @@ export default function PipelinePanel({
   };
 
   return (
-    <section className="bg-[#15191E] border border-white/5 rounded-3xl p-5 space-y-4">
+    <section
+      id="production-pipeline-panel"
+      className="bg-[#15191E] border border-white/5 rounded-3xl p-5 space-y-4"
+    >
       <div className="flex items-center gap-3">
         <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400">
           <Clapperboard className="w-5 h-5" />
@@ -281,9 +283,9 @@ export default function PipelinePanel({
         </div>
       )}
 
-      {message && (
+      {displayMessage && (
         <p className="text-xs rounded-xl border border-white/10 bg-[#0B0F14] px-3 py-2 text-slate-300">
-          {message}
+          {displayMessage}
         </p>
       )}
 
@@ -316,11 +318,11 @@ export default function PipelinePanel({
         </a>
       )}
 
-      {running && (
+      {(running || isSyncActive) && displayProgress > 0 && (
         <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
           <div
             className="h-full bg-emerald-500 transition-all duration-500"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${displayProgress}%` }}
           />
         </div>
       )}
@@ -409,30 +411,61 @@ export default function PipelinePanel({
             <p className="text-[10px] text-amber-400">{assets.message}</p>
           )}
           <ul className="space-y-1">
-            {assets.files.map(file => (
-              <li key={file.key} className="flex items-center justify-between gap-2 text-[11px]">
-                <span className={file.available ? 'text-slate-300' : 'text-slate-600'}>
-                  {file.available ? '✓' : '○'} {file.label}
-                  {file.filename ? ` (${file.filename})` : ''}
-                </span>
-                {file.available && (
-                  <button
-                    type="button"
-                    disabled={downloading === file.key}
-                    onClick={() => {
-                      setDownloading(file.key);
-                      void downloadEpisodeFile(episodeId, file.key)
-                        .catch(() => setError('No se pudo descargar el archivo'))
-                        .finally(() => setDownloading(null));
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg border border-white/10 hover:border-indigo-500/40 text-indigo-300 disabled:opacity-50"
+            {assets.files.map(file => {
+              const inProgress = assetProgress.get(file.key);
+              const renderProgress =
+                file.key === 'video' &&
+                episodeSync?.primaryJob?.type === 'render' &&
+                (episodeSync.primaryJob.status === 'pending' ||
+                  episodeSync.primaryJob.status === 'active')
+                  ? `${episodeSync.primaryJob.progress}%`
+                  : null;
+              return (
+                <li key={file.key} className="flex items-center justify-between gap-2 text-[11px]">
+                  <span
+                    className={
+                      file.available
+                        ? 'text-slate-300'
+                        : inProgress
+                          ? 'text-indigo-300 flex items-center gap-1.5'
+                          : 'text-slate-600'
+                    }
                   >
-                    <Download className="w-3 h-3" />
-                    {downloading === file.key ? '…' : 'Descargar'}
-                  </button>
-                )}
-              </li>
-            ))}
+                    {inProgress && !file.available ? (
+                      <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                    ) : file.available ? (
+                      '✓'
+                    ) : (
+                      '○'
+                    )}{' '}
+                    {file.label}
+                    {file.filename ? ` (${file.filename})` : ''}
+                    {inProgress && !file.available && (
+                      <span className="text-indigo-400/90">
+                        — {inProgress}
+                        {renderProgress ? ` ${renderProgress}` : ''}
+                      </span>
+                    )}
+                  </span>
+                  {file.available && (
+                    <button
+                      type="button"
+                      disabled={downloading === file.key}
+                      onClick={() => {
+                        setDownloading(file.key);
+                        void downloadEpisodeFile(episodeId, file.key)
+                          .catch(() => setError('No se pudo descargar el archivo'))
+                          .finally(() => setDownloading(null));
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg border border-white/10 hover:border-indigo-500/40 text-indigo-300 disabled:opacity-50"
+                    >
+                      <Download className="w-3 h-3" />
+                      {downloading === file.key ? '…' : 'Descargar'}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           <p className="text-[10px] text-slate-500">
             Descarga el MP4 o la narración para editar en DaVinci, Premiere u otra app. Los archivos viven en el volumen del servidor hasta que uses «Ya publiqué → archivar» con Drive configurado.

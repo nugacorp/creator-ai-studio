@@ -73,6 +73,7 @@ describe('Workspace Guion generate script', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes('/agent-runs')) return jsonResponse({ runs: [] });
+      if (url.includes(`/episodes/${episode.id}/jobs`)) return jsonResponse([]);
       if (url.includes('/storage/stats')) {
         return jsonResponse({ episodes: 1, totalBytes: 0, diskFreeBytes: 1_000_000 });
       }
@@ -131,6 +132,7 @@ describe('Workspace Guion generate script', () => {
         });
       }
       if (url.includes('/agent-runs')) return jsonResponse({ runs: [] });
+      if (url.includes(`/episodes/${episode.id}/jobs`)) return jsonResponse([]);
       if (url.includes('/storage/stats')) {
         return jsonResponse({ episodes: 1, totalBytes: 0, diskFreeBytes: 1_000_000 });
       }

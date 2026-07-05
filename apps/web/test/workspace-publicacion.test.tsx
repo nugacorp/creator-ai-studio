@@ -69,6 +69,7 @@ describe('Workspace Publicación tab', () => {
           items: [{ provider: 'youtube', configured: false, authMethod: 'none', source: 'none' }],
         });
       }
+      if (url.includes(`/episodes/${episode.id}/jobs`)) return jsonResponse([]);
       if (url.includes(`/episodes/${episode.id}/assets`)) {
         return jsonResponse({
           episodeId: episode.id,

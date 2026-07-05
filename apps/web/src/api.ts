@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AgentDefinition,
   AgentRunRecord,
   AppSettings,
@@ -60,6 +60,16 @@ async function buildAuthHeaders(extra?: HeadersInit): Promise<Headers> {
     headers.set('Authorization', `Bearer ${token}`);
   }
   return headers;
+}
+
+export class ApiHttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message?: string) {
+    super(message ?? `API error (${status})`);
+    this.name = 'ApiHttpError';
+    this.status = status;
+  }
 }
 
 export class ApiUnauthorizedError extends Error {
@@ -346,6 +356,10 @@ export async function createJob(
 
 export async function fetchJob(id: string): Promise<ProductionJob> {
   return apiFetch<ProductionJob>(`/jobs/${encodeURIComponent(id)}`);
+}
+
+export async function fetchEpisodeJobs(episodeId: string): Promise<ProductionJob[]> {
+  return apiFetch<ProductionJob[]>(`/episodes/${encodeURIComponent(episodeId)}/jobs`);
 }
 
 export interface ProductionJobsResponse {

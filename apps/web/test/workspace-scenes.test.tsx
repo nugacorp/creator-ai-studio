@@ -76,6 +76,8 @@ describe('Workspace scene deletion', () => {
       const url = String(input);
       const method = init?.method ?? 'GET';
 
+      if (url.includes(`/episodes/${episode.id}/jobs`)) return jsonResponse([]);
+
       if (url.includes(`/episodes/${episode.id}/assets`)) {
         return jsonResponse({
           episodeId: episode.id,
