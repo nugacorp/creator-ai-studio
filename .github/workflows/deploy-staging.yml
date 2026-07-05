@@ -1,18 +1,18 @@
-# Deploy staging to VPS on push to `staging`.
+﻿# Deploy staging to VPS on push to `staging`.
 #
-# Required repository secrets (Settings → Secrets and variables → Actions):
-#   VPS_HOST      — e.g. 217.76.56.66
-#   VPS_SSH_KEY   — private SSH key (PEM) for deploy user
-# Optional (staging auth — synced to /root/creator-ai-studio/.env.supabase.local):
-#   VPS_USER                  — defaults to root
-#   SUPABASE_URL              — e.g. https://iiokqyedkylwhonbrrvo.supabase.co
-#   SUPABASE_ANON_KEY         — Dashboard → API → anon / publishable key
-#   SUPABASE_JWT_SECRET       — Dashboard → API → JWT Secret
-#   SUPABASE_SERVICE_ROLE_KEY — optional Postgres sync
-#   CAS_API_KEY               — worker + machine-to-machine Bearer
-#   GEMINI_API_KEY              — API Gemini provider (optional)
-#   RCLONE_REMOTE               — e.g. gdrive:Creator-AI-Studio/episodes (optional)
-#   RCLONE_OAUTH_TOKEN_JSON     — OAuth JSON for setup-rclone-vps workflow (optional, one-time)
+# Required repository secrets (Settings â†’ Secrets and variables â†’ Actions):
+#   VPS_HOST      â€” e.g. 217.76.56.66
+#   VPS_SSH_KEY   â€” private SSH key (PEM) for deploy user
+# Optional (staging auth â€” synced to /root/creator-ai-studio/.env.supabase.local):
+#   VPS_USER                  â€” defaults to root
+#   SUPABASE_URL              â€” e.g. https://iiokqyedkylwhonbrrvo.supabase.co
+#   SUPABASE_ANON_KEY         â€” Dashboard â†’ API â†’ anon / publishable key
+#   SUPABASE_JWT_SECRET       â€” Dashboard â†’ API â†’ JWT Secret
+#   SUPABASE_SERVICE_ROLE_KEY â€” optional Postgres sync
+#   CAS_API_KEY               â€” worker + machine-to-machine Bearer
+#   GEMINI_API_KEY              â€” API Gemini provider (optional)
+#   RCLONE_REMOTE               â€” e.g. gdrive:Creator-AI-Studio/episodes (optional)
+#   RCLONE_OAUTH_TOKEN_JSON     â€” OAuth JSON for setup-rclone-vps workflow (optional, one-time)
 #
 # The VPS must have Docker, the Coolify app at /data/coolify/applications/...,
 # and /root/creator-ai-studio as sync target.
@@ -66,7 +66,7 @@ jobs:
         run: |
           if [ -n "${SUPABASE_JWT_SECRET}" ] && { [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; }; then
             echo "::error::SUPABASE_JWT_SECRET is set but SUPABASE_URL and/or SUPABASE_ANON_KEY GitHub secrets are missing."
-            echo "Add them under Settings → Secrets → Actions so the web image is built with VITE_SUPABASE_*."
+            echo "Add them under Settings â†’ Secrets â†’ Actions so the web image is built with VITE_SUPABASE_*."
             echo "See docs/02-operations/SUPABASE_AUTH.md"
             exit 1
           fi
@@ -102,6 +102,24 @@ jobs:
           bash /root/creator-ai-studio/scripts/vps-sync-supabase-env.sh
           EOF
 
+
+      - name: Apply rclone OAuth token (if configured)
+        env:
+          VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          RCLONE_OAUTH_TOKEN_JSON: ${{ secrets.RCLONE_OAUTH_TOKEN_JSON }}
+        run: |
+          if [ -z "${RCLONE_OAUTH_TOKEN_JSON}" ]; then
+            echo "RCLONE_OAUTH_TOKEN_JSON not set; skipping rclone token apply"
+            exit 0
+          fi
+          printf '%s' "${RCLONE_OAUTH_TOKEN_JSON}" | \
+            ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+              "${VPS_USER}@${VPS_HOST}" \
+              'cat > /tmp/rclone-oauth.json && chmod 600 /tmp/rclone-oauth.json'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "${VPS_USER}@${VPS_HOST}" \
+            "RCLONE_OAUTH_TOKEN_FILE=/tmp/rclone-oauth.json bash /root/creator-ai-studio/scripts/vps-apply-rclone-token.sh; rm -f /tmp/rclone-oauth.json"
       - name: Redeploy staging stack
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -123,3 +141,4 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" \
             "bash /root/creator-ai-studio/scripts/vps-archive-if-over-limit.sh || true"
+

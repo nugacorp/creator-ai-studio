@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 # Apply rclone Google Drive OAuth token on the VPS (non-interactive).
 #
 # Token: output of `rclone authorize drive` on a machine with a browser (single-line JSON).
@@ -10,15 +10,11 @@
 # Or from a file:
 #   RCLONE_OAUTH_TOKEN_FILE=/tmp/rclone-oauth.json bash ...
 #
-# Config is written to the Docker volume used by API/worker containers:
-#   /var/lib/docker/volumes/creator-ai-studio-rclone-config/_data/rclone.conf
-#
-# Containers read it at RCLONE_CONFIG=/config/rclone/rclone.conf (same volume mount).
+# Config is written to the Docker volume mounted at /config/rclone in the API container
+# (Coolify names volumes like z7b1ieqp66a7e43cywaz816w_creator-ai-studio-rclone-config).
 set -euo pipefail
 
 REMOTE_NAME="${RCLONE_REMOTE_NAME:-gdrive}"
-CONFIG_DIR="${RCLONE_CONFIG_DIR:-/var/lib/docker/volumes/creator-ai-studio-rclone-config/_data}"
-CONFIG_FILE="${CONFIG_DIR}/rclone.conf"
 REMOTE_PATH="${RCLONE_REMOTE_PATH:-Creator-AI-Studio/episodes}"
 ENV_FILE="${RCLONE_ENV_FILE:-/root/creator-ai-studio/.env.supabase.local}"
 
@@ -35,9 +31,9 @@ if [ -z "${RCLONE_OAUTH_TOKEN_JSON:-}" ]; then
   exit 1
 fi
 
-python3 -c '
-import json, os, sys
-raw = os.environ.get("RCLONE_OAUTH_TOKEN_JSON", "").strip()
+python3 <<'PY' "${RCLONE_OAUTH_TOKEN_JSON}"
+import json, sys
+raw = sys.argv[1].strip()
 try:
     tok = json.loads(raw)
 except json.JSONDecodeError as e:
@@ -47,28 +43,70 @@ if not isinstance(tok, dict):
 if not any(k in tok for k in ("access_token", "refresh_token", "token")):
     raise SystemExit("ERROR: token JSON missing access_token/refresh_token")
 print("Token JSON looks valid")
-'
+PY
 
 if ! command -v rclone >/dev/null 2>&1; then
   echo "Installing rclone..."
   apt-get update -qq && apt-get install -y -qq rclone
 fi
 
-mkdir -p "${CONFIG_DIR}"
-chmod 700 "${CONFIG_DIR}"
-export RCLONE_CONFIG="${CONFIG_FILE}"
+resolve_config_dirs() {
+  local dirs=()
+  if [ -n "${RCLONE_CONFIG_DIR:-}" ]; then
+    dirs+=("${RCLONE_CONFIG_DIR}")
+  else
+    local api_cid mount_src
+    api_cid=$(docker ps -q --filter 'name=api-' 2>/dev/null | head -1 || true)
+    if [ -n "${api_cid}" ]; then
+      mount_src=$(docker inspect "${api_cid}" --format '{{ range .Mounts }}{{ if eq .Destination "/config/rclone" }}{{ .Source }}{{ end }}{{ end }}' 2>/dev/null || true)
+      if [ -n "${mount_src}" ]; then
+        dirs+=("${mount_src}")
+      fi
+    fi
+    while IFS= read -r d; do
+      [ -n "${d}" ] && dirs+=("${d}")
+    done < <(find /var/lib/docker/volumes -maxdepth 2 -type d -name '_data' 2>/dev/null \
+      | grep -E 'creator-ai-studio-rclone-config/_data$' || true)
+    dirs+=("/var/lib/docker/volumes/creator-ai-studio-rclone-config/_data")
+  fi
+  printf '%s\n' "${dirs[@]}" | awk '!seen[$0]++'
+}
+
+CONFIG_DIRS=()
+while IFS= read -r d; do
+  [ -n "${d}" ] && CONFIG_DIRS+=("${d}")
+done < <(resolve_config_dirs)
+
+if [ "${#CONFIG_DIRS[@]}" -eq 0 ]; then
+  echo "ERROR: could not resolve rclone config directory" >&2
+  exit 1
+fi
+
+PRIMARY_DIR="${CONFIG_DIRS[0]}"
+PRIMARY_FILE="${PRIMARY_DIR}/rclone.conf"
+mkdir -p "${PRIMARY_DIR}"
+chmod 700 "${PRIMARY_DIR}"
+export RCLONE_CONFIG="${PRIMARY_FILE}"
 
 if rclone listremotes 2>/dev/null | grep -q "^${REMOTE_NAME}:$"; then
-  echo "Removing existing remote '${REMOTE_NAME}'..."
+  echo "Removing existing remote '${REMOTE_NAME}' from ${PRIMARY_FILE}..."
   rclone config delete "${REMOTE_NAME}" || true
 fi
 
-echo "Creating remote '${REMOTE_NAME}' from OAuth token..."
+echo "Creating remote '${REMOTE_NAME}' from OAuth token (primary: ${PRIMARY_FILE})..."
 rclone config create "${REMOTE_NAME}" drive \
   config_token "${RCLONE_OAUTH_TOKEN_JSON}" \
   scope drive
 
-chmod 600 "${CONFIG_FILE}" 2>/dev/null || true
+chmod 600 "${PRIMARY_FILE}" 2>/dev/null || true
+
+for dir in "${CONFIG_DIRS[@]:1}"; do
+  mkdir -p "${dir}"
+  chmod 700 "${dir}"
+  cp -f "${PRIMARY_FILE}" "${dir}/rclone.conf"
+  chmod 600 "${dir}/rclone.conf" 2>/dev/null || true
+  echo "Synced config to ${dir}/rclone.conf"
+done
 
 echo "=== Verifying remote ==="
 rclone lsd "${REMOTE_NAME}:"
@@ -100,6 +138,6 @@ PY
 chmod 600 "${ENV_FILE}"
 
 echo
-echo "Done. Host config: ${CONFIG_FILE}"
-echo "Container path:   RCLONE_CONFIG=/config/rclone/rclone.conf"
+echo "Done. Primary host config: ${PRIMARY_FILE}"
+echo "Container path:          RCLONE_CONFIG=/config/rclone/rclone.conf"
 echo "RCLONE_REMOTE=${REMOTE_NAME}:${REMOTE_PATH}"

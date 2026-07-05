@@ -1,9 +1,9 @@
-# Apply rclone Google Drive OAuth on the staging VPS (non-interactive).
+﻿# Apply rclone Google Drive OAuth on the staging VPS (non-interactive).
 #
 # Required repository secrets:
 #   VPS_HOST, VPS_SSH_KEY (same as deploy-staging)
 #   VPS_USER (optional, defaults to root)
-#   RCLONE_OAUTH_TOKEN_JSON — full JSON from: rclone authorize drive
+#   RCLONE_OAUTH_TOKEN_JSON â€” full JSON from: rclone authorize drive
 #
 # Optional: RCLONE_REMOTE already in GitHub secrets for env sync after apply.
 #
@@ -51,7 +51,7 @@ jobs:
           if [ -z "${RCLONE_OAUTH_TOKEN_JSON}" ]; then
             echo "::error::GitHub secret RCLONE_OAUTH_TOKEN_JSON is not set."
             echo "On your PC run: rclone authorize drive"
-            echo "Add the full JSON line to Settings → Secrets → Actions → RCLONE_OAUTH_TOKEN_JSON"
+            echo "Add the full JSON line to Settings â†’ Secrets â†’ Actions â†’ RCLONE_OAUTH_TOKEN_JSON"
             exit 1
           fi
           printf '%s' "${RCLONE_OAUTH_TOKEN_JSON}" | \
@@ -87,8 +87,14 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" bash -s <<'EOF'
           set -euo pipefail
-          export RCLONE_CONFIG=/var/lib/docker/volumes/creator-ai-studio-rclone-config/_data/rclone.conf
-          rclone lsd gdrive:Creator-AI-Studio/episodes
+                    API=$(docker ps -q --filter "name=api-" | head -1)
+          if [ -z "${API}" ]; then
+            echo "No API container; verifying on host primary volume"
+            export RCLONE_CONFIG=/var/lib/docker/volumes/creator-ai-studio-rclone-config/_data/rclone.conf
+            rclone lsd gdrive:Creator-AI-Studio/episodes
+          else
+            docker exec "${API}" rclone lsd gdrive:Creator-AI-Studio/episodes
+          fi
           EOF
 
       - name: Verify storage API (optional)
