@@ -85,6 +85,11 @@ Reference copy: [deploy/staging.env.example](../../deploy/staging.env.example).
 | `LOCAL_STORAGE_PATH` | API, Worker | Yes | `/data/episodes` | Must point to a persistent mounted volume. |
 | `CAS_PUBLIC_URL` | API | No | `https://creator-ai-studio.217.76.56.66.sslip.io` | Public URL for OAuth redirects (must match browser URL, include `https://` when SSL is enabled). |
 | `VITE_API_BASE_URL` | Web build | No | `/api` | Optional override. Leave unset/defaulted to `/api` in staging so the dashboard uses the same-origin nginx proxy. |
+| `VITE_SUPABASE_URL` | Web build | Yes (if auth on) | `https://iiokqyedkylwhonbrrvo.supabase.co` | Baked into static JS at image build. Set via VPS `.env.supabase.local` or GitHub Actions secrets. |
+| `VITE_SUPABASE_ANON_KEY` | Web build | Yes (if auth on) | *(Dashboard → API → anon/publishable)* | Same as above. Without both `VITE_*`, login UI is missing when API requires auth. |
+| `SUPABASE_URL` | API runtime | No | `https://iiokqyedkylwhonbrrvo.supabase.co` | Postgres sync + JWT JWKS; alias for web build when `VITE_SUPABASE_URL` omitted. |
+| `SUPABASE_ANON_KEY` | VPS / CI | No | *(anon key)* | Written to `.env.supabase.local`; derived to `VITE_SUPABASE_ANON_KEY` at web build. |
+| `SUPABASE_JWT_SECRET` | API runtime | Yes (staging auth) | *(JWT Secret)* | Enables API JWT validation; requires web rebuild with `VITE_SUPABASE_*`. |
 
 ### HTTPS (Google OAuth)
 
@@ -123,6 +128,8 @@ Web Docker image:
 ```bash
 docker build -f deploy/Dockerfile.web \
   --build-arg VITE_API_BASE_URL=/api \
+  --build-arg VITE_SUPABASE_URL=https://iiokqyedkylwhonbrrvo.supabase.co \
+  --build-arg VITE_SUPABASE_ANON_KEY="<anon-or-publishable-key>" \
   -t creator-ai-studio-web:staging .
 docker run --rm -p 8080:8080 creator-ai-studio-web:staging
 ```

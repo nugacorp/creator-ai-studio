@@ -117,6 +117,21 @@ if [ -z "${VITE_SUPABASE_ANON_KEY:-}" ] && [ -n "${VITE_SUPABASE_PUBLISHABLE_KEY
   export VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_PUBLISHABLE_KEY"
 fi
 
+VITE_SUPABASE_URL="${VITE_SUPABASE_URL:-${SUPABASE_URL:-}}"
+VITE_SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-}}"
+
+if [ -n "${SUPABASE_JWT_SECRET:-}" ]; then
+  if [ -z "${VITE_SUPABASE_URL}" ] || [ -z "${VITE_SUPABASE_ANON_KEY}" ]; then
+    echo "ERROR: SUPABASE_JWT_SECRET is set (API auth on) but web build args are missing." >&2
+    echo "  Add to /root/creator-ai-studio/.env.supabase.local (or GitHub Actions secrets):" >&2
+    echo "    SUPABASE_URL=https://iiokqyedkylwhonbrrvo.supabase.co" >&2
+    echo "    SUPABASE_ANON_KEY=<Dashboard → Settings → API → anon / publishable key>" >&2
+    echo "  vps-sync-supabase-env.sh derives VITE_SUPABASE_* from those keys." >&2
+    echo "  See docs/02-operations/SUPABASE_AUTH.md" >&2
+    exit 1
+  fi
+fi
+
 echo "=== Migrating secrets to persistent volume ==="
 API_CONTAINER=$(docker ps -q -f name=api-z7b1ieqp66a7e43cywaz816w | head -1 || true)
 if [ -n "$API_CONTAINER" ]; then
@@ -139,10 +154,7 @@ echo "=== Building API image (${COMMIT}) ==="
 docker build -f "$SRC_DIR/deploy/Dockerfile.api" -t "z7b1ieqp66a7e43cywaz816w_api:${COMMIT}" "$SRC_DIR"
 
 echo "=== Building Web image (${COMMIT}) ==="
-# .env.supabase.local often defines SUPABASE_URL / SUPABASE_ANON_KEY for the API;
-# map those to Vite build args when VITE_* are not set explicitly.
-VITE_SUPABASE_URL="${VITE_SUPABASE_URL:-${SUPABASE_URL:-}}"
-VITE_SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-}}"
+# Vite bakes VITE_* at build time — these must be passed as docker build --build-arg.
 WEB_BUILD_ARGS=(--build-arg "VITE_API_BASE_URL=/api")
 if [ -n "${VITE_SUPABASE_URL}" ]; then
   WEB_BUILD_ARGS+=(--build-arg "VITE_SUPABASE_URL=${VITE_SUPABASE_URL}")
@@ -153,10 +165,28 @@ fi
 if [ -n "${SUPABASE_URL:-}" ] && [ -z "${VITE_SUPABASE_ANON_KEY}" ]; then
   echo "WARN: SUPABASE_URL is set but VITE_SUPABASE_ANON_KEY/SUPABASE_ANON_KEY is missing; web login will be disabled" >&2
 fi
+if [ -n "${VITE_SUPABASE_URL}" ]; then
+  echo "Web build: VITE_SUPABASE_URL set (anon key: $([ -n "${VITE_SUPABASE_ANON_KEY}" ] && echo yes || echo MISSING))"
+else
+  echo "Web build: no VITE_SUPABASE_URL — login UI will not be baked into the dashboard"
+fi
+WEB_IMAGE="z7b1ieqp66a7e43cywaz816w_web:${COMMIT}"
 docker build -f "$SRC_DIR/deploy/Dockerfile.web" \
   "${WEB_BUILD_ARGS[@]}" \
-  -t "z7b1ieqp66a7e43cywaz816w_web:${COMMIT}" \
+  -t "$WEB_IMAGE" \
   "$SRC_DIR"
+
+if [ -n "${VITE_SUPABASE_URL}" ]; then
+  HOST_FRAGMENT="${VITE_SUPABASE_URL#https://}"
+  HOST_FRAGMENT="${HOST_FRAGMENT#http://}"
+  if ! docker run --rm "$WEB_IMAGE" \
+    sh -c "grep -rq '${HOST_FRAGMENT}' /usr/share/nginx/html/assets/ 2>/dev/null"; then
+    echo "ERROR: Web image built but VITE_SUPABASE_URL was not embedded in static assets." >&2
+    echo "  Check deploy/Dockerfile.web ARG/ENV and rebuild with --build-arg VITE_SUPABASE_URL." >&2
+    exit 1
+  fi
+  echo "OK: VITE_SUPABASE_URL embedded in web assets"
+fi
 
 echo "=== Building Worker image (${COMMIT}) ==="
 docker build -f "$SRC_DIR/deploy/Dockerfile.worker" -t "z7b1ieqp66a7e43cywaz816w_worker:${COMMIT}" "$SRC_DIR"

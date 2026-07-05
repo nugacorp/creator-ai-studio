@@ -1,5 +1,8 @@
 # Creator AI Studio — Staging Web image
 # Builds the Vite app and serves static assets with nginx.
+#
+# VITE_* must be passed as docker build --build-arg (baked at compile time).
+# Staging: scripts/vps-redeploy.sh reads /root/creator-ai-studio/.env.supabase.local.
 
 FROM node:22-bookworm-slim AS builder
 

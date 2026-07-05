@@ -12,8 +12,13 @@ export default function AuthMisconfiguredView() {
           <code className="text-amber-200">VITE_SUPABASE_ANON_KEY</code>.
         </p>
         <p className="text-sm text-[#8B949E] leading-relaxed">
-          Añádelas en <code className="text-slate-300">.env.supabase.local</code> en el VPS y vuelve
-          a desplegar la imagen web (rebuild). Consulta{' '}
+          Son variables de <strong className="text-slate-300 font-medium">build</strong> (Vite), no de
+          runtime: añade <code className="text-slate-300">SUPABASE_URL</code> y{' '}
+          <code className="text-slate-300">SUPABASE_ANON_KEY</code> en{' '}
+          <code className="text-slate-300">/root/creator-ai-studio/.env.supabase.local</code> en el VPS
+          (o en los secrets de GitHub Actions) y ejecuta{' '}
+          <code className="text-slate-300">scripts/vps-redeploy.sh</code> para reconstruir la imagen
+          web. Consulta{' '}
           <code className="text-slate-300">docs/02-operations/SUPABASE_AUTH.md</code>.
         </p>
       </div>

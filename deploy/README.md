@@ -20,9 +20,15 @@ Docker and Compose files for Creator AI Studio. Run all commands from the **repo
 
 ```bash
 docker build -f deploy/Dockerfile.api -t creator-ai-studio-api:local .
-docker build -f deploy/Dockerfile.web --build-arg VITE_API_BASE_URL=/api -t creator-ai-studio-web:local .
+docker build -f deploy/Dockerfile.web \
+  --build-arg VITE_API_BASE_URL=/api \
+  --build-arg VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co \
+  --build-arg VITE_SUPABASE_ANON_KEY=your-anon-or-publishable-key \
+  -t creator-ai-studio-web:local .
 docker build -f deploy/Dockerfile.worker -t creator-ai-studio-worker:local .
 ```
+
+`VITE_SUPABASE_*` are **build-time only** (Vite). Staging VPS builds pass them via `scripts/vps-redeploy.sh` reading `/root/creator-ai-studio/.env.supabase.local`. See `docs/02-operations/SUPABASE_AUTH.md`.
 
 ## Compose (from repo root)
 

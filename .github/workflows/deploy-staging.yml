@@ -55,6 +55,23 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
             ./ "${VPS_USER}@${VPS_HOST}:/root/creator-ai-studio/"
 
+      - name: Verify Supabase secrets for web login build
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+        run: |
+          if [ -n "${SUPABASE_JWT_SECRET}" ] && { [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; }; then
+            echo "::error::SUPABASE_JWT_SECRET is set but SUPABASE_URL and/or SUPABASE_ANON_KEY GitHub secrets are missing."
+            echo "Add them under Settings → Secrets → Actions so the web image is built with VITE_SUPABASE_*."
+            echo "See docs/02-operations/SUPABASE_AUTH.md"
+            exit 1
+          fi
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::warning::SUPABASE_URL or SUPABASE_ANON_KEY not in GitHub secrets."
+            echo "Web login requires them at build time unless /root/creator-ai-studio/.env.supabase.local already exists on the VPS."
+          fi
+
       - name: Sync Supabase env on VPS
         env:
           VPS_USER: ${{ secrets.VPS_USER || 'root' }}

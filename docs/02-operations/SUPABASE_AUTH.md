@@ -68,19 +68,75 @@ Migraciones en `supabase/migrations/`:
 
 ## 4. Variables en Coolify / staging
 
+### Importante: Vite solo en build time
+
+`VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` se **incrustan en el JS estático** al construir la imagen web (`deploy/Dockerfile.web`). No sirve añadirlas como variables de runtime en Coolify para el contenedor nginx: hay que **reconstruir** la imagen web con `--build-arg`.
+
 | Variable | Dónde | Uso |
 |----------|--------|-----|
-| `VITE_SUPABASE_URL` | Build web | Cliente Supabase |
-| `VITE_SUPABASE_ANON_KEY` | Build web | Cliente Supabase |
-| `SUPABASE_JWT_SECRET` | API | Validar JWT (`Project Settings → API → JWT Secret`) |
-| `SUPABASE_URL` | API (opcional) | Sync Postgres + JWKS fallback |
+| `VITE_SUPABASE_URL` | **Build** web | Cliente Supabase en el navegador |
+| `VITE_SUPABASE_ANON_KEY` | **Build** web | Cliente Supabase en el navegador |
+| `SUPABASE_URL` | API (runtime) | Sync Postgres + JWKS fallback; alias para derivar `VITE_SUPABASE_URL` |
+| `SUPABASE_ANON_KEY` | VPS / CI | Alias para derivar `VITE_SUPABASE_ANON_KEY` en el build |
+| `SUPABASE_JWT_SECRET` | API (runtime) | Validar JWT (`Project Settings → API → JWT Secret`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | API (opcional) | Sync Postgres |
-
-**VPS:** guarda los valores reales en `/root/creator-ai-studio/.env.supabase.local` (no en git). `scripts/vps-redeploy.sh` los carga para inyectar `SUPABASE_*` en la API y pasar `VITE_SUPABASE_*` al build de la web. Si faltan `VITE_*`, el dashboard no muestra login y verás `401 unauthorized` en todas las rutas protegidas.
+| `CAS_API_KEY` | API + worker | Auth máquina-a-máquina (worker) |
 
 Endpoint público de diagnóstico: `GET /api/auth/status` → `{ authRequired, apiKeyAuth, supabaseAuth }`.
 
-Tras definir `VITE_*`, **rebuild** la imagen web. Con auth activa, las rutas `/api/*` (excepto health, auth/status y OAuth) requieren `Authorization: Bearer <access_token>` o `CAS_API_KEY`.
+Si la API tiene `SUPABASE_JWT_SECRET` pero la web se construyó **sin** `VITE_*`, verás la pantalla **«Configuración requerida — Inicio de sesión no disponible»** y `401` en rutas protegidas.
+
+### Opción A — GitHub Actions (recomendado)
+
+En el repo **Settings → Secrets and variables → Actions**, define:
+
+| Secret | Valor |
+|--------|--------|
+| `SUPABASE_URL` | `https://iiokqyedkylwhonbrrvo.supabase.co` |
+| `SUPABASE_ANON_KEY` | Dashboard → Settings → API → **anon** o **publishable** key |
+| `SUPABASE_JWT_SECRET` | Dashboard → Settings → API → **JWT Secret** |
+| `SUPABASE_SERVICE_ROLE_KEY` | (opcional) service role |
+| `CAS_API_KEY` | (opcional) clave para el worker |
+| `CAS_SECRETS_KEY` | (opcional) cifrado de claves en UI |
+
+Cada push a `staging` ejecuta `scripts/vps-sync-supabase-env.sh` (escribe `/root/creator-ai-studio/.env.supabase.local`) y `scripts/vps-redeploy.sh` (build con `--build-arg VITE_SUPABASE_*`).
+
+### Opción B — Archivo manual en el VPS
+
+SSH al VPS y crea o edita `/root/creator-ai-studio/.env.supabase.local` (no commitear):
+
+```bash
+SUPABASE_URL=https://iiokqyedkylwhonbrrvo.supabase.co
+SUPABASE_ANON_KEY=<anon-o-publishable-key-del-dashboard>
+SUPABASE_JWT_SECRET=<jwt-secret-del-dashboard>
+# opcional:
+# SUPABASE_SERVICE_ROLE_KEY=
+# CAS_API_KEY=
+# CAS_SECRETS_KEY=
+```
+
+`vps-sync-supabase-env.sh` y `vps-redeploy.sh` derivan `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` desde `SUPABASE_URL` / `SUPABASE_ANON_KEY` si no están explícitos.
+
+### Rebuild obligatorio (web)
+
+Tras definir las variables, **reconstruye la imagen web** (no basta con reiniciar el contenedor):
+
+```bash
+cd /root/creator-ai-studio
+bash scripts/vps-redeploy.sh manual-$(date +%Y%m%d)
+```
+
+O dispara un deploy con push a `staging` (si los secrets de GitHub están configurados).
+
+`vps-redeploy.sh` falla si `SUPABASE_JWT_SECRET` está definido pero faltan las claves para el build web, y verifica que la URL de Supabase quedó embebida en los assets estáticos.
+
+### Coolify: qué no hacer
+
+- No uses solo **Restart** en Coolify para el servicio web: no recompila Vite.
+- El redeploy real lo hace `scripts/vps-redeploy.sh` vía GitHub Actions (build `docker build` + actualización del compose de Coolify).
+- Si construyes a mano con `docker compose -f deploy/docker-compose.staging.yml up --build`, exporta `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en el shell o en un `.env` junto al compose antes del build.
+
+Con auth activa, las rutas `/api/*` (excepto health, auth/status y OAuth) requieren `Authorization: Bearer <access_token>` o `CAS_API_KEY`.
 
 ## 5. Desarrollo local
 

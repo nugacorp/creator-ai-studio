@@ -47,9 +47,11 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.web
       args:
+        # Vite embeds these at image build time — export before `docker compose up --build`
+        # or use scripts/vps-redeploy.sh on the VPS (reads .env.supabase.local).
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
-        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
-        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-${SUPABASE_URL:-}}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-}}
     expose:
       - "8080"
     labels:
