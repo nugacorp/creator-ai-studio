@@ -49,6 +49,21 @@ ssh -i "$env:USERPROFILE\.ssh\cursor_creator_studio" -o BatchMode=yes root@217.7
 1. Generate: `ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\cursor_cas_deploy_ed25519 -C "cursor-cas-deploy" -N '""'`
 2. Append the `.pub` to `/root/.ssh/authorized_keys` using an existing working key (or update GitHub secret `VPS_SSH_KEY` and redeploy).
 
+## Hermes Agent CLI vs CAS deploy tree
+
+Two directories on cas-core-01 — do not conflate them:
+
+| Path | Use |
+|------|-----|
+| `/home/creator/projects/creator-ai-studio` | Hermes Agent **git workspace** (`creator` user, full `.git`) |
+| `/root/creator-ai-studio` | **CI rsync deploy target** (no `.git`; run `vps-redeploy.sh` as root) |
+
+Hermes Agent CLI walks parent directories for `.git` when building its system prompt. If `/root/creator-ai-studio/.git` exists (e.g. after a manual `git init` as root) and is unreadable to the running user, Hermes aborts with:
+
+`PermissionError: [Errno 13] Permission denied: '/root/creator-ai-studio/.git'`
+
+Fix: use `/home/creator/projects/creator-ai-studio` as Hermes cwd; CI runs `scripts/vps-post-rsync.sh` after each rsync to delete stray `.git` under `/root/creator-ai-studio` and restore `+x` on deploy scripts.
+
 ## Related
 
 - Google Drive / rclone: [RCLONE_DRIVE.md](./RCLONE_DRIVE.md)

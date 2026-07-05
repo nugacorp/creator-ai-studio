@@ -13,6 +13,20 @@ metadata:
 
 Use for Creator AI Studio deploy validation to staging/Coolify.
 
+## VPS path layout (cas-core-01)
+
+| Path | Purpose |
+|------|---------|
+| `/home/creator/projects/creator-ai-studio` | **Hermes cwd / git workspace** — full clone with `.git`, owned by `creator` |
+| `/root/creator-ai-studio` | **Deploy sync target** — rsync from GitHub Actions, **no `.git`** |
+
+Rules:
+
+- Set Hermes Agent CLI `cwd` to `/home/creator/projects/creator-ai-studio` for git, tests, and code edits.
+- Never use `/root/creator-ai-studio` as Hermes cwd — Hermes walks for `.git` when loading context; a root-owned unreadable `.git` there crashes with `PermissionError`.
+- Run deploy/redeploy as **root** only: `COMPOSE_FILE=deploy/docker-compose.staging.yml bash /root/creator-ai-studio/scripts/vps-redeploy.sh <tag>`
+- After CI rsync, `scripts/vps-post-rsync.sh` removes stray `.git` and restores `+x` on deploy scripts.
+
 ## Inputs needed
 - Branch and expected commit SHA.
 - Target URL.
@@ -25,10 +39,10 @@ Use for Creator AI Studio deploy validation to staging/Coolify.
 - Do not modify Coolify variables or environment secrets.
 
 ## Allowed commands
-- `git fetch --all --prune`, checkout target branch, `git pull --ff-only`.
-- `npm run test`, `npm run typecheck`, `npm run build`.
+- In `/home/creator/projects/creator-ai-studio`: `git fetch --all --prune`, checkout target branch, `git pull --ff-only`.
+- `npm run test`, `npm run typecheck`, `npm run build` (from the git workspace above).
 - `bash -n scripts/vps-redeploy.sh scripts/patch-worker-cas-key.sh`.
-- `scripts/vps-redeploy.sh <commit>` when deployment is authorized.
+- As root on deploy tree: `bash /root/creator-ai-studio/scripts/vps-redeploy.sh <commit>` when deployment is authorized.
 - `docker compose config` and `docker ps` on target host, without env dumps.
 - `GET /api/health` and public UI smoke.
 
