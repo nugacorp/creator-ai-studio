@@ -28,6 +28,7 @@ export interface VideoProject {
   outline: string[];
   scenes: Scene[];
   audioUrl?: string;
+  videoUrl?: string;
   thumbnailUrl?: string;
   seoTitles: string[];
   seoDescription: string;

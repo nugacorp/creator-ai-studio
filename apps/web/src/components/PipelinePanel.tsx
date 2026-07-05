@@ -78,7 +78,7 @@ export default function PipelinePanel({
       .then(setStorage)
       .catch(() => setStorage(null));
     loadAssets();
-  }, [loadAssets]);
+  }, [episodeId, loadAssets]);
 
   const startPipeline = async (mode: PipelineMode, label: string) => {
     setRunning(true);

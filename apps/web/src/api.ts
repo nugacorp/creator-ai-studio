@@ -450,6 +450,21 @@ export async function downloadEpisodeFile(episodeId: string, assetKey: string): 
   URL.revokeObjectURL(url);
 }
 
+/** Fetch episode file with auth and return a blob URL for inline preview (revoke when done). */
+export async function fetchEpisodeAssetObjectUrl(
+  episodeId: string,
+  assetKey: string,
+): Promise<string | null> {
+  const headers = await buildAuthHeaders();
+  const response = await fetch(
+    `${API_BASE_URL}/episodes/${encodeURIComponent(episodeId)}/files/${encodeURIComponent(assetKey)}`,
+    { headers },
+  );
+  if (!response.ok) return null;
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
 export interface AgentsListResponse {
   agents: import('@creator-ai-studio/shared').AgentDefinition[];
   orchestrator: string;

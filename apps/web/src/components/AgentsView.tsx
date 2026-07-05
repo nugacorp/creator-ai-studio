@@ -1,7 +1,28 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Cpu, Play, Terminal, Loader2 } from 'lucide-react';
-import type { AgentDefinition, AgentRunRecord } from '@creator-ai-studio/shared';
-import { fetchAgentRuns, fetchAgents, runEpisodeAgent } from '../api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Cpu,
+  Play,
+  Terminal,
+  Loader2,
+  RefreshCw,
+  FileText,
+  Image as ImageIcon,
+  Film,
+  Volume2,
+  Download,
+  ExternalLink,
+} from 'lucide-react';
+import type { AgentDefinition, AgentRunRecord, EpisodeDetail } from '@creator-ai-studio/shared';
+import {
+  downloadEpisodeFile,
+  fetchAgentRuns,
+  fetchAgents,
+  fetchEpisodeAssetObjectUrl,
+  fetchEpisodeAssets,
+  fetchEpisodeDetail,
+  runEpisodeAgent,
+  type EpisodeAssetsResponse,
+} from '../api';
 
 const AGENT_COLORS: Record<string, string> = {
   hermes: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
@@ -17,11 +38,13 @@ const AGENT_COLORS: Record<string, string> = {
   analytics_agent: 'text-lime-400 bg-lime-500/10 border-lime-500/20',
 };
 
+type AgentCardStatus = 'working' | 'idle' | 'completed' | 'failed';
+
 interface AgentCard {
   id: string;
   name: string;
   role: string;
-  status: 'working' | 'idle' | 'paused' | 'failed';
+  status: AgentCardStatus;
   currentTask: string;
   progress: number;
   avatarColor: string;
@@ -30,13 +53,31 @@ interface AgentCard {
 
 interface AgentsViewProps {
   episodeId?: string;
+  episodeTitle?: string;
+  onEpisodeRefresh?: () => Promise<void>;
+  onOpenWorkspace?: () => void;
 }
 
-function runToStatus(run: AgentRunRecord | undefined): AgentCard['status'] {
+function runToStatus(run: AgentRunRecord | undefined): AgentCardStatus {
   if (!run) return 'idle';
   if (run.status === 'running') return 'working';
+  if (run.status === 'completed') return 'completed';
   if (run.status === 'failed' || run.status === 'blocked') return 'failed';
   return 'idle';
+}
+
+function formatAgentTask(def: AgentDefinition, run: AgentRunRecord | undefined): string {
+  if (!run) return 'Sin ejecuciones en este episodio';
+  if (run.status === 'running') return 'En ejecución…';
+  const lastLog = run.logs?.at(-1);
+  if (run.status === 'completed') {
+    return lastLog?.includes('Completado') ? lastLog : `Completado — ${def.name}`;
+  }
+  if (run.status === 'failed' || run.status === 'blocked') {
+    const err = typeof run.output?.error === 'string' ? run.output.error : lastLog;
+    return err ?? `Error — ${def.name}`;
+  }
+  return `${run.status} — ${def.name}`;
 }
 
 function mergeAgentsWithRuns(defs: AgentDefinition[], runs: AgentRunRecord[]): AgentCard[] {
@@ -52,15 +93,13 @@ function mergeAgentsWithRuns(defs: AgentDefinition[], runs: AgentRunRecord[]): A
     const run = latestByAgent.get(def.id);
     const status = runToStatus(run);
     const progress =
-      run?.status === 'completed' ? 100 : run?.status === 'running' ? 50 : run?.status === 'failed' ? 0 : 0;
+      status === 'completed' ? 100 : status === 'working' ? 50 : status === 'failed' ? 0 : 0;
     return {
       id: def.id,
       name: def.name,
       role: def.role,
       status,
-      currentTask: run
-        ? `${run.status} — ${def.description.slice(0, 80)}…`
-        : def.description.slice(0, 100),
+      currentTask: formatAgentTask(def, run),
       progress,
       avatarColor: AGENT_COLORS[def.id] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/20',
       logs: run?.logs ?? [`[${def.name}] Sin ejecuciones registradas en este episodio.`],
@@ -68,40 +107,123 @@ function mergeAgentsWithRuns(defs: AgentDefinition[], runs: AgentRunRecord[]): A
   });
 }
 
-export default function AgentsView({ episodeId }: AgentsViewProps) {
+export default function AgentsView({
+  episodeId,
+  episodeTitle,
+  onEpisodeRefresh,
+  onOpenWorkspace,
+}: AgentsViewProps) {
   const [definitions, setDefinitions] = useState<AgentDefinition[]>([]);
   const [agents, setAgents] = useState<AgentCard[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('hermes');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [episode, setEpisode] = useState<EpisodeDetail | null>(null);
+  const [assets, setAssets] = useState<EpisodeAssetsResponse | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<{
+    thumbnail?: string;
+    video?: string;
+    audio?: string;
+  }>({});
+  const previewUrlsRef = useRef(previewUrls);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { agents: defs } = await fetchAgents();
-      setDefinitions(defs);
-      let runs: AgentRunRecord[] = [];
-      if (episodeId) {
-        const data = await fetchAgentRuns(episodeId);
-        runs = data.runs;
-      }
-      const cards = mergeAgentsWithRuns(defs, runs);
-      setAgents(cards);
-      if (!cards.some(c => c.id === selectedAgentId) && cards[0]) {
-        setSelectedAgentId(cards[0].id);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error cargando agentes');
-    } finally {
-      setLoading(false);
+  const revokePreviewUrls = useCallback((urls: typeof previewUrls) => {
+    for (const url of Object.values(urls)) {
+      if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
     }
-  }, [episodeId, selectedAgentId]);
+  }, []);
+
+  const loadPreviews = useCallback(
+    async (id: string, detail: EpisodeDetail, assetList: EpisodeAssetsResponse | null) => {
+      const next: typeof previewUrls = {};
+      const thumbFile = assetList?.files.find(f => f.key === 'thumbnail' && f.available);
+      const videoFile = assetList?.files.find(f => f.key === 'video' && f.available);
+      const audioFile = assetList?.files.find(f => f.key === 'audio' && f.available);
+
+      if (thumbFile) {
+        next.thumbnail = (await fetchEpisodeAssetObjectUrl(id, 'thumbnail')) ?? undefined;
+      } else if (detail.content.thumbnailUrl) {
+        next.thumbnail = detail.content.thumbnailUrl;
+      }
+      if (videoFile) {
+        next.video = (await fetchEpisodeAssetObjectUrl(id, 'video')) ?? undefined;
+      }
+      if (audioFile) {
+        next.audio = (await fetchEpisodeAssetObjectUrl(id, 'audio')) ?? undefined;
+      } else if (detail.content.audioUrl) {
+        next.audio = detail.content.audioUrl;
+      }
+
+      revokePreviewUrls(previewUrlsRef.current);
+      previewUrlsRef.current = next;
+      setPreviewUrls(next);
+    },
+    [revokePreviewUrls],
+  );
+
+  const refresh = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const silent = opts?.silent ?? false;
+      if (!silent) setRefreshing(true);
+      setError(null);
+      try {
+        const { agents: defs } = await fetchAgents();
+        setDefinitions(defs);
+
+        let runs: AgentRunRecord[] = [];
+        if (episodeId) {
+          const [runsData, detail, assetsData] = await Promise.all([
+            fetchAgentRuns(episodeId),
+            fetchEpisodeDetail(episodeId),
+            fetchEpisodeAssets(episodeId).catch(() => null),
+          ]);
+          runs = runsData.runs;
+          setEpisode(detail);
+          setAssets(assetsData);
+          await loadPreviews(episodeId, detail, assetsData);
+          if (onEpisodeRefresh) await onEpisodeRefresh();
+        } else {
+          setEpisode(null);
+          setAssets(null);
+          revokePreviewUrls(previewUrlsRef.current);
+          previewUrlsRef.current = {};
+          setPreviewUrls({});
+        }
+
+        const cards = mergeAgentsWithRuns(defs, runs);
+        setAgents(cards);
+        setSelectedAgentId(prev => (cards.some(c => c.id === prev) ? prev : (cards[0]?.id ?? 'hermes')));
+        setLastRefreshedAt(
+          new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        );
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Error cargando agentes');
+      } finally {
+        setLoading(false);
+        if (!silent) setRefreshing(false);
+      }
+    },
+    [episodeId, onEpisodeRefresh, loadPreviews, revokePreviewUrls],
+  );
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    return () => revokePreviewUrls(previewUrlsRef.current);
+  }, [revokePreviewUrls]);
+
+  useEffect(() => {
+    if (!episodeId) return;
+    const hasActive = agents.some(a => a.status === 'working');
+    if (!hasActive) return;
+    const timer = window.setInterval(() => void refresh({ silent: true }), 5000);
+    return () => window.clearInterval(timer);
+  }, [episodeId, agents, refresh]);
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId) ?? agents[0];
 
@@ -114,13 +236,16 @@ export default function AgentsView({ episodeId }: AgentsViewProps) {
     setError(null);
     try {
       await runEpisodeAgent(episodeId, agentId, { autoEnqueuePlan });
-      await refresh();
+      await refresh({ silent: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo encolar el agente');
     } finally {
       setRunning(null);
     }
   };
+
+  const scriptText = episode?.content.script?.trim() ?? '';
+  const scriptWords = scriptText ? scriptText.split(/\s+/).filter(Boolean).length : 0;
 
   if (loading && agents.length === 0) {
     return (
@@ -141,8 +266,17 @@ export default function AgentsView({ episodeId }: AgentsViewProps) {
           <div>
             <h2 className="font-display font-bold text-base text-white">Agentes especializados (API real)</h2>
             <p className="text-[11px] text-[#8B949E]">
-              Orquestador: <span className="text-rose-300 font-semibold">Hermes</span> en el VPS — coordina el equipo de producción
+              Orquestador: <span className="text-rose-300 font-semibold">Hermes</span> en el VPS
+              {episodeTitle ? (
+                <>
+                  {' '}
+                  · Episodio: <span className="text-white">{episodeTitle}</span>
+                </>
+              ) : null}
             </p>
+            {lastRefreshedAt && (
+              <p className="text-[10px] text-slate-500 font-mono mt-0.5">Actualizado {lastRefreshedAt}</p>
+            )}
           </div>
         </div>
 
@@ -158,22 +292,129 @@ export default function AgentsView({ episodeId }: AgentsViewProps) {
           </button>
           <button
             type="button"
+            disabled={refreshing}
             onClick={() => void refresh()}
-            className="px-3 py-1.5 rounded-2xl border border-white/10 text-xs text-slate-300 hover:text-white"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl border border-white/10 text-xs text-slate-300 hover:text-white disabled:opacity-50 cursor-pointer"
           >
-            Actualizar
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Actualizando…' : 'Actualizar'}
           </button>
         </div>
       </div>
 
       {!episodeId && (
         <p className="text-xs text-amber-400/90 rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2">
-          Abre el workspace de un episodio para ejecutar agentes y ver logs reales persistidos en el servidor.
+          Abre el workspace de un episodio (Proyectos → Abrir proyecto) para ejecutar agentes y ver guion, miniatura y
+          video generados.
         </p>
       )}
 
       {error && (
         <p className="text-xs text-rose-300 rounded-xl border border-rose-500/30 bg-rose-950/20 px-3 py-2">{error}</p>
+      )}
+
+      {episodeId && episode && (
+        <div className="bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl p-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+              Producción del episodio
+            </h3>
+            {onOpenWorkspace && (
+              <button
+                type="button"
+                onClick={onOpenWorkspace}
+                className="flex items-center gap-1 text-[10px] text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Abrir workspace completo
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="rounded-xl border border-white/5 bg-[#0B0F14] p-3 space-y-2">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+                <FileText className="w-3.5 h-3.5 text-amber-400" />
+                Guion
+              </div>
+              {scriptText ? (
+                <>
+                  <p className="text-[10px] text-slate-300 line-clamp-6 leading-relaxed whitespace-pre-wrap">
+                    {scriptText.slice(0, 600)}
+                    {scriptText.length > 600 ? '…' : ''}
+                  </p>
+                  <p className="text-[9px] text-slate-500 font-mono">{scriptWords} palabras</p>
+                  <button
+                    type="button"
+                    onClick={() => void downloadEpisodeFile(episodeId, 'script')}
+                    className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-3 h-3" /> Descargar guion
+                  </button>
+                </>
+              ) : (
+                <p className="text-[10px] text-slate-500 italic">Pendiente — ejecuta Investigador o Guionista</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-white/5 bg-[#0B0F14] p-3 space-y-2">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+                <ImageIcon className="w-3.5 h-3.5 text-pink-400" />
+                Miniatura
+              </div>
+              {previewUrls.thumbnail ? (
+                <img
+                  src={previewUrls.thumbnail}
+                  alt="Miniatura del episodio"
+                  className="w-full aspect-video object-cover rounded-lg border border-white/10"
+                />
+              ) : (
+                <p className="text-[10px] text-slate-500 italic py-8 text-center">Sin miniatura aún</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-white/5 bg-[#0B0F14] p-3 space-y-2">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+                <Volume2 className="w-3.5 h-3.5 text-violet-400" />
+                Narración
+              </div>
+              {previewUrls.audio ? (
+                <audio controls src={previewUrls.audio} className="w-full h-8" />
+              ) : (
+                <p className="text-[10px] text-slate-500 italic py-4">Sin audio — job TTS pendiente</p>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-white/5 bg-[#0B0F14] p-3 space-y-2">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase">
+                <Film className="w-3.5 h-3.5 text-emerald-400" />
+                Video
+              </div>
+              {previewUrls.video ? (
+                <video controls src={previewUrls.video} className="w-full aspect-video rounded-lg border border-white/10" />
+              ) : (
+                <p className="text-[10px] text-slate-500 italic py-8 text-center">Sin render — ejecuta pipeline video</p>
+              )}
+            </div>
+          </div>
+
+          {assets && assets.files.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {assets.files
+                .filter(f => f.available && f.key !== 'content')
+                .map(f => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => void downloadEpisodeFile(episodeId, f.key)}
+                    className="text-[10px] px-2 py-1 rounded-lg border border-white/10 text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    ↓ {f.label}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -185,6 +426,7 @@ export default function AgentsView({ episodeId }: AgentsViewProps) {
           <div className="space-y-3">
             {agents.map(ag => {
               const isWorking = ag.status === 'working';
+              const isCompleted = ag.status === 'completed';
               const isSelected = selectedAgentId === ag.id;
 
               return (
@@ -208,7 +450,13 @@ export default function AgentsView({ episodeId }: AgentsViewProps) {
                         <h4 className="text-xs font-bold text-white">{ag.name}</h4>
                         <span
                           className={`w-1.5 h-1.5 rounded-full ${
-                            isWorking ? 'bg-emerald-400 animate-ping' : ag.status === 'failed' ? 'bg-rose-400' : 'bg-[#8B949E]'
+                            isWorking
+                              ? 'bg-emerald-400 animate-ping'
+                              : isCompleted
+                                ? 'bg-emerald-500'
+                                : ag.status === 'failed'
+                                  ? 'bg-rose-400'
+                                  : 'bg-[#8B949E]'
                           }`}
                         />
                       </div>
@@ -269,7 +517,7 @@ export default function AgentsView({ episodeId }: AgentsViewProps) {
           </div>
 
           <p className="text-[9px] text-[#8B949E] pt-3 font-mono leading-normal shrink-0">
-            Logs persistidos en <code className="text-indigo-300">00-control/agent-runs.json</code> del episodio.
+            Logs en <code className="text-indigo-300">00-control/agent-runs.json</code>
           </p>
         </div>
       </div>

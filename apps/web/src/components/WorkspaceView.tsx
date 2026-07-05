@@ -58,6 +58,26 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
 
   // Escenas State
   const [scenes, setScenes] = useState<Scene[]>(project.scenes);
+
+  useEffect(() => {
+    setScriptText(project.script);
+    setOutline(project.outline);
+    setScenes(project.scenes);
+    setThumbnailUrl(
+      project.thumbnailUrl ||
+        'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=600',
+    );
+    setSeoDescription(project.seoDescription);
+    if (project.audioUrl) setAudioBase64(project.audioUrl);
+  }, [
+    project.id,
+    project.script,
+    project.outline,
+    project.scenes,
+    project.thumbnailUrl,
+    project.audioUrl,
+    project.seoDescription,
+  ]);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(project.scenes[0]?.id || null);
 
   // Thumbnail State

@@ -60,6 +60,7 @@ function episodeToProject(episode: EpisodeSummary, content?: EpisodeDetail['cont
     seoTags: c?.seoTags ?? [],
     thumbnailUrl: c?.thumbnailUrl,
     audioUrl: c?.audioUrl,
+    videoUrl: c?.videoUrl,
     scheduledAt: c?.scheduledAt,
   };
 }
@@ -144,6 +145,14 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     await loadProjects();
     setWorkspaceRefreshToken(t => t + 1);
   }, [loadProjects]);
+
+  const reloadEpisode = useCallback(async (episodeId: string) => {
+    const detail = await fetchEpisodeDetail(episodeId);
+    setProjects(prev =>
+      prev.map(p => (p.id === episodeId ? episodeToProject(detail, detail.content) : p)),
+    );
+    setWorkspaceRefreshToken(t => t + 1);
+  }, []);
 
   useEffect(() => {
     if (!canAccessApi) return;
@@ -395,7 +404,23 @@ export function App({ initialView = 'home' }: AppProps = {}) {
 
           {currentView === 'automation' && <AutomationView episodeId={activeProject?.id} />}
 
-          {currentView === 'agents' && <AgentsView episodeId={activeProject?.id} />}
+          {currentView === 'agents' && (
+            <AgentsView
+              episodeId={activeProject?.id}
+              episodeTitle={activeProject?.title}
+              onEpisodeRefresh={
+                activeProject?.id ? () => reloadEpisode(activeProject.id) : undefined
+              }
+              onOpenWorkspace={
+                activeProject?.id
+                  ? () => {
+                      setActiveProjectId(activeProject.id);
+                      setCurrentView('workspace');
+                    }
+                  : undefined
+              }
+            />
+          )}
 
           {currentView === 'production' && <ProductionView projects={projects} />}
 
