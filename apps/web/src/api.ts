@@ -18,6 +18,8 @@ import type {
   UpdateEpisodeInput,
 } from '@creator-ai-studio/shared';
 
+import { getSupabaseClient, isSupabaseAuthEnabled } from './lib/supabase';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 let apiAccessToken: string | null = null;
@@ -29,6 +31,27 @@ export function setApiAccessToken(token: string | null): void {
 
 export function setOnUnauthorized(handler: (() => void) | null): void {
   onUnauthorized = handler;
+}
+
+/** Resolve Bearer token: in-memory cache first, then live Supabase session. */
+async function resolveAccessToken(): Promise<string | null> {
+  if (apiAccessToken) return apiAccessToken;
+  if (!isSupabaseAuthEnabled()) return null;
+  const client = getSupabaseClient();
+  if (!client) return null;
+  const { data } = await client.auth.getSession();
+  const token = data.session?.access_token ?? null;
+  if (token) apiAccessToken = token;
+  return token;
+}
+
+async function buildAuthHeaders(extra?: HeadersInit): Promise<Headers> {
+  const headers = new Headers(extra);
+  const token = await resolveAccessToken();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return headers;
 }
 
 export class ApiUnauthorizedError extends Error {
@@ -52,19 +75,29 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
   return (await response.json()) as AuthStatus;
 }
 
-function authHeaders(extra?: HeadersInit): Headers {
-  const headers = new Headers(extra);
-  if (apiAccessToken) {
-    headers.set('Authorization', `Bearer ${apiAccessToken}`);
-  }
-  return headers;
-}
-
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = authHeaders(init?.headers);
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  let headers = await buildAuthHeaders(init?.headers);
+  let response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+
+  // Retry once after refresh when the first call raced ahead of session hydration.
+  if (response.status === 401 && isSupabaseAuthEnabled()) {
+    const client = getSupabaseClient();
+    if (client) {
+      const { data } = await client.auth.refreshSession();
+      const token = data.session?.access_token ?? null;
+      if (token) {
+        apiAccessToken = token;
+        headers = await buildAuthHeaders(init?.headers);
+        response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+      }
+    }
+  }
+
   if (response.status === 401) {
-    onUnauthorized?.();
+    const body = (await response.clone().json().catch(() => ({}))) as { error?: string };
+    if (body.error === 'invalid_token') {
+      onUnauthorized?.();
+    }
     throw new ApiUnauthorizedError();
   }
   if (!response.ok) {
@@ -222,8 +255,9 @@ export async function startGoogleOAuth(
     returnUrl,
     forceConsent: forceConsent ? 'true' : 'false',
   });
+  const headers = await buildAuthHeaders();
   const response = await fetch(`${API_BASE_URL}/oauth/google/start?${query.toString()}`, {
-    headers: authHeaders(),
+    headers,
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { message?: string; error?: string };
