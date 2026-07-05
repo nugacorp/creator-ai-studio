@@ -75,6 +75,7 @@ import type { EpisodeStage, EpisodeStageStatus } from '@creator-ai-studio/shared
 import { suggestNextPublishSlot, DEFAULT_PUBLISH_SCHEDULE, formatNextPublishSlot } from '@creator-ai-studio/shared';
 import type { EpisodeSyncState } from '../hooks/useEpisodeSync';
 import { AGENT_LABELS } from '../lib/episodeJobLabels';
+import { pollProductionJob } from '../lib/pollProductionJob';
 
 interface WorkspaceViewProps {
   project: VideoProject;
@@ -755,28 +756,20 @@ export default function WorkspaceView({
       triggerFeedback('success', 'Subiendo y programando en YouTube…');
 
       await new Promise<void>((resolve, reject) => {
-        const poll = window.setInterval(async () => {
-          try {
-            const updatedJob = await fetchJob(job.id);
-            if (updatedJob.status === 'completed') {
-              window.clearInterval(poll);
-              const url = updatedJob.result?.youtubeUrl as string | undefined;
-              triggerFeedback(
-                'success',
-                url
-                  ? `✓ Video programado en YouTube: ${url}`
-                  : '✓ Video programado en YouTube.',
-              );
-              resolve();
-            } else if (updatedJob.status === 'failed') {
-              window.clearInterval(poll);
-              reject(new Error(updatedJob.error ?? 'Publicación falló'));
-            }
-          } catch (err) {
-            window.clearInterval(poll);
-            reject(err instanceof Error ? err : new Error('Publicación falló'));
-          }
-        }, 2000);
+        pollProductionJob(job.id, {
+          onUpdate: () => {},
+          onCompleted: updated => {
+            const url = updated.result?.youtubeUrl as string | undefined;
+            triggerFeedback(
+              'success',
+              url ? `? Video programado en YouTube: ${url}` : '? Video programado en YouTube.',
+            );
+            resolve();
+          },
+          onFailed: updated => reject(new Error(updated.error ?? 'Publicaci�n fall�')),
+          onWaitingForApi: () => {},
+          onFatalError: err => reject(err),
+        });
       });
     } catch (err) {
       triggerFeedback(
@@ -818,21 +811,16 @@ export default function WorkspaceView({
       episodeSync?.trackJob(job.id);
 
       await new Promise<void>((resolve, reject) => {
-        const poll = window.setInterval(async () => {
-          try {
-            const updatedJob = await fetchJob(job.id);
-            if (updatedJob.status === 'completed') {
-              window.clearInterval(poll);
-              resolve();
-            } else if (updatedJob.status === 'failed') {
-              window.clearInterval(poll);
-              reject(new Error(updatedJob.error ?? 'El guionista no pudo completar el trabajo'));
-            }
-          } catch (err) {
-            window.clearInterval(poll);
-            reject(err instanceof Error ? err : new Error('Error al consultar el job del guionista'));
-          }
-        }, 2000);
+        pollProductionJob(job.id, {
+          onUpdate: () => {},
+          onCompleted: () => resolve(),
+          onFailed: updated =>
+            reject(new Error(updated.error ?? 'El guionista no pudo completar el trabajo')),
+          onWaitingForApi: () =>
+            setProcessingMessage('Servidor actualiz�ndose � reintentando�'),
+          onFatalError: err =>
+            reject(err instanceof Error ? err : new Error('Error al consultar el job del guionista')),
+        });
       });
 
       const detail = await fetchEpisodeDetail(project.id);
@@ -897,7 +885,7 @@ export default function WorkspaceView({
     try {
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i]!;
-        setProcessingMessage(`Procesando imagen ${i + 1} de ${scenes.length}…`);
+        setProcessingMessage(`Generando imagen ${i + 1} de ${scenes.length}…`);
         const data = await generateSceneImages(project.id, [scene.id], {
           skipLlmRefine: true,
         });

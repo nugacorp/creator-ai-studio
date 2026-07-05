@@ -26,6 +26,7 @@ import {
 } from '../api';
 import type { EpisodeSyncState } from '../hooks/useEpisodeSync';
 import { inProgressAssetKeys, PIPELINE_STEP_LABELS } from '../lib/episodeJobLabels';
+import { pollProductionJob } from '../lib/pollProductionJob';
 
 interface PipelinePanelProps {
   episodeId: string;
@@ -87,38 +88,37 @@ export default function PipelinePanel({
 
   const pollJob = (jobId: string, onDone: (updated: Awaited<ReturnType<typeof fetchJob>>) => void) => {
     episodeSync?.trackJob(jobId);
-    const poll = setInterval(async () => {
-      try {
-        const updated = await fetchJob(jobId);
+    pollProductionJob(jobId, {
+      onUpdate: updated => {
         setProgress(updated.progress);
         const step =
           (updated.result?.step as string | undefined) ??
           PIPELINE_STEP_LABELS[(updated.result?.stepKey as string | undefined) ?? ''] ??
           updated.type;
-        setMessage(`${step} — ${updated.progress}%`);
-
-        if (updated.status === 'completed') {
-          clearInterval(poll);
-          setRunning(false);
-          onDone(updated);
-          onPipelineComplete?.();
-          void fetchStorageStats().then(setStorage);
-          void episodeSync?.refresh();
-          if (!episodeSync) loadAssets();
-        }
-        if (updated.status === 'failed') {
-          clearInterval(poll);
-          setRunning(false);
-          setError(updated.error ?? 'El pipeline falló');
-          setMessage(null);
-        }
-      } catch {
-        clearInterval(poll);
+        setMessage(`${step} � ${updated.progress}%`);
+      },
+      onCompleted: updated => {
         setRunning(false);
-        setError('Error al consultar el progreso del job');
+        onDone(updated);
+        onPipelineComplete?.();
+        void fetchStorageStats().then(setStorage);
+        void episodeSync?.refresh();
+        if (!episodeSync) loadAssets();
+      },
+      onFailed: updated => {
+        setRunning(false);
+        setError(updated.error ?? 'El pipeline fall�');
         setMessage(null);
-      }
-    }, 2000);
+      },
+      onWaitingForApi: () => {
+        setMessage('Servidor actualiz�ndose � reintentando�');
+      },
+      onFatalError: err => {
+        setRunning(false);
+        setError(err.message || 'Error al consultar el progreso del job');
+        setMessage(null);
+      },
+    });
   };
 
   const startPipeline = async (mode: import('../api').PipelineMode, label: string) => {

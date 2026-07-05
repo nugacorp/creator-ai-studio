@@ -88,7 +88,7 @@ export interface AuthStatus {
 export async function fetchAuthStatus(): Promise<AuthStatus> {
   const response = await fetch(`${API_BASE_URL}/auth/status`);
   if (!response.ok) {
-    throw new Error(`API error (${response.status})`);
+    throw new ApiHttpError(response.status);
   }
   return (await response.json()) as AuthStatus;
 }
@@ -119,7 +119,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiUnauthorizedError();
   }
   if (!response.ok) {
-    throw new Error(`API error (${response.status})`);
+    throw new ApiHttpError(response.status);
   }
   return (await response.json()) as T;
 }

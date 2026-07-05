@@ -9,6 +9,7 @@ import {
   type EpisodeAssetsResponse,
 } from '../api';
 import { jobStatusLabel } from '../lib/episodeJobLabels';
+import { isTransientApiError } from '../lib/pollProductionJob';
 
 const POLL_MS = 2500;
 const COMPLETED_APPLY_MS = 8000;
@@ -107,7 +108,8 @@ export function useEpisodeSync(episodeId: string | null | undefined): EpisodeSyn
         [...watchedJobIds.current].map(async id => {
           try {
             return await fetchJob(id);
-          } catch {
+          } catch (err) {
+            if (isTransientApiError(err)) return null;
             watchedJobIds.current.delete(id);
             return null;
           }
