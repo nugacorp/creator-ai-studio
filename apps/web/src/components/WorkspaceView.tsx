@@ -26,6 +26,8 @@ import {
   Download,
   AlertCircle,
   Plus,
+  Pencil,
+  ListOrdered,
   Subtitles,
   CheckCircle2,
 } from 'lucide-react';
@@ -102,6 +104,9 @@ export default function WorkspaceView({
   const [scriptText, setScriptText] = useState(project.script);
   const [outline, setOutline] = useState<string[]>(project.outline);
   const [selectedOutlineIndex, setSelectedOutlineIndex] = useState(0);
+  const [editingOutlineIndex, setEditingOutlineIndex] = useState<number | null>(null);
+  const [editingOutlineText, setEditingOutlineText] = useState('');
+  const scriptEditorRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Audio State (Narracion)
   const [selectedVoice, setSelectedVoice] = useState('JBFqnCBsd6RMkjVDRZzb');
@@ -274,8 +279,68 @@ export default function WorkspaceView({
 
   const handleSaveChanges = () => {
     persistProject();
-    triggerFeedback('success', '✓ Cambios guardados con éxito');
+    triggerFeedback('success', '✓ Cambios guardados — etapas dependientes se marcarán pendientes en el servidor');
   };
+
+  const jumpToOutlineInScript = (index: number) => {
+    setSelectedOutlineIndex(index);
+    const item = outline[index]?.trim();
+    if (!item || !scriptEditorRef.current) return;
+    const needle = item.replace(/^\d+\.\s*/, '').slice(0, 24);
+    const pos = scriptText.toLowerCase().indexOf(needle.toLowerCase());
+    if (pos >= 0) {
+      scriptEditorRef.current.focus();
+      scriptEditorRef.current.setSelectionRange(pos, Math.min(pos + needle.length, scriptText.length));
+      scriptEditorRef.current.scrollTop =
+        (pos / Math.max(scriptText.length, 1)) * scriptEditorRef.current.scrollHeight;
+    }
+  };
+
+  const startEditOutline = (index: number) => {
+    setEditingOutlineIndex(index);
+    setEditingOutlineText(outline[index] ?? '');
+  };
+
+  const commitOutlineEdit = () => {
+    if (editingOutlineIndex === null) return;
+    const next = [...outline];
+    next[editingOutlineIndex] = editingOutlineText.trim() || `Punto ${editingOutlineIndex + 1}`;
+    setOutline(next);
+    setEditingOutlineIndex(null);
+    setEditingOutlineText('');
+  };
+
+  const addOutlinePoint = () => {
+    setOutline(prev => [...prev, `Punto ${prev.length + 1}`]);
+    setSelectedOutlineIndex(outline.length);
+  };
+
+  const removeOutlinePoint = (index: number) => {
+    if (outline.length <= 1) return;
+    setOutline(prev => prev.filter((_, i) => i !== index));
+    setSelectedOutlineIndex(Math.max(0, index - 1));
+    if (editingOutlineIndex === index) setEditingOutlineIndex(null);
+  };
+
+  const syncOutlineFromScript = () => {
+    const headers = scriptText
+      .split(/\n/)
+      .map(line => line.trim())
+      .filter(line => /^\*\*.+\*\*$/.test(line) || /^\*\*\[/.test(line))
+      .map(line => line.replace(/^\*\*|\*\*$/g, '').trim())
+      .slice(0, 12);
+    if (headers.length === 0) {
+      triggerFeedback('error', 'No se encontraron encabezados ** en el guion para sincronizar');
+      return;
+    }
+    setOutline(headers);
+    triggerFeedback('success', `✓ Outline actualizado (${headers.length} puntos desde el guion)`);
+  };
+
+  const hasPublishedAssets =
+    Boolean(project.videoUrl) ||
+    stageStatuses.get('video') === 'completed' ||
+    stageStatuses.get('subtitles') === 'completed';
 
   const renderSectionFooter = (tab: WorkspaceTab) => {
     const status = aggregateStageStatus(stagesForTab(tab), stageStatuses);
@@ -686,29 +751,127 @@ export default function WorkspaceView({
         
         {/* 1. GUION PANEL */}
         {activeTab === 'guion' && (
+          <div className="space-y-6">
+            {hasPublishedAssets && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-950/15 px-4 py-3 space-y-2">
+                <p className="text-xs font-bold text-amber-200 flex items-center gap-2">
+                  <ListOrdered className="w-4 h-4" />
+                  Re-generar video con tus cambios
+                </p>
+                <ol className="text-[11px] text-amber-100/80 space-y-1 list-decimal list-inside leading-relaxed">
+                  <li>Edita el <strong>outline</strong> y el <strong>guion</strong> → <strong>Guardar Cambios</strong></li>
+                  <li>
+                    <strong>Escenas</strong> → storyboard / generar imágenes faltantes (escenas 5, 6, etc.)
+                  </li>
+                  <li>
+                    <strong>Subtítulos</strong> → Generar subtítulos
+                  </li>
+                  <li>
+                    <strong>Video</strong> → Exportar Video Final (incluye todas las escenas)
+                  </li>
+                  <li>Aprobar cada sección que hayas modificado</li>
+                </ol>
+              </div>
+            )}
+
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             
             {/* Left: Outline */}
             <div className="space-y-4 lg:col-span-1">
-              <h4 className="text-[11px] font-bold text-[#8B949E] uppercase tracking-wider font-mono">Outline del Contenido</h4>
-              <div className="space-y-1 bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-xl p-2 max-h-[350px] overflow-y-auto">
-                {outline.map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedOutlineIndex(idx)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors ${
-                      selectedOutlineIndex === idx
-                        ? 'bg-indigo-950/40 text-indigo-300 font-semibold'
-                        : 'text-[#8B949E] hover:text-[#E6EDF2] hover:bg-[#15191E]'
-                    }`}
-                  >
-                    <span className="w-5 h-5 rounded bg-[rgba(255,255,255,0.05)] text-[10px] font-mono flex items-center justify-center text-white shrink-0">
-                      {idx + 1}
-                    </span>
-                    <span className="truncate">{item}</span>
-                  </button>
-                ))}
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-[11px] font-bold text-[#8B949E] uppercase tracking-wider font-mono">
+                  Outline del Contenido
+                </h4>
+                <button
+                  type="button"
+                  onClick={syncOutlineFromScript}
+                  className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 cursor-pointer"
+                  title="Extraer puntos desde encabezados ** del guion"
+                >
+                  Sincronizar
+                </button>
               </div>
+              <div className="space-y-1 bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-xl p-2 max-h-[350px] overflow-y-auto">
+                {outline.length === 0 ? (
+                  <p className="text-[10px] text-slate-500 px-2 py-3 text-center italic">
+                    Sin outline — usa Sincronizar o Añadir punto
+                  </p>
+                ) : (
+                  outline.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex items-center gap-1 rounded-xl transition-colors ${
+                        selectedOutlineIndex === idx
+                          ? 'bg-indigo-950/40'
+                          : 'hover:bg-[#15191E]'
+                      }`}
+                    >
+                      {editingOutlineIndex === idx ? (
+                        <input
+                          value={editingOutlineText}
+                          onChange={e => setEditingOutlineText(e.target.value)}
+                          onBlur={commitOutlineEdit}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') commitOutlineEdit();
+                            if (e.key === 'Escape') setEditingOutlineIndex(null);
+                          }}
+                          className="flex-1 mx-1 my-1 px-2 py-1.5 text-xs bg-[#15191E] border border-indigo-500/40 rounded-lg text-white"
+                          autoFocus
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => jumpToOutlineInScript(idx)}
+                          className={`flex-1 flex items-center gap-2.5 px-2 py-2 text-xs font-medium text-left cursor-pointer min-w-0 ${
+                            selectedOutlineIndex === idx
+                              ? 'text-indigo-300 font-semibold'
+                              : 'text-[#8B949E] hover:text-[#E6EDF2]'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded bg-[rgba(255,255,255,0.05)] text-[10px] font-mono flex items-center justify-center text-white shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="truncate" title={item}>
+                            {item}
+                          </span>
+                        </button>
+                      )}
+                      {editingOutlineIndex !== idx && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => startEditOutline(idx)}
+                            className="p-1.5 text-slate-500 hover:text-indigo-300 cursor-pointer shrink-0"
+                            aria-label={`Editar punto ${idx + 1}`}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeOutlinePoint(idx)}
+                            disabled={outline.length <= 1}
+                            className="p-1.5 text-slate-500 hover:text-rose-400 disabled:opacity-30 cursor-pointer shrink-0"
+                            aria-label={`Eliminar punto ${idx + 1}`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={addOutlinePoint}
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-white/10 text-[10px] font-bold text-slate-400 hover:text-white hover:border-indigo-500/30 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Añadir punto al outline
+              </button>
+              <p className="text-[9px] text-slate-600 leading-relaxed px-1">
+                Clic en un punto para localizarlo en el guion. Lápiz para editar el título del punto.
+              </p>
             </div>
 
             {/* Center: Notion style script editor */}
@@ -716,6 +879,7 @@ export default function WorkspaceView({
               <h4 className="text-[11px] font-bold text-[#8B949E] uppercase tracking-wider font-mono">Editor de Guiones tipo Notion</h4>
               <div className="relative">
                 <textarea
+                  ref={scriptEditorRef}
                   value={scriptText}
                   onChange={e => setScriptText(e.target.value)}
                   className="w-full h-[350px] bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-xl p-5 text-sm text-[#E6EDF2] leading-relaxed focus:outline-none focus:border-indigo-500/40 resize-none font-sans"
@@ -755,6 +919,7 @@ export default function WorkspaceView({
               </div>
             </div>
 
+          </div>
           </div>
         )}
         {activeTab === 'guion' && renderSectionFooter('guion')}

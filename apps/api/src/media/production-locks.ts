@@ -36,6 +36,15 @@ export function stagesToInvalidate(
     pending.add('seo');
   }
 
+  if (JSON.stringify(before.outline ?? []) !== JSON.stringify(after.outline ?? [])) {
+    pending.add('script');
+    pending.add('storyboard');
+    pending.add('assets');
+    pending.add('subtitles');
+    pending.add('video');
+    pending.add('shorts');
+  }
+
   if (sceneContentSignature(before.scenes) !== sceneContentSignature(after.scenes)) {
     pending.add('assets');
     pending.add('subtitles');
