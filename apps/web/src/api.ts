@@ -143,6 +143,14 @@ export async function deleteEpisode(id: string): Promise<{ ok: boolean; id: stri
   });
 }
 
+export async function generateStoryboardFromScript(
+  episodeId: string,
+): Promise<{ scenes: import('@creator-ai-studio/shared').Scene[] }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/storyboard/from-script`, {
+    method: 'POST',
+  });
+}
+
 export async function updateStageStatus(
   id: string,
   stage: EpisodeStage,

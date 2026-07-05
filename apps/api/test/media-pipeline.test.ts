@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeSlideDurationSeconds } from '../src/media/audio-probe.js';
+import { parseScenesFromScript } from '../src/media/script-to-scenes.js';
 import { chunkTextForTts, prepareScriptForTts } from '../src/media/script-for-tts.js';
 
 const SAMPLE_SCRIPT = `**Título:** Reflexiones sobre la Creación: Génesis 1
@@ -14,6 +15,14 @@ const SAMPLE_SCRIPT = `**Título:** Reflexiones sobre la Creación: Génesis 1
 **Narrador:**
 "Cada vez que vemos un océano brillante, debemos recordar que todo eso es obra de un Creador amoroso."
 `;
+
+describe('parseScenesFromScript', () => {
+  it('parses screenplay bracket markers into scenes', () => {
+    const scenes = parseScenesFromScript(SAMPLE_SCRIPT);
+    expect(scenes.length).toBeGreaterThanOrEqual(2);
+    expect(scenes[0]?.text).toMatch(/naturaleza|Hola a todos/i);
+  });
+});
 
 describe('prepareScriptForTts', () => {
   it('strips stage directions and keeps only spoken lines', () => {

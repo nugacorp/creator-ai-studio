@@ -7,6 +7,7 @@ const REDIS_URL = process.env.REDIS_URL;
 
 const PIPELINE_STEP_LABELS: Record<string, string> = {
   script: 'Guion IA',
+  storyboard: 'Storyboard / escenas',
   seo: 'Metadatos SEO',
   tts: 'Narración',
   thumbnail: 'Miniatura',
@@ -151,6 +152,13 @@ async function runScriptJob(job: ProductionJob): Promise<void> {
   await assertOk(patchRes, 'save script');
 }
 
+async function runStoryboardJob(job: ProductionJob): Promise<void> {
+  const res = await apiFetch(`/episodes/${job.episodeId}/storyboard/from-script`, {
+    method: 'POST',
+  });
+  await assertOk(res, 'storyboard from script');
+}
+
 async function runSeoJob(job: ProductionJob): Promise<void> {
   const episodeRes = await apiFetch(`/episodes/${job.episodeId}`);
   await assertOk(episodeRes, 'load episode for SEO');
@@ -260,7 +268,7 @@ export function resolvePipelineMode(job: ProductionJob): PipelineMode {
 
 /** Step keys per pipeline mode. Exported for tests. */
 export function buildPipelineStepKeys(mode: PipelineMode): string[] {
-  const draft = ['script', 'seo', 'tts', 'thumbnail', 'render', 'shorts', 'publish_package'];
+  const draft = ['script', 'storyboard', 'seo', 'tts', 'thumbnail', 'render', 'shorts', 'publish_package'];
   if (mode === 'production-draft') return draft;
   if (mode === 'ready-for-review') return [...draft, 'review'];
   return [...draft, 'publish', 'confirm'];
@@ -278,6 +286,7 @@ async function runPipelineJob(job: ProductionJob): Promise<Record<string, unknow
 
   const stepFns: Record<string, () => Promise<{ youtubeUrl?: string; videoId?: string } | void>> = {
     script: () => runScriptJob(job),
+    storyboard: () => runStoryboardJob(job),
     seo: () => runSeoJob(job),
     tts: () => runTtsJob(job),
     thumbnail: () => runThumbnailJob(job),
@@ -348,6 +357,9 @@ export async function processJob(job: ProductionJob): Promise<void> {
     switch (job.type) {
       case 'script':
         await runScriptJob(job);
+        break;
+      case 'storyboard':
+        await runStoryboardJob(job);
         break;
       case 'seo':
         await runSeoJob(job);

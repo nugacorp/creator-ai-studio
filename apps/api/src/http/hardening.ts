@@ -20,7 +20,7 @@ const WINDOW_MS = 60_000;
 /** Paths that trigger AI providers, ffmpeg or rclone — much stricter budget. */
 const EXPENSIVE_PATTERNS = [
   /^\/(?:api\/)?(?:ai|gemini)\//,
-  /^\/(?:api\/)?episodes\/[^/]+\/(?:render|shorts|thumbnail|pipeline|archive|restore)$/,
+  /^\/(?:api\/)?episodes\/[^/]+\/(?:render|shorts|thumbnail|pipeline|archive|restore|storyboard\/from-script)$/,
   /^\/(?:api\/)?integrations\//,
 ];
 

@@ -599,6 +599,31 @@ function registerRoutes(
     return result;
   });
 
+  app.post(route(prefix, '/episodes/:id/storyboard/from-script'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await storage.getEpisode(id);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const script = episode.content.script?.trim();
+    if (!script) {
+      reply.code(400);
+      return { error: 'no_script', message: 'Escribe o genera un guion en la pestaña Guion primero.' };
+    }
+    const { parseScenesFromScript } = await import('./media/script-to-scenes.js');
+    const scenes = parseScenesFromScript(script);
+    if (scenes.length === 0) {
+      reply.code(400);
+      return {
+        error: 'no_scenes_parsed',
+        message: 'No se detectaron bloques de escena en el guion.',
+      };
+    }
+    const updated = await storage.updateEpisode(id, { content: { scenes } });
+    return { scenes, episode: updated };
+  });
+
   app.post(route(prefix, '/episodes/:id/shorts'), async (request, reply) => {
     const { id } = request.params as { id: string };
     const dir = await storage.getEpisodeDirectory(id);

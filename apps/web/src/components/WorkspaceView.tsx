@@ -28,7 +28,7 @@ import {
   Plus
 } from 'lucide-react';
 import { VideoProject, Scene } from '../types';
-import { aiGenerateImage, aiRewrite, aiSeo, aiTts, fetchElevenLabsVoices } from '../api';
+import { aiGenerateImage, aiRewrite, aiSeo, aiTts, fetchElevenLabsVoices, generateStoryboardFromScript } from '../api';
 import type { ElevenLabsVoice } from '../api';
 
 interface WorkspaceViewProps {
@@ -120,6 +120,28 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
   const triggerFeedback = (type: 'success' | 'error', text: string) => {
     setFeedbackMsg({ type, text });
     setTimeout(() => setFeedbackMsg(null), 4000);
+  };
+
+  const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
+
+  const handleGenerateScenesFromScript = async () => {
+    if (!scriptText.trim()) {
+      triggerFeedback('error', 'Escribe o genera un guion en la pestaña Guion primero.');
+      return;
+    }
+    setIsGeneratingScenes(true);
+    try {
+      const data = await generateStoryboardFromScript(project.id);
+      setScenes(data.scenes);
+      if (data.scenes[0]) setSelectedSceneId(data.scenes[0].id);
+      onUpdateProject({ ...project, scenes: data.scenes, script: scriptText });
+      triggerFeedback('success', `✓ ${data.scenes.length} escenas generadas desde el guion`);
+    } catch (err) {
+      console.error(err);
+      triggerFeedback('error', 'No se pudieron extraer escenas — revisa el formato del guion');
+    } finally {
+      setIsGeneratingScenes(false);
+    }
   };
 
   // 1. AI Rewrite for Scripts (Notion style suggestions)
@@ -535,31 +557,54 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                   Planifica cada toma. Puedes añadir el texto descriptivo y dejar que la IA cree la miniatura artística de previsualización.
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  const newSc: Scene = {
-                    id: `sc_${Date.now()}`,
-                    text: 'Escribe el concepto visual de esta escena...',
-                    imageUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?auto=format&fit=crop&q=80&w=400',
-                    voiceoverPrompt: 'Sugerencia de voz',
-                    musicTrack: 'Peaceful Ambient Piano',
-                    duration: 5,
-                    transition: 'Fade'
-                  };
-                  setScenes(prev => [...prev, newSc]);
-                }}
-                className="px-3 py-1.5 rounded-xl bg-[rgba(255,255,255,0.05)] hover:bg-[#30363D] text-[#E6EDF2] text-xs font-semibold flex items-center gap-1 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Añadir Escena</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateScenesFromScript()}
+                  disabled={isGeneratingScenes || !scriptText.trim()}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{isGeneratingScenes ? 'Generando…' : 'Desde guion'}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    const newSc: Scene = {
+                      id: `sc_${Date.now()}`,
+                      text: 'Escribe el concepto visual de esta escena...',
+                      imageUrl: '',
+                      voiceoverPrompt: '',
+                      musicTrack: 'Peaceful Ambient Piano',
+                      duration: 5,
+                      transition: 'Fade',
+                    };
+                    setScenes(prev => [...prev, newSc]);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-[rgba(255,255,255,0.05)] hover:bg-[#30363D] text-[#E6EDF2] text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Añadir Escena</span>
+                </button>
+              </div>
             </div>
 
             {scenes.length === 0 ? (
-              <div className="text-center py-12 text-[#8B949E] text-xs italic space-y-2">
+              <div className="text-center py-12 text-[#8B949E] text-xs space-y-4">
                 <AlertCircle className="w-8 h-8 text-[#8B949E]/50 mx-auto" />
-                <p>No hay escenas configuradas en este proyecto.</p>
-                <p className="text-[10px]">Utiliza el botón de arriba para crear una escena.</p>
+                <p className="italic">No hay escenas en este episodio.</p>
+                {scriptText.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleGenerateScenesFromScript()}
+                    disabled={isGeneratingScenes}
+                    className="mx-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Generar escenas desde el guion ({scriptText.includes('**[') ? 'detectado formato screenplay' : 'por párrafos'})
+                  </button>
+                ) : (
+                  <p className="text-[10px]">Primero escribe un guion en la pestaña Guion, o añade escenas manualmente.</p>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -572,12 +617,19 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                   >
                     {/* Visual Preview */}
                     <div className="relative h-40 bg-[#15191E] group">
-                      <img
-                        src={scene.imageUrl}
-                        alt={`Escena ${index + 1}`}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
+                      {scene.imageUrl ? (
+                        <img
+                          src={scene.imageUrl}
+                          alt={`Escena ${index + 1}`}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-500 bg-gradient-to-br from-[#15191E] to-[#0B0F14] px-4 text-center">
+                          <ImageIcon className="w-8 h-8 opacity-40" />
+                          <span className="text-[10px]">Sin imagen — genera con IA</span>
+                        </div>
+                      )}
                       <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-bold font-mono text-white">
                         ESCENA {index + 1}
                       </div>

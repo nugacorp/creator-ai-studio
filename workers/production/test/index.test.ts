@@ -14,6 +14,7 @@ describe('production worker', () => {
   it('production-draft excludes YouTube steps', () => {
     const keys = buildPipelineStepKeys('production-draft');
     expect(keys).toContain('script');
+    expect(keys).toContain('storyboard');
     expect(keys).toContain('publish_package');
     expect(keys).not.toContain('publish');
     expect(keys).not.toContain('confirm');

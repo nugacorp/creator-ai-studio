@@ -13,6 +13,7 @@ import type {
 } from '@creator-ai-studio/shared';
 import { HUMAN_APPROVAL_AGENT_IDS, isJobType } from '@creator-ai-studio/shared';
 import { withProvider } from '../ai/router.js';
+import { parseScenesFromScript } from '../media/script-to-scenes.js';
 import { createJob } from '../jobs/store.js';
 import { enqueueJob } from '../jobs/queue.js';
 import type { EpisodeStorage } from '../storage/index.js';
@@ -586,17 +587,7 @@ async function runStoryboardDesigner(
 }
 
 function fallbackScenesFromScript(script: string): Scene[] {
-  const paragraphs = script.split(/\n\n+/).filter(p => p.trim().length > 20);
-  const chunks = paragraphs.length > 0 ? paragraphs : [script.slice(0, 500)];
-  return chunks.slice(0, 10).map((text, i) => ({
-    id: `scene-${i + 1}`,
-    text: text.trim(),
-    imageUrl: '',
-    voiceoverPrompt: text.trim().slice(0, 200),
-    musicTrack: 'ambient-soft',
-    duration: 10,
-    transition: 'fade',
-  }));
+  return parseScenesFromScript(script);
 }
 
 async function runSceneAssetDesigner(
