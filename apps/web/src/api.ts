@@ -1,4 +1,5 @@
 import type {
+  AgentDefinition,
   AgentRunRecord,
   AppSettings,
   CreateEpisodeInput,
@@ -543,7 +544,7 @@ export async function fetchAgents(): Promise<AgentsListResponse> {
   return apiFetch<AgentsListResponse>('/agents');
 }
 
-export interface AgentConfigResponse extends import('@creator-ai-studio/shared').AgentDefinition {
+export interface AgentConfigResponse extends AgentDefinition {
   systemPrompt: string;
   skills: string[];
 }

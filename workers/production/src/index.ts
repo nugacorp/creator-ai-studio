@@ -218,8 +218,8 @@ async function runSceneImagesJob(job: ProductionJob): Promise<void> {
 }
 
 async function runSeoJob(job: ProductionJob): Promise<void> {
-  const episode = await loadEpisode(job.episodeId);
-  if (isStageCompleted(episode, 'seo') && (episode.content?.seoDescription?.trim().length ?? 0) > 20) {
+  const snapshot = await loadEpisode(job.episodeId);
+  if (isStageCompleted(snapshot, 'seo') && (snapshot.content?.seoDescription?.trim().length ?? 0) > 20) {
     console.log(`[pipeline] ${job.episodeId}: skip SEO (aprobado)`);
     return;
   }
