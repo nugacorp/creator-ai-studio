@@ -54,7 +54,7 @@ export default function CopilotView({ episodeTitle }: CopilotViewProps) {
       console.error(err);
       setMessages(prev => [
         ...prev,
-        { id: `err_${Date.now()}`, sender: 'assistant', text: 'Error de red al conectar con el servidor Gemini AI.' }
+        { id: `err_${Date.now()}`, sender: 'assistant', text: 'Error de red al conectar con el servidor de IA.' }
       ]);
     } finally {
       setIsSending(false);
@@ -76,7 +76,7 @@ export default function CopilotView({ episodeTitle }: CopilotViewProps) {
           </div>
           <div>
             <h2 className="font-display font-bold text-base text-white">Copiloto Inteligente de Creator OS</h2>
-            <p className="text-[11px] text-[#8B949E]">Conversación multi-turno con Gemini 3.5 Flash para idear, pulir y estructurar contenido</p>
+            <p className="text-[11px] text-[#8B949E]">Asistente multi-provider que solo responde sobre Creator AI Studio, producción de contenido y operaciones del proyecto</p>
           </div>
         </div>
       </div>
@@ -157,7 +157,7 @@ export default function CopilotView({ episodeTitle }: CopilotViewProps) {
               disabled={isSending}
               value={inputText}
               onChange={e => setInputText(e.target.value)}
-              placeholder="Pregúntale cualquier cosa a tu Copiloto de IA..."
+              placeholder="Pregunta solo sobre Creator AI Studio, episodios, guiones, YouTube, producción o integraciones..."
               className="flex-1 bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-2xl px-4 py-3 text-xs text-white placeholder-[#8B949E] focus:outline-none focus:border-indigo-500/40"
             />
             <button

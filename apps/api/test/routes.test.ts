@@ -357,6 +357,20 @@ describe('api routes', () => {
     expect(body.reply).toBeTruthy();
   });
 
+  it('POST /api/gemini/chat refuses out-of-scope general questions', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/gemini/chat',
+      payload: { message: 'cuanto es 4++4?' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { reply: string };
+    expect(body.reply).toContain('Creator AI Studio');
+    expect(body.reply).toContain('no puedo responder');
+    expect(body.reply).not.toContain('8');
+  });
+
   it('POST /api/episodes/:id/jobs creates a production job', async () => {
     const episode = await createEpisode('Job test');
 

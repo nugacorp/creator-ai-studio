@@ -125,6 +125,7 @@ async function assertOk(res: Response, step: string): Promise<void> {
 }
 
 interface EpisodeSnapshot {
+  title?: string;
   stages?: Array<{ stage: string; status: string }>;
   content?: {
     script?: string;

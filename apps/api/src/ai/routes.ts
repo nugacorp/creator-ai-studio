@@ -43,6 +43,88 @@ async function runAI<T>(reply: FastifyReply, fn: () => Promise<T>): Promise<T | 
   }
 }
 
+const CHAT_SCOPE_REFUSAL =
+  'Soy el copiloto de Creator AI Studio y no puedo responder consultas fuera del proyecto. Puedo ayudarte con episodios, guiones bíblicos, miniaturas, SEO, YouTube, producción, automatización, agentes, integraciones o el estado operativo de Creator AI Studio.';
+
+const CHAT_SCOPE_KEYWORDS = [
+  'creator ai studio',
+  'creator os',
+  'creator',
+  'cas',
+  'copiloto',
+  'proyecto',
+  'episodio',
+  'guion',
+  'guión',
+  'biblia',
+  'bíblico',
+  'biblico',
+  'cristiano',
+  'youtube',
+  'short',
+  'titulo',
+  'título',
+  'ctr',
+  'seo',
+  'miniatura',
+  'thumbnail',
+  'produccion',
+  'producción',
+  'video',
+  'canal',
+  'metricas',
+  'métricas',
+  'pipeline',
+  'tts',
+  'narracion',
+  'narración',
+  'voz',
+  'render',
+  'publicacion',
+  'publicación',
+  'publicar',
+  'staging',
+  'deploy',
+  'despliegue',
+  'sistema',
+  'worker',
+  'redis',
+  'supabase',
+  'google',
+  'gemini',
+  'openai',
+  'claude',
+  'api',
+  'dashboard',
+  'agente',
+  'automatizacion',
+  'automatización',
+  'contenido',
+  'gancho',
+  'retencion',
+  'retención',
+  'audiencia',
+];
+
+function normalizeForScope(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function isProjectScopedChat(messages: Array<{ role: string; content: string }>): boolean {
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find(message => message.role === 'user')
+    ?.content.trim();
+
+  if (!lastUserMessage) return false;
+
+  const normalized = normalizeForScope(lastUserMessage);
+  return CHAT_SCOPE_KEYWORDS.some(keyword => normalized.includes(normalizeForScope(keyword)));
+}
+
 function registerAIRoutes(app: FastifyInstance, prefix: '' | '/api'): void {
   const base = prefix === '/api' ? '/api/ai' : '/ai';
   const geminiBase = prefix === '/api' ? '/api/gemini' : '/gemini';
@@ -53,6 +135,10 @@ function registerAIRoutes(app: FastifyInstance, prefix: '' | '/api'): void {
       reply: FastifyReply,
     ) => {
       const messages = body.messages ?? [{ role: 'user' as const, content: body.message ?? '' }];
+      if (!isProjectScopedChat(messages)) {
+        return { reply: CHAT_SCOPE_REFUSAL };
+      }
+
       const result = await runAI(reply, () =>
         withProvider(
           'chat',
