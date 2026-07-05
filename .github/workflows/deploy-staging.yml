@@ -11,6 +11,7 @@
 #   SUPABASE_SERVICE_ROLE_KEY — optional Postgres sync
 #   CAS_API_KEY               — worker + machine-to-machine Bearer
 #   GEMINI_API_KEY              — API Gemini provider (optional)
+#   RCLONE_REMOTE               — e.g. gdrive:Creator-AI-Studio/episodes (optional)
 #
 # The VPS must have Docker, the Coolify app at /data/coolify/applications/...,
 # and /root/creator-ai-studio as sync target.
@@ -84,6 +85,7 @@ jobs:
           CAS_API_KEY: ${{ secrets.CAS_API_KEY }}
           CAS_SECRETS_KEY: ${{ secrets.CAS_SECRETS_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RCLONE_REMOTE: ${{ secrets.RCLONE_REMOTE }}
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" bash -s <<EOF
@@ -94,12 +96,15 @@ jobs:
           CAS_API_KEY=${CAS_API_KEY@Q} \
           CAS_SECRETS_KEY=${CAS_SECRETS_KEY@Q} \
           GEMINI_API_KEY=${GEMINI_API_KEY@Q} \
+          RCLONE_REMOTE=${RCLONE_REMOTE@Q} \
+          RCLONE_CONFIG=/config/rclone/rclone.conf \
           bash /root/creator-ai-studio/scripts/vps-sync-supabase-env.sh
           EOF
 
       - name: Redeploy staging stack
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RCLONE_REMOTE: ${{ secrets.RCLONE_REMOTE }}
           VPS_USER: ${{ secrets.VPS_USER || 'root' }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           DEPLOY_TAG: e2e-pipeline-${{ github.sha }}
@@ -108,3 +113,12 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" \
             "set -a; [ -f /root/creator-ai-studio/.env.supabase.local ] && . /root/creator-ai-studio/.env.supabase.local; set +a; COMPOSE_FILE=deploy/docker-compose.staging.yml bash /root/creator-ai-studio/scripts/vps-redeploy.sh ${DEPLOY_TAG}"
+
+      - name: Auto-archive if over episode limit
+        env:
+          VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "${VPS_USER}@${VPS_HOST}" \
+            "bash /root/creator-ai-studio/scripts/vps-archive-if-over-limit.sh || true"

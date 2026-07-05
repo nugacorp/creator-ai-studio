@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import {
   authorizePublish,
+  archiveEpisode,
   buildPublishPackage,
   confirmPublish,
   downloadEpisodeFile,
@@ -194,6 +195,36 @@ export default function PipelinePanel({
     }
   };
 
+  const handleArchiveToDrive = async () => {
+    if (
+      !window.confirm(
+        '¿Archivar este episodio en Google Drive y liberar espacio en el VPS? No podrás editarlo hasta restaurarlo.',
+      )
+    ) {
+      return;
+    }
+    setRunning(true);
+    setError(null);
+    setMessage('Archivando en Google Drive…');
+    try {
+      const result = await archiveEpisode(episodeId);
+      if (!result.ok) {
+        setError(result.message);
+        setMessage(null);
+        return;
+      }
+      setMessage(`✓ ${result.message}`);
+      void fetchStorageStats().then(setStorage);
+      loadAssets();
+      onPipelineComplete?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al archivar');
+      setMessage(null);
+    } finally {
+      setRunning(false);
+    }
+  };
+
   const handleConfirmPublish = async () => {
     setRunning(true);
     setError(null);
@@ -237,8 +268,15 @@ export default function PipelinePanel({
           {storage.diskWarning && (
             <span className="text-amber-400">⚠ Disco casi lleno — archiva episodios publicados</span>
           )}
-          {!storage.archiveConfigured && (
+          {storage.archiveConfigured ? (
+            <span className="text-emerald-400">Drive: conectado</span>
+          ) : (
             <span className="text-amber-400">Drive: configura RCLONE_REMOTE en el servidor</span>
+          )}
+          {storage.activeEpisodeCount > storage.maxActiveEpisodes && (
+            <span className="text-amber-400">
+              ⚠ Sobre el límite — se archivarán episodios publicados automáticamente
+            </span>
           )}
         </div>
       )}
@@ -329,12 +367,21 @@ export default function PipelinePanel({
         </button>
         <button
           type="button"
+          disabled={running || !storage?.archiveConfigured}
+          onClick={() => void handleArchiveToDrive()}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0B0F14] border border-emerald-500/30 hover:border-emerald-400/50 disabled:opacity-40 text-xs font-semibold text-emerald-200"
+        >
+          <CloudUpload className="w-4 h-4" />
+          Archivar a Drive
+        </button>
+        <button
+          type="button"
           disabled={running}
           onClick={() => void handleConfirmPublish()}
           className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0B0F14] border border-white/10 text-xs font-semibold text-slate-400"
         >
-          <CloudUpload className="w-4 h-4" />
-          Ya publiqué → archivar
+          <CheckCircle2 className="w-4 h-4" />
+          Ya publiqué → archivar auto
         </button>
       </div>
 

@@ -20,7 +20,15 @@ async function isFfmpegOnPath(): Promise<boolean> {
   }
 }
 
-export async function getStorageStats(storage: EpisodeStorage): Promise<StorageStats> {
+export async function getStorageStats(
+  storage: EpisodeStorage,
+  options: { skipAutoArchive?: boolean } = {},
+): Promise<StorageStats> {
+  if (!options.skipAutoArchive && isArchiveConfigured()) {
+    const { autoArchiveOverLimit } = await import('../archive/auto.js');
+    await autoArchiveOverLimit(storage).catch(() => undefined);
+  }
+
   const episodesPath = resolveStoragePath();
   const settings = await getSettings();
   const episodes = await storage.listEpisodes();

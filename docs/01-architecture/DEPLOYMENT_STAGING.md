@@ -99,7 +99,7 @@ For long-lived refresh tokens (avoid re-login every 7 days): [docs/02-operations
 
 Configure TTS for real narration: set `ELEVENLABS_API_KEY` in Coolify or configure Piper (`PIPER_BIN`, `PIPER_MODEL`) on the API container. See [deploy/staging.env.example](../../deploy/staging.env.example).
 
-Archive to Google Drive is optional. Set `RCLONE_REMOTE` when ready; `autoArchiveOnPublish` defaults to `false` until configured.
+Archive to Google Drive: see [docs/02-operations/RCLONE_DRIVE.md](../02-operations/RCLONE_DRIVE.md). Set `RCLONE_REMOTE=gdrive:Creator-AI-Studio/episodes` after one-time `scripts/vps-setup-rclone.sh` on the VPS.
 
 ### Volúmenes
 

@@ -21,6 +21,7 @@ const WINDOW_MS = 60_000;
 const EXPENSIVE_PATTERNS = [
   /^\/(?:api\/)?(?:ai|gemini)\//,
   /^\/(?:api\/)?episodes\/[^/]+\/(?:render|shorts|thumbnail|pipeline|run-safe-pipeline|archive|restore|storyboard\/from-script|scenes\/generate-images)$/,
+  /^\/(?:api\/)?system\/auto-archive$/,
   /^\/(?:api\/)?integrations\//,
   // Agent execution runs LLM calls directly (sync) or enqueues heavy work.
   /^\/(?:api\/)?episodes\/[^/]+\/agents\/[^/]+\/run$/,

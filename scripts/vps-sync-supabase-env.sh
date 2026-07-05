@@ -18,6 +18,8 @@ KEYS=(
   CAS_API_KEY
   CAS_SECRETS_KEY
   GEMINI_API_KEY
+  RCLONE_REMOTE
+  RCLONE_CONFIG
 )
 
 python3 <<'PY'
@@ -35,6 +37,8 @@ keys = [
     "CAS_API_KEY",
     "CAS_SECRETS_KEY",
     "GEMINI_API_KEY",
+    "RCLONE_REMOTE",
+    "RCLONE_CONFIG",
 ]
 
 existing: dict[str, str] = {}

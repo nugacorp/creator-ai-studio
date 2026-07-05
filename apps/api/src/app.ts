@@ -34,6 +34,7 @@ import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
 import { createChannel, deleteChannel, listChannels, updateChannel } from './channels/store.js';
 import { EpisodeStorage, resolveStoragePath } from './storage/index.js';
+import { isArchiveConfigured } from './archive/drive.js';
 import { getEpisodeForUser } from './storage/access.js';
 import {
   getEpisodeMetadataSource,
@@ -462,6 +463,21 @@ function registerRoutes(
   app.get(route(prefix, '/system/storage'), async () => {
     const { getStorageStats } = await import('./system/storage.js');
     return getStorageStats(storage);
+  });
+
+  app.post(route(prefix, '/system/auto-archive'), async (request, reply) => {
+    if (!isArchiveConfigured()) {
+      reply.code(503);
+      return { error: 'RCLONE_REMOTE no configurado en el servidor' };
+    }
+    const query = request.query as { force?: string };
+    const { autoArchiveOverLimit } = await import('./archive/auto.js');
+    const result = await autoArchiveOverLimit(storage, {
+      force: query.force === '1' || query.force === 'true',
+    });
+    const { getStorageStats } = await import('./system/storage.js');
+    const stats = await getStorageStats(storage, { skipAutoArchive: true });
+    return { ...result, storage: stats };
   });
 
   app.get(route(prefix, '/analytics'), async (request) => {

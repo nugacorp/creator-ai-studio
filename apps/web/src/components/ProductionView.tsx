@@ -247,6 +247,15 @@ export default function ProductionView({ projects, onOpenWorkspace }: Production
               Disco casi lleno
             </span>
           )}
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 ${
+              storage.archiveConfigured
+                ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+                : 'border-amber-500/20 bg-amber-500/10 text-amber-300'
+            }`}
+          >
+            Drive {storage.archiveConfigured ? 'conectado' : 'sin configurar'}
+          </span>
         </div>
       )}
 
