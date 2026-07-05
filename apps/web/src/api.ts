@@ -11,7 +11,7 @@ import type {
   EpisodeSummary,
   ProductionJob,
   ProjectStatus,
-  type JobStatus,
+  JobStatus,
   SecretProvider,
   SecretsPatch,
   SecretStatus,

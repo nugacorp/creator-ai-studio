@@ -101,3 +101,40 @@ export async function getPendingJobs(): Promise<ProductionJob[]> {
   }
   return jobs;
 }
+
+export interface ListJobsOptions {
+  /** Comma-separated or array of statuses to include. Omit for all. */
+  status?: import('@creator-ai-studio/shared').JobStatus[];
+  limit?: number;
+}
+
+async function readAllJobs(): Promise<ProductionJob[]> {
+  if (!existsSync(jobsDir())) return [];
+  const files = await readdir(jobsDir());
+  const jobs: ProductionJob[] = [];
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+    jobs.push(JSON.parse(await readFile(path.join(jobsDir(), file), 'utf8')) as ProductionJob);
+  }
+  return jobs;
+}
+
+export async function listAllJobs(options: ListJobsOptions = {}): Promise<ProductionJob[]> {
+  const { status, limit = 50 } = options;
+  let jobs = await readAllJobs();
+  if (status && status.length > 0) {
+    const allowed = new Set(status);
+    jobs = jobs.filter(j => allowed.has(j.status));
+  }
+  jobs.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  return jobs.slice(0, limit);
+}
+
+export async function getJobsSummary(): Promise<Record<import('@creator-ai-studio/shared').JobStatus, number>> {
+  const jobs = await readAllJobs();
+  const summary = { pending: 0, active: 0, completed: 0, failed: 0 };
+  for (const job of jobs) {
+    summary[job.status] += 1;
+  }
+  return summary;
+}

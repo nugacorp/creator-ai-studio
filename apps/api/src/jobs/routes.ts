@@ -1,8 +1,23 @@
 import type { FastifyInstance } from 'fastify';
-import { isJobType } from '@creator-ai-studio/shared';
-import { createJob, getJob, listJobsForEpisode, getPendingJobs, updateJob } from './store.js';
+import { isJobType, JOB_STATUSES, type JobStatus } from '@creator-ai-studio/shared';
+import {
+  createJob,
+  getJob,
+  getJobsSummary,
+  listAllJobs,
+  listJobsForEpisode,
+  getPendingJobs,
+  updateJob,
+} from './store.js';
 import { enqueueJob } from './queue.js';
 import { createJobBody, patchJobBody } from '../http/schemas.js';
+
+function parseStatusFilter(raw: string | undefined): JobStatus[] | undefined {
+  if (!raw?.trim()) return undefined;
+  const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+  const valid = parts.filter((s): s is JobStatus => (JOB_STATUSES as readonly string[]).includes(s));
+  return valid.length > 0 ? valid : undefined;
+}
 
 function route(prefix: string, path: string): string {
   return `${prefix}${path}`;
@@ -24,6 +39,19 @@ export function registerJobRoutes(app: FastifyInstance, prefix: '' | '/api'): vo
     return job;
   });
 
+  app.get(route(prefix, '/jobs'), async request => {
+    const query = request.query as { status?: string; limit?: string };
+    const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);
+    const status = parseStatusFilter(query.status);
+    const [jobs, summary] = await Promise.all([
+      listAllJobs({ status, limit }),
+      getJobsSummary(),
+    ]);
+    return { jobs, summary };
+  });
+
+  app.get(route(prefix, '/jobs/pending'), async () => getPendingJobs());
+
   app.get(route(prefix, '/jobs/:id'), async (request, reply) => {
     const { id } = request.params as { id: string };
     const job = await getJob(id);
@@ -38,8 +66,6 @@ export function registerJobRoutes(app: FastifyInstance, prefix: '' | '/api'): vo
     const { id } = request.params as { id: string };
     return await listJobsForEpisode(id);
   });
-
-  app.get(route(prefix, '/jobs/pending'), async () => getPendingJobs());
 
   app.patch(route(prefix, '/jobs/:id'), { schema: { body: patchJobBody } }, async (request, reply) => {
     const { id } = request.params as { id: string };

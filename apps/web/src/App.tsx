@@ -520,7 +520,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             <AgentStudioView onOpenProjects={() => setCurrentView('projects')} />
           )}
 
-          {currentView === 'production' && <ProductionView projects={projects} />}
+          {currentView === 'production' && (
+            <ProductionView projects={projects} onOpenWorkspace={handleOpenWorkspace} />
+          )}
 
           {currentView === 'multichannel' && <MultichannelView channels={channels} />}
 

@@ -403,4 +403,34 @@ describe('api routes', () => {
     expect(job.status).toBe('pending');
     expect(job.id).toBeTruthy();
   });
+
+  it('GET /api/jobs lists jobs with summary', async () => {
+    const episode = await createEpisode('Jobs list test');
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/episodes/${episode.id}/jobs`,
+      payload: { type: 'tts' },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/jobs' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      jobs: Array<{ episodeId: string; type: string; status: string }>;
+      summary: { pending: number; active: number; completed: number; failed: number };
+    };
+    expect(body.jobs.some(j => j.episodeId === episode.id && j.type === 'tts')).toBe(true);
+    expect(body.summary.pending).toBeGreaterThanOrEqual(1);
+  });
+
+  it('GET /api/jobs filters by status', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/jobs?status=completed&limit=5',
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { jobs: Array<{ status: string }> };
+    expect(body.jobs.every(j => j.status === 'completed')).toBe(true);
+    expect(body.jobs.length).toBeLessThanOrEqual(5);
+  });
 });
