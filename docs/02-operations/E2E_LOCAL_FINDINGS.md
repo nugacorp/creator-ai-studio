@@ -4,9 +4,24 @@
 **Entorno:** local (Node 22, ffmpeg 4.4), `NODE_ENV=development`, `ALLOW_MOCKS=true`, proveedores IA/TTS en modo demo.
 **Método:** API en :3100 + worker en polling. Se creó un episodio y se ejecutó `run-safe-pipeline` (modo `production-draft`), observando cada paso, más pruebas aisladas de cada endpoint.
 
-## Resumen ejecutivo
+## Estado de resolución (2026-07-05, actualización)
 
-El pipeline **NO llega al final** en su estado actual. Se corta en el paso **`thumbnail`** (paso 4 de 7) por un bug del worker que afecta a todos los pasos sin cuerpo (thumbnail, render, shorts, publish_package, confirm, archive). Con ese bloqueo resuelto, el segundo bloqueo es el TTS demo, que no genera archivo de audio y luego impide el render.
+**Los 4 hallazgos están corregidos en el código.**
+
+| # | Hallazgo | Estado | Dónde |
+|---|----------|--------|-------|
+| Bloqueante 1 | Worker manda CT json sin cuerpo → 400 | ✅ Corregido | `workers/production/src/index.ts` (envía `body='{}'`) + parser tolerante en la API |
+| Medio 4 | API rechaza cuerpo vacío en JSON | ✅ Corregido | `apps/api/src/app.ts` `buildApp` → `addContentTypeParser` (verificado con Fastify real: cuerpo vacío→200, JSON válido→200, JSON inválido→400) |
+| Bloqueante 2 | TTS demo sin audio | ✅ Corregido | `apps/api/src/integrations/tts.ts` → `writeDemoSilentAudio` (audio silencioso con ffmpeg cuando `ALLOW_MOCKS`) |
+| Alto 3 | Thumbnail `saved:true` falso | ✅ Corregido | `apps/api/src/media/render.ts` → placeholder ffmpeg cuando la descarga falla en demo |
+
+**Verificación pendiente de green final:** el E2E completo de punta a punta no pudo re-ejecutarse en esta sesión por un fallo de sincronización del sandbox (bash leía los archivos truncados a media instrucción, tanto `src` como `dist`, impidiendo `node` cargar los módulos). Las herramientas de edición sí ven el disco real —por eso los fixes están aplicados y confirmados por inspección + grep en src y dist—, y el mecanismo de Medio 4 se probó de forma aislada con Fastify real. Para el green definitivo, ejecutar en local (ver "Comando E2E" al final).
+
+---
+
+## Resumen ejecutivo (diagnóstico original)
+
+El pipeline **NO llegaba al final**. Se cortaba en el paso **`thumbnail`** (paso 4 de 7) por un bug del worker que afecta a todos los pasos sin cuerpo (thumbnail, render, shorts, publish_package, confirm, archive). Con ese bloqueo resuelto, el segundo bloqueo era el TTS demo, que no generaba archivo de audio y luego impedía el render.
 
 Lo que **sí funciona** de forma aislada: crear episodio, guion (demo), SEO (demo), render de video real con ffmpeg (video reproducible de 5 s, 1920×1080), short 9:16, y el empaquetado `publish-package` con su checklist. El **gating de publicación** funciona correctamente (upload sin `authorize` → 403; `authorize-publish` sin artefactos completos → `publish_package_not_ready`).
 
@@ -57,3 +72,27 @@ Lo que **sí funciona** de forma aislada: crear episodio, guion (demo), SEO (dem
 4. **Alto 3** (thumbnail `saved` veraz) — correctitud; bajo esfuerzo.
 
 Tras 1, 2 y 4, un pipeline `production-draft` debería completar de principio a fin en local con mocks (guion → SEO → TTS marcador → thumbnail demo → render → short → publish-package = ready).
+
+## Comando E2E (green final en local)
+
+```bash
+npm ci && npm run build
+
+# Terminal 1 — API
+NODE_ENV=development ALLOW_MOCKS=true AI_ALLOW_DEMO_FALLBACK=true \
+  LOCAL_STORAGE_PATH=/tmp/cas/episodes \
+  CAS_SECRETS_KEY=local-e2e-master-key-0123456789 \
+  API_PORT=3000 node apps/api/dist/server.js
+
+# Terminal 2 — Worker
+API_BASE_URL=http://localhost:3000/api WORKER_POLL_INTERVAL_MS=1000 \
+  LOCAL_STORAGE_PATH=/tmp/cas/episodes node workers/production/dist/index.js
+
+# Terminal 3 — disparar el flujo
+EP=$(curl -s -X POST localhost:3000/api/episodes -H 'Content-Type: application/json' -d '{"title":"E2E"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+curl -s -X POST localhost:3000/api/episodes/$EP/run-safe-pipeline -H 'Content-Type: application/json' -d '{}'
+# Poll GET /api/jobs/<jobId> hasta status=completed y revisar los artefactos en 02..10.
+```
+
+Esperado: el job `pipeline` llega a `completed` con los 7 pasos, y `10-publish/checklist.json` marca `ready: true`.
+

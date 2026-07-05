@@ -52,6 +52,28 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     logger: options.logger ?? false,
     trustProxy: true,
   });
+
+  // Medio 4 — tolerate an empty body on POST/PATCH "action" endpoints sent with
+  // Content-Type: application/json. Without this, Fastify replies 400
+  // (FST_ERR_CTP_EMPTY_JSON_BODY), which broke worker-driven pipeline steps
+  // (thumbnail/render/shorts/publish-package/confirm/archive) that carry no body.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (_req, body, done) => {
+      if (body === '' || body === undefined || body === null) {
+        done(null, {});
+        return;
+      }
+      try {
+        done(null, JSON.parse(body as string));
+      } catch (err) {
+        (err as { statusCode?: number }).statusCode = 400;
+        done(err as Error, undefined);
+      }
+    },
+  );
+
   const storage = options.storage ?? new EpisodeStorage(resolveStoragePath());
 
   registerHardening(app);
