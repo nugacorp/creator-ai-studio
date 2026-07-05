@@ -319,7 +319,7 @@ export default function WorkspaceView({
   useEffect(() => {
     void fetchSecrets()
       .then(res => {
-        const yt = res.items.find(item => item.provider === 'youtube');
+        const yt = res.items?.find(item => item.provider === 'youtube');
         setYoutubeConnected(Boolean(yt?.configured));
       })
       .catch(() => setYoutubeConnected(false));
