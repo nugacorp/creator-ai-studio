@@ -1,6 +1,7 @@
 import type { TtsProvider } from '@creator-ai-studio/shared';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { withProvider } from '../ai/router.js';
 import { areMocksAllowed } from '../config/mocks.js';
 import { getSettings } from '../settings/store.js';
 import { synthesizeSpeech } from './elevenlabs.js';

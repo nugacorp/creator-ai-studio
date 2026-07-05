@@ -21,9 +21,8 @@ describe('resolveSceneSlides', () => {
   let episodeDir: string;
 
   beforeEach(async () => {
-    episodeDir = await mkdir(path.join(tmpdir(), `render-slides-${Date.now()}`), {
-      recursive: true,
-    }).then(d => d);
+    episodeDir = path.join(tmpdir(), `render-slides-${Date.now()}`);
+    await mkdir(episodeDir, { recursive: true });
     await mkdir(path.join(episodeDir, '04-assets'), { recursive: true });
   });
 
