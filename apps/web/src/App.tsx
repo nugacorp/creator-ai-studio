@@ -21,6 +21,7 @@ import DemoModeBanner from './components/DemoModeBanner';
 import LoginView from './components/LoginView';
 import AuthMisconfiguredView from './components/AuthMisconfiguredView';
 import { useAuth } from './context/AuthContext';
+import { isSupabaseAuthEnabled } from './lib/supabase';
 
 import {
   INITIAL_CHANNELS,
@@ -100,7 +101,13 @@ export function App({ initialView = 'home' }: AppProps = {}) {
         if (active) setAuthStatus(status);
       })
       .catch(() => {
-        if (active) setAuthStatus({ authRequired: false, apiKeyAuth: false, supabaseAuth: false });
+        if (active) {
+          setAuthStatus({
+            authRequired: isSupabaseAuthEnabled(),
+            apiKeyAuth: false,
+            supabaseAuth: isSupabaseAuthEnabled(),
+          });
+        }
       })
       .finally(() => {
         if (active) setAuthStatusLoading(false);

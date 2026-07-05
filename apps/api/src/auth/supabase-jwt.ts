@@ -13,6 +13,22 @@ function getSupabaseJwks(): JWTVerifyGetKey | null {
   return jwks;
 }
 
+function payloadToUser(payload: { sub?: unknown }): { userId: string } | null {
+  if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+    return null;
+  }
+  return { userId: payload.sub };
+}
+
+async function verifyWithSecret(token: string, jwtSecret: string): Promise<{ userId: string } | null> {
+  try {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret));
+    return payloadToUser(payload);
+  } catch {
+    return null;
+  }
+}
+
 export async function verifySupabaseAccessToken(
   token: string,
 ): Promise<{ userId?: string } | null> {
@@ -23,18 +39,21 @@ export async function verifySupabaseAccessToken(
     return null;
   }
 
-  try {
-    const { payload } = jwksKey
-      ? await jwtVerify(token, jwksKey)
-      : await jwtVerify(token, new TextEncoder().encode(jwtSecret!));
-
-    if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
-      return null;
+  if (jwksKey) {
+    try {
+      const { payload } = await jwtVerify(token, jwksKey);
+      const user = payloadToUser(payload);
+      if (user) return user;
+    } catch {
+      // Fall through to legacy HS256 secret when tokens predate ECC rotation.
     }
-    return { userId: payload.sub };
-  } catch {
-    return null;
   }
+
+  if (jwtSecret) {
+    return verifyWithSecret(token, jwtSecret);
+  }
+
+  return null;
 }
 
 export function isSupabaseAuthConfigured(): boolean {
