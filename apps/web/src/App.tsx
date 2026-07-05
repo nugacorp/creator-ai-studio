@@ -91,7 +91,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const activeProject = projects.find(p => p.id === activeProjectId);
   const authRequired = authStatus?.authRequired ?? false;
   const canAccessApi =
-    !authRequired || (authEnabled && Boolean(session));
+    !authRequired || (authEnabled && Boolean(session?.access_token));
 
   useEffect(() => {
     let active = true;

@@ -10,7 +10,7 @@ import {
 import type { Session, User } from '@supabase/supabase-js';
 import { getSupabaseClient, isSupabaseAuthEnabled } from '../lib/supabase';
 import { fetchUserProfile, saveUserProfile, type UserProfile } from '../lib/profile';
-import { setApiAccessToken } from '../api';
+import { setApiAccessToken, setOnUnauthorized } from '../api';
 
 interface AuthContextValue {
   authEnabled: boolean;
@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!authEnabled || !supabase) {
       setApiAccessToken(null);
+      setOnUnauthorized(null);
       setProfile(null);
       setLoading(false);
       return;
@@ -65,24 +66,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let active = true;
 
+    const syncToken = (nextSession: Session | null) => {
+      setApiAccessToken(nextSession?.access_token ?? null);
+    };
+
     void supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       setSession(data.session);
-      setApiAccessToken(data.session?.access_token ?? null);
+      syncToken(data.session);
       setLoading(false);
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      setApiAccessToken(nextSession?.access_token ?? null);
+      syncToken(nextSession);
       setLoading(false);
       if (!nextSession) {
         setProfile(null);
       }
     });
 
+    setOnUnauthorized(() => {
+      void supabase.auth.refreshSession().then(({ data, error }) => {
+        if (error || !data.session) {
+          void supabase.auth.signOut();
+        } else {
+          setSession(data.session);
+          syncToken(data.session);
+        }
+      });
+    });
+
     return () => {
       active = false;
+      setOnUnauthorized(null);
       subscription.subscription.unsubscribe();
     };
   }, [authEnabled, supabase]);

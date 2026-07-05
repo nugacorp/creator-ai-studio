@@ -21,9 +21,14 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 let apiAccessToken: string | null = null;
+let onUnauthorized: (() => void) | null = null;
 
 export function setApiAccessToken(token: string | null): void {
   apiAccessToken = token;
+}
+
+export function setOnUnauthorized(handler: (() => void) | null): void {
+  onUnauthorized = handler;
 }
 
 export class ApiUnauthorizedError extends Error {
@@ -59,6 +64,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = authHeaders(init?.headers);
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   if (response.status === 401) {
+    onUnauthorized?.();
     throw new ApiUnauthorizedError();
   }
   if (!response.ok) {

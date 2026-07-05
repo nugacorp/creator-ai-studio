@@ -28,7 +28,10 @@ export async function verifySupabaseAccessToken(
       ? await jwtVerify(token, jwksKey)
       : await jwtVerify(token, new TextEncoder().encode(jwtSecret!));
 
-    return typeof payload.sub === 'string' ? { userId: payload.sub } : {};
+    if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+      return null;
+    }
+    return { userId: payload.sub };
   } catch {
     return null;
   }
