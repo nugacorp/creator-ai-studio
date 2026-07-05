@@ -32,7 +32,7 @@ export default function Sidebar({ currentView, setCurrentView, mobileOpen = fals
     { id: 'calendar', label: 'Publicaciones', icon: Calendar },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'automation', label: 'Automatización', icon: Network },
-    { id: 'agents', label: 'Agentes IA', icon: Cpu },
+    { id: 'agents', label: 'Estudio agentes', icon: Cpu },
     { id: 'production', label: 'Modo Producción', icon: Factory },
     { id: 'multichannel', label: 'Modo Multicanal', icon: Layers },
     { id: 'teams', label: 'Equipos', icon: Users2 },

@@ -543,6 +543,15 @@ export async function fetchAgents(): Promise<AgentsListResponse> {
   return apiFetch<AgentsListResponse>('/agents');
 }
 
+export interface AgentConfigResponse extends import('@creator-ai-studio/shared').AgentDefinition {
+  systemPrompt: string;
+  skills: string[];
+}
+
+export async function fetchAgentConfig(agentId: string): Promise<AgentConfigResponse> {
+  return apiFetch<AgentConfigResponse>(`/agents/${encodeURIComponent(agentId)}/config`);
+}
+
 export async function fetchAgentRuns(episodeId: string): Promise<AgentRunsResponse> {
   return apiFetch<AgentRunsResponse>(`/episodes/${encodeURIComponent(episodeId)}/agent-runs`);
 }

@@ -162,9 +162,19 @@ export async function runAgent(
   try {
     const result = await executeAgent(storage, options, episode, dir, logs);
     const completedAt = new Date().toISOString();
-    logs.push(`[${def.name}] Completado ${completedAt}`);
 
     const runStatus = resolveRunStatus(result, options.agentId, options.input);
+    const statusLog =
+      runStatus === 'completed'
+        ? `Completado ${completedAt}`
+        : runStatus === 'awaiting_approval'
+          ? 'Pendiente de aprobación humana'
+          : runStatus === 'blocked'
+            ? result.qualityGate?.passed === false
+              ? 'Bloqueado — puerta de calidad no aprobada'
+              : 'Bloqueado'
+            : `Finalizado ${completedAt}`;
+    logs.push(`[${def.name}] ${statusLog}`);
 
     const finalRun = await updateAgentRun(storage, options.episodeId, runId, {
       status: runStatus,
@@ -525,6 +535,7 @@ async function runEditorialReviewer(
   );
   const parsed = parseJsonBlock(text);
   const passed = parsed?.passed !== false;
+  _logs.push(`[Revisor editorial] passed=${passed}`);
   const needsApproval = passed && shouldRequireHumanApproval('editorial_reviewer', input);
 
   return {

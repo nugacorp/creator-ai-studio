@@ -9,9 +9,9 @@ import LibraryView from './components/LibraryView';
 import CalendarView from './components/CalendarView';
 import AnalyticsView from './components/AnalyticsView';
 import AutomationView from './components/AutomationView';
-import AgentsView from './components/AgentsView';
+import AgentStudioView from './components/AgentStudioView';
 import CopilotView from './components/CopilotView';
-import ProductionStagesPanel from './components/ProductionStagesPanel';
+import ProjectPipelinePanel from './components/ProjectPipelinePanel';
 import PipelinePanel from './components/PipelinePanel';
 import ProductionView from './components/ProductionView';
 import MultichannelView from './components/MultichannelView';
@@ -94,6 +94,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [workspaceRefreshToken, setWorkspaceRefreshToken] = useState(0);
   const [projectsBoardFilter, setProjectsBoardFilter] = useState<DashboardSection | null>(null);
   const [workspaceInitialTab, setWorkspaceInitialTab] = useState<WorkspaceTab | null>(null);
+  const [workspaceForcedTab, setWorkspaceForcedTab] = useState<WorkspaceTab | undefined>();
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [deleteWorkspaceTarget, setDeleteWorkspaceTarget] = useState<VideoProject | null>(null);
@@ -209,8 +210,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     setCurrentView('workspace');
   };
 
-  const handleOpenWorkspace = (projectId: string) => {
-    setWorkspaceInitialTab(null);
+  const handleOpenWorkspace = (projectId: string, initialTab?: WorkspaceTab) => {
+    setWorkspaceInitialTab(initialTab ?? null);
+    setWorkspaceForcedTab(initialTab);
     setActiveProjectId(projectId);
     setCurrentView('workspace');
   };
@@ -454,11 +456,16 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                   episodeTitle={activeProject.title}
                   onPipelineComplete={() => void handlePipelineComplete()}
                 />
-                <ProductionStagesPanel episodeId={activeProject.id} />
+                <ProjectPipelinePanel
+                  episodeId={activeProject.id}
+                  projectStatus={activeProject.status}
+                  onGoToTab={tab => setWorkspaceForcedTab(tab)}
+                />
                 <WorkspaceView
                   project={activeProject}
                   onUpdateProject={handleUpdateProject}
                   initialTab={workspaceInitialTab ?? undefined}
+                  forcedTab={workspaceForcedTab}
                 />
               </div>
             ) : (
@@ -486,19 +493,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
           {currentView === 'automation' && <AutomationView episodeId={activeProject?.id} />}
 
           {currentView === 'agents' && (
-            <AgentsView
-              episodeId={activeProject?.id}
-              episodeTitle={activeProject?.title}
-              onEpisodeRefresh={reloadEpisode}
-              onOpenWorkspace={
-                activeProject?.id
-                  ? () => {
-                      setActiveProjectId(activeProject.id);
-                      setCurrentView('workspace');
-                    }
-                  : undefined
-              }
-            />
+            <AgentStudioView onOpenProjects={() => setCurrentView('projects')} />
           )}
 
           {currentView === 'production' && <ProductionView projects={projects} />}

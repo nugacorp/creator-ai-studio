@@ -37,7 +37,7 @@ const SIDEBAR_ITEMS = [
   'Publicaciones',
   'Analytics',
   'Automatización',
-  'Agentes IA',
+  'Estudio agentes',
   'Modo Producción',
   'Modo Multicanal',
   'Equipos',

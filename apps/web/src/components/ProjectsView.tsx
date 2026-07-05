@@ -7,12 +7,14 @@ import {
   highlightColumnForSection,
   DASHBOARD_SECTION_LABELS,
   type DashboardSection,
+  type WorkspaceTab,
 } from '../lib/dashboardNavigation';
+import { stepForColumn } from '../lib/projectPipeline';
 
 interface ProjectsViewProps {
   projects: VideoProject[];
   setProjects: React.Dispatch<React.SetStateAction<VideoProject[]>>;
-  onOpenWorkspace: (projectId: string) => void;
+  onOpenWorkspace: (projectId: string, initialTab?: WorkspaceTab) => void;
   seriesList: string[];
   onCreateEpisode: (title: string) => Promise<void>;
   onMoveProjectStatus?: (id: string, status: ProjectStatus) => Promise<void>;
@@ -319,7 +321,7 @@ export default function ProjectsView({
 
                         {/* Title */}
                         <h4
-                          onClick={() => onOpenWorkspace(proj.id)}
+                          onClick={() => onOpenWorkspace(proj.id, stepForColumn(proj.status).workspaceTab)}
                           className="font-bold text-xs text-white tracking-tight cursor-pointer hover:text-indigo-400 leading-snug transition-colors line-clamp-2 italic"
                         >
                           "{proj.title}"
@@ -383,7 +385,7 @@ export default function ProjectsView({
                               </button>
                             )}
                             <button
-                              onClick={() => onOpenWorkspace(proj.id)}
+                              onClick={() => onOpenWorkspace(proj.id, stepForColumn(proj.status).workspaceTab)}
                               className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
                             >
                               Editar Workspace

@@ -46,7 +46,7 @@ const AGENT_COLORS: Record<string, string> = {
 
 const AGENT_POLL_MS = 15_000;
 
-type AgentCardStatus = 'working' | 'idle' | 'completed' | 'failed' | 'awaiting_approval';
+type AgentCardStatus = 'working' | 'idle' | 'completed' | 'failed' | 'blocked' | 'awaiting_approval';
 
 interface AgentCard {
   id: string;
@@ -75,23 +75,32 @@ function runToStatus(run: AgentRunRecord | undefined): AgentCardStatus {
   if (run.status === 'running') return 'working';
   if (run.status === 'awaiting_approval') return 'awaiting_approval';
   if (run.status === 'completed') return 'completed';
-  if (run.status === 'failed' || run.status === 'blocked') return 'failed';
+  if (run.status === 'blocked') return 'blocked';
+  if (run.status === 'failed') return 'failed';
   return 'idle';
 }
 
 function formatAgentTask(def: AgentDefinition, run: AgentRunRecord | undefined): string {
   if (!run) return 'Sin ejecuciones en este episodio';
   if (run.status === 'running') return 'En ejecución…';
-  const lastLog = run.logs?.at(-1);
-  if (run.status === 'completed') {
-    return lastLog?.includes('Completado') ? lastLog : `Completado — ${def.name}`;
-  }
   if (run.status === 'awaiting_approval') {
     return `Aprobación humana requerida — ${def.name}`;
   }
-  if (run.status === 'failed' || run.status === 'blocked') {
-    const err = typeof run.output?.error === 'string' ? run.output.error : lastLog;
+  if (run.status === 'blocked') {
+    if (run.qualityGate && !run.qualityGate.passed) {
+      const failedCheck = run.qualityGate.checks.find(c => !c.ok);
+      return failedCheck
+        ? `${failedCheck.label} — requiere corrección`
+        : `Revisión no aprobada — ${def.name}`;
+    }
+    return `Bloqueado — ${def.name}`;
+  }
+  if (run.status === 'failed') {
+    const err = typeof run.output?.error === 'string' ? run.output.error : undefined;
     return err ?? `Error — ${def.name}`;
+  }
+  if (run.status === 'completed') {
+    return `Completado — ${def.name}`;
   }
   return `${run.status} — ${def.name}`;
 }
@@ -575,6 +584,7 @@ export default function AgentsView({
             {agents.map(ag => {
               const isWorking = ag.status === 'working';
               const isCompleted = ag.status === 'completed';
+              const isBlocked = ag.status === 'blocked';
               const isAwaiting = ag.status === 'awaiting_approval';
               const isSelected = selectedAgentId === ag.id;
 
@@ -605,9 +615,11 @@ export default function AgentsView({
                                 ? 'bg-emerald-500'
                                 : isAwaiting
                                   ? 'bg-amber-400 animate-pulse'
-                                : ag.status === 'failed'
-                                  ? 'bg-rose-400'
-                                  : 'bg-[#8B949E]'
+                                  : isBlocked
+                                    ? 'bg-amber-400'
+                                    : ag.status === 'failed'
+                                      ? 'bg-rose-400'
+                                      : 'bg-[#8B949E]'
                           }`}
                         />
                       </div>

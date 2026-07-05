@@ -47,6 +47,12 @@ const episodeDetail = {
 function mockApi(opts: { detailFails?: boolean } = {}) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
+    if (url.includes('/agent-runs')) {
+      return jsonResponse({ runs: [] });
+    }
+    if (url.includes('/storage/stats')) {
+      return jsonResponse({ episodes: 1, totalBytes: 0, diskFreeBytes: 1_000_000 });
+    }
     if (url.includes(`/episodes/${episode.id}/assets`)) {
       return jsonResponse({
         episodeId: episode.id,
@@ -91,7 +97,7 @@ describe('Project card / Edit Workspace navigation', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Guardar Cambios/i })).toBeInTheDocument(),
     );
-    expect(screen.getByText(/Etapas de Producción/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pipeline del proyecto/i)).toBeInTheDocument();
   });
 
   it('opens the workspace from the "Editar Workspace" button', async () => {
@@ -157,6 +163,10 @@ describe('Project card / Edit Workspace navigation', () => {
     };
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
+      if (url.includes('/agent-runs')) return jsonResponse({ runs: [] });
+      if (url.includes('/storage/stats')) {
+        return jsonResponse({ episodes: 1, totalBytes: 0, diskFreeBytes: 1_000_000 });
+      }
       if (url.includes(`/episodes/${second.id}`)) {
         return jsonResponse({ ...episodeDetail, ...second, content: { ...episodeDetail.content } });
       }

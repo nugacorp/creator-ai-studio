@@ -46,9 +46,10 @@ interface WorkspaceViewProps {
   project: VideoProject;
   onUpdateProject: (updated: VideoProject) => void;
   initialTab?: 'guion' | 'narracion' | 'escenas' | 'video' | 'thumbnail' | 'seo' | 'publicacion' | 'analytics';
+  forcedTab?: 'guion' | 'narracion' | 'escenas' | 'video' | 'thumbnail' | 'seo' | 'publicacion' | 'analytics';
 }
 
-export default function WorkspaceView({ project, onUpdateProject, initialTab }: WorkspaceViewProps) {
+export default function WorkspaceView({ project, onUpdateProject, initialTab, forcedTab }: WorkspaceViewProps) {
   const [activeTab, setActiveTab] = useState<
     'guion' | 'narracion' | 'escenas' | 'video' | 'thumbnail' | 'seo' | 'publicacion' | 'analytics'
   >(initialTab ?? 'guion');
@@ -94,6 +95,10 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
     project.seoDescription,
     initialTab,
   ]);
+
+  useEffect(() => {
+    if (forcedTab) setActiveTab(forcedTab);
+  }, [forcedTab]);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(project.scenes[0]?.id || null);
 
   // Thumbnail State

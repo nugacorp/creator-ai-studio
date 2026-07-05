@@ -47,6 +47,15 @@ describe('agent system', () => {
     expect(body.agents.length).toBe(AGENT_IDS.length);
   });
 
+  it('GET /agents/:id/config returns system prompt and skills', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/agents/scriptwriter/config' });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { id: string; systemPrompt: string; skills: string[] };
+    expect(body.id).toBe('scriptwriter');
+    expect(body.systemPrompt.length).toBeGreaterThan(20);
+    expect(body.skills.length).toBeGreaterThan(0);
+  });
+
   it('POST /episodes/:id/agents/hermes/run enqueues agent job', async () => {
     const episode = await createEpisode('Agent WO smoke');
     const response = await app.inject({
@@ -268,6 +277,32 @@ describe('agent system', () => {
       expect(approve.statusCode).toBe(200);
       const approved = approve.json() as { run: { status: string } };
       expect(approved.run.status).toBe('completed');
+    });
+
+    it('editorial_reviewer blocked run logs quality gate failure (not Completado)', async () => {
+      const episode = await createEpisode('Editorial gate');
+      await runSyncAgent(episode.id, 'researcher');
+      await runSyncAgent(episode.id, 'scriptwriter');
+
+      const editorial = await app.inject({
+        method: 'POST',
+        url: `/api/episodes/${episode.id}/agents/editorial_reviewer/run`,
+        payload: { async: false, input: { skipApproval: true } },
+      });
+      expect(editorial.statusCode).toBe(200);
+      const body = editorial.json() as {
+        run: { status: string; logs: string[]; qualityGate?: { passed: boolean } };
+      };
+
+      if (body.run.status === 'blocked') {
+        expect(body.run.qualityGate?.passed).toBe(false);
+        const lastLog = body.run.logs.at(-1) ?? '';
+        expect(lastLog).not.toMatch(/Completado/);
+        expect(lastLog).toMatch(/Bloqueado|puerta de calidad/i);
+      } else {
+        expect(body.run.status).toBe('completed');
+        expect(body.run.qualityGate?.passed).not.toBe(false);
+      }
     });
   });
 });

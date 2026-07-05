@@ -5,6 +5,7 @@ import { getEpisodeForUser } from '../storage/access.js';
 import { createJob } from '../jobs/store.js';
 import { enqueueJob } from '../jobs/queue.js';
 import { listAgentDefinitions, getAgentDefinition } from './registry.js';
+import { AGENT_SYSTEM_PROMPTS } from './prompts.js';
 import { listAgentRuns, getAgentRun, approveAgentRun } from './store.js';
 import { runAgent } from './runner.js';
 
@@ -30,6 +31,24 @@ export function registerAgentRoutes(
       return { error: 'agent not found' };
     }
     return def;
+  });
+
+  app.get(route(prefix, '/agents/:agentId/config'), async (request, reply) => {
+    const { agentId } = request.params as { agentId: string };
+    if (!isAgentId(agentId)) {
+      reply.code(400);
+      return { error: 'invalid agent id' };
+    }
+    const def = getAgentDefinition(agentId);
+    if (!def) {
+      reply.code(404);
+      return { error: 'agent not found' };
+    }
+    return {
+      ...def,
+      systemPrompt: AGENT_SYSTEM_PROMPTS[agentId],
+      skills: def.expertise,
+    };
   });
 
   app.get(route(prefix, '/episodes/:id/agent-runs'), async (request, reply) => {
