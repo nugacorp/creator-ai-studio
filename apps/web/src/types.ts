@@ -48,6 +48,8 @@ export interface Channel {
   subscribers: number;
   avatar: string;
   type: 'YouTube' | 'TikTok' | 'Facebook' | 'Instagram' | 'Podcast';
+  customUrl?: string;
+  viewCount?: number;
 }
 
 export interface Agent {
@@ -81,13 +83,4 @@ export interface AutomationEdge {
   id: string;
   source: string;
   target: string;
-}
-
-export interface TeamMember {
-  id: string;
-  name: string;
-  role: string;
-  avatar: string;
-  activeProject?: string;
-  status: 'Online' | 'Offline';
 }

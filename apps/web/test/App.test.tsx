@@ -48,6 +48,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function defaultApiMock(url: string): Response | null {
+  if (url.includes('/integrations/youtube/channels')) {
+    return jsonResponse({ connected: false, channels: [] });
+  }
+  if (url.includes('/settings')) {
+    return jsonResponse({
+      ttsSampleRate: '24000',
+      ttsAccent: 'es-ES',
+      aiProviderDefault: 'gemini',
+      ttsProvider: 'elevenlabs',
+      autoArchiveOnPublish: false,
+      maxActiveEpisodes: 1,
+      diskWarningThresholdGb: 5,
+    });
+  }
+  return null;
+}
+
 describe('Official dashboard shell', () => {
   it('renders the full official sidebar navigation', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -55,7 +73,7 @@ describe('Official dashboard shell', () => {
       if (url.includes('/auth/status')) {
         return jsonResponse({ authRequired: false, apiKeyAuth: false, supabaseAuth: false });
       }
-      return jsonResponse([]);
+      return defaultApiMock(url) ?? jsonResponse([]);
     });
 
     renderApp('projects');
@@ -74,6 +92,8 @@ describe('Official dashboard shell', () => {
       if (url.includes('/auth/status')) {
         return jsonResponse({ authRequired: false, apiKeyAuth: false, supabaseAuth: false });
       }
+      const fallback = defaultApiMock(url);
+      if (fallback) return fallback;
       return new Promise(() => {});
     });
 
@@ -111,8 +131,19 @@ describe('Official dashboard shell', () => {
       if (url.includes('/episodes')) {
         return jsonResponse([sampleEpisode]);
       }
-      if (url.includes('/channels')) {
-        return jsonResponse([]);
+      if (url.includes('/channels') || url.includes('/integrations/youtube/channels')) {
+        return jsonResponse({ connected: false, channels: [] });
+      }
+      if (url.includes('/settings')) {
+        return jsonResponse({
+          ttsSampleRate: '24000',
+          ttsAccent: 'es-ES',
+          aiProviderDefault: 'gemini',
+          ttsProvider: 'elevenlabs',
+          autoArchiveOnPublish: false,
+          maxActiveEpisodes: 1,
+          diskWarningThresholdGb: 5,
+        });
       }
       return jsonResponse([]);
     });

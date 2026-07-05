@@ -37,11 +37,13 @@ import {
   createEpisode,
   deleteEpisode,
   fetchAuthStatus,
-  fetchChannels,
   fetchEpisodeDetail,
   fetchEpisodes,
+  fetchSettings,
+  fetchYouTubeChannels,
   updateEpisode,
   updateEpisodeProjectStatus,
+  updateSettings,
   type AuthStatus,
 } from './api';
 import {
@@ -51,6 +53,28 @@ import {
   type DashboardSection,
   type WorkspaceTab,
 } from './lib/dashboardNavigation';
+
+const ACTIVE_CHANNEL_STORAGE_KEY = 'cas_active_channel_id';
+
+function mapYouTubeChannel(c: {
+  id: string;
+  name: string;
+  thumbnailUrl: string;
+  subscribers: number;
+  viewCount: number;
+  customUrl?: string;
+}): Channel {
+  return {
+    id: c.id,
+    name: c.name,
+    status: 'Produciendo',
+    subscribers: c.subscribers,
+    avatar: c.thumbnailUrl || '📺',
+    type: 'YouTube',
+    customUrl: c.customUrl,
+    viewCount: c.viewCount,
+  };
+}
 
 function episodeToProject(episode: EpisodeSummary, content?: EpisodeDetail['content']): VideoProject {
   const c = content;
@@ -90,6 +114,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   });
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+  const [youtubeConnected, setYoutubeConnected] = useState(false);
+  const [channelsLoading, setChannelsLoading] = useState(true);
   const [projects, setProjects] = useState<VideoProject[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('');
@@ -184,28 +210,46 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     }
   }, [currentView, activeProjectId]);
 
+  const loadYouTubeChannels = useCallback(async () => {
+    setChannelsLoading(true);
+    try {
+      const [yt, settings] = await Promise.all([fetchYouTubeChannels(), fetchSettings()]);
+      const mapped = yt.channels.map(mapYouTubeChannel);
+      setChannels(mapped);
+      setYoutubeConnected(yt.connected);
+
+      const storedId =
+        settings.activeChannelId ??
+        localStorage.getItem(ACTIVE_CHANNEL_STORAGE_KEY) ??
+        null;
+      const match = storedId ? mapped.find(c => c.id === storedId) : undefined;
+      setSelectedChannel(match ?? mapped[0] ?? null);
+    } catch {
+      setChannels([]);
+      setYoutubeConnected(false);
+      setSelectedChannel(null);
+    } finally {
+      setChannelsLoading(false);
+    }
+  }, []);
+
+  const handleSelectChannel = useCallback((channel: Channel) => {
+    setSelectedChannel(channel);
+    localStorage.setItem(ACTIVE_CHANNEL_STORAGE_KEY, channel.id);
+    void updateSettings({ activeChannelId: channel.id }).catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     if (!canAccessApi) return;
-    void fetchChannels()
-      .then(data => {
-        const mapped = data.map(c => ({
-          id: c.id,
-          name: c.name,
-          status: c.status as Channel['status'],
-          subscribers: c.subscribers,
-          avatar: c.avatar,
-          type: c.type as Channel['type'],
-        }));
-        setChannels(mapped);
-        setSelectedChannel(prev =>
-          prev && mapped.some(c => c.id === prev.id) ? prev : mapped[0] ?? null,
-        );
-      })
-      .catch(() => {
-        setChannels([]);
-        setSelectedChannel(null);
-      });
-  }, [canAccessApi]);
+    void loadYouTubeChannels();
+  }, [loadYouTubeChannels, canAccessApi]);
+
+  useEffect(() => {
+    if (!canAccessApi) return;
+    if (currentView === 'settings' || currentView === 'multichannel') {
+      void loadYouTubeChannels();
+    }
+  }, [currentView, canAccessApi, loadYouTubeChannels]);
 
   const handleContinueWorking = (projectId: string) => {
     setWorkspaceInitialTab(null);
@@ -399,7 +443,10 @@ export function App({ initialView = 'home' }: AppProps = {}) {
         <Header
           channels={channels}
           selectedChannel={selectedChannel}
-          setSelectedChannel={setSelectedChannel}
+          setSelectedChannel={handleSelectChannel}
+          youtubeConnected={youtubeConnected}
+          channelsLoading={channelsLoading}
+          onGoToSettings={() => setCurrentView('settings')}
           notifications={notifications}
           setNotifications={setNotifications}
           onMenuClick={() => setMobileSidebarOpen(true)}
@@ -524,7 +571,16 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             <ProductionView projects={projects} onOpenWorkspace={handleOpenWorkspace} />
           )}
 
-          {currentView === 'multichannel' && <MultichannelView channels={channels} />}
+          {currentView === 'multichannel' && (
+            <MultichannelView
+              channels={channels}
+              youtubeConnected={youtubeConnected}
+              loading={channelsLoading}
+              selectedChannelId={selectedChannel?.id ?? null}
+              onSelectChannel={handleSelectChannel}
+              onGoToSettings={() => setCurrentView('settings')}
+            />
+          )}
 
           {currentView === 'teams' && (
             <TeamsView

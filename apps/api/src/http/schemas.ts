@@ -68,6 +68,7 @@ export const settingsBody = {
     maxActiveEpisodes: { type: 'integer', minimum: 1, maximum: 50 },
     diskWarningThresholdGb: { type: 'number', minimum: 1, maximum: 10_000 },
     agentOverrides: { type: 'object', additionalProperties: true },
+    activeChannelId: TEXT_SHORT,
   },
   additionalProperties: false,
 } as const;
@@ -99,6 +100,35 @@ export const channelPatchBody = {
     status: TEXT_SHORT,
     subscribers: { type: 'integer', minimum: 0 },
     avatar: TEXT_MEDIUM,
+  },
+  additionalProperties: false,
+} as const;
+
+export const syncTeamOwnerBody = {
+  type: 'object',
+  required: ['email', 'displayName'],
+  properties: {
+    email: { type: 'string', minLength: 3, maxLength: 320 },
+    displayName: { type: 'string', minLength: 1, maxLength: 200 },
+  },
+  additionalProperties: false,
+} as const;
+
+export const createTeamInviteBody = {
+  type: 'object',
+  required: ['email', 'role'],
+  properties: {
+    email: { type: 'string', minLength: 3, maxLength: 320 },
+    role: { type: 'string', enum: ['editor', 'viewer'] },
+  },
+  additionalProperties: false,
+} as const;
+
+export const updateTeamMemberBody = {
+  type: 'object',
+  required: ['role'],
+  properties: {
+    role: { type: 'string', enum: ['editor', 'viewer'] },
   },
   additionalProperties: false,
 } as const;

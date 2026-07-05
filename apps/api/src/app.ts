@@ -28,6 +28,7 @@ import { registerOAuthRoutes } from './oauth/routes.js';
 import { registerAIRoutes } from './ai/routes.js';
 import { registerJobRoutes } from './jobs/routes.js';
 import { registerAgentRoutes } from './agents/routes.js';
+import { registerTeamRoutes } from './team/routes.js';
 import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
 import { createChannel, deleteChannel, listChannels, updateChannel } from './channels/store.js';
@@ -85,6 +86,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerAIRoutes(app, prefix);
     registerJobRoutes(app, prefix);
     registerAgentRoutes(app, prefix, storage);
+    registerTeamRoutes(app, prefix);
     registerSecretRoutes(app, prefix);
     registerOAuthRoutes(app, prefix);
   }
@@ -469,6 +471,11 @@ function registerRoutes(
     const { buildCalendarEvents } = await import('./calendar/events.js');
     const result = await buildCalendarEvents(storage, request.userId);
     return result.events;
+  });
+
+  app.get(route(prefix, '/integrations/youtube/channels'), async () => {
+    const { fetchYouTubeChannels } = await import('./integrations/youtube.js');
+    return fetchYouTubeChannels();
   });
 
   app.post(route(prefix, '/integrations/youtube/upload'), async (request, reply) => {

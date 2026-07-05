@@ -4,6 +4,7 @@ import type {
   AppSettings,
   CreateEpisodeInput,
   CreateJobInput,
+  CreateTeamInviteInput,
   ElevenLabsVoice,
   EpisodeDetail,
   EpisodeStage,
@@ -17,7 +18,11 @@ import type {
   SecretStatus,
   SecretTestResult,
   StorageStats,
+  SyncTeamOwnerInput,
+  TeamResponse,
+  TeamRole,
   TtsProvider,
+  YouTubeChannelsResponse,
   UpdateEpisodeInput,
 } from '@creator-ai-studio/shared';
 
@@ -321,6 +326,45 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
   });
 }
 
+export async function fetchTeam(): Promise<TeamResponse> {
+  return apiFetch<TeamResponse>('/team');
+}
+
+export async function syncTeamOwner(input: SyncTeamOwnerInput): Promise<TeamResponse> {
+  return apiFetch<TeamResponse>('/team/sync-owner', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function inviteTeamMember(input: CreateTeamInviteInput): Promise<TeamResponse> {
+  return apiFetch<TeamResponse>('/team/invites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateTeamMemberRole(
+  memberId: string,
+  role: Exclude<TeamRole, 'owner'>,
+): Promise<TeamResponse> {
+  return apiFetch<TeamResponse>(`/team/members/${memberId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function removeTeamMember(memberId: string): Promise<TeamResponse> {
+  return apiFetch<TeamResponse>(`/team/members/${memberId}`, { method: 'DELETE' });
+}
+
+export async function revokeTeamInvite(inviteId: string): Promise<TeamResponse> {
+  return apiFetch<TeamResponse>(`/team/invites/${inviteId}`, { method: 'DELETE' });
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -363,6 +407,12 @@ export interface ChannelData {
 
 export async function fetchChannels(): Promise<ChannelData[]> {
   return apiFetch<ChannelData[]>('/channels');
+}
+
+export type { YouTubeChannelInfo, YouTubeChannelsResponse } from '@creator-ai-studio/shared';
+
+export async function fetchYouTubeChannels(): Promise<YouTubeChannelsResponse> {
+  return apiFetch<YouTubeChannelsResponse>('/integrations/youtube/channels');
 }
 
 export interface SecretsResponse {

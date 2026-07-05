@@ -107,6 +107,69 @@ export async function hasYouTubeScopes(): Promise<boolean> {
   return scopes.includes('youtube');
 }
 
+export interface YouTubeChannelInfo {
+  id: string;
+  name: string;
+  thumbnailUrl: string;
+  subscribers: number;
+  viewCount: number;
+  customUrl?: string;
+}
+
+export interface YouTubeChannelsResult {
+  connected: boolean;
+  channels: YouTubeChannelInfo[];
+}
+
+/** List every YouTube channel the connected Google account can manage. */
+export async function fetchYouTubeChannels(): Promise<YouTubeChannelsResult> {
+  const dedicated = await getSecret('YOUTUBE_ACCESS_TOKEN');
+  const accessToken = await resolveYouTubeAccessToken();
+  if (!accessToken) {
+    return { connected: false, channels: [] };
+  }
+  if (!dedicated && !(await hasYouTubeScopes())) {
+    return { connected: false, channels: [] };
+  }
+
+  const response = await fetch(
+    'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true&maxResults=50',
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+
+  if (!response.ok) {
+    return { connected: true, channels: [] };
+  }
+
+  const data = (await response.json()) as {
+    items?: Array<{
+      id?: string;
+      snippet?: {
+        title?: string;
+        customUrl?: string;
+        thumbnails?: { default?: { url?: string }; medium?: { url?: string } };
+      };
+      statistics?: { subscriberCount?: string; viewCount?: string };
+    }>;
+  };
+
+  const channels = (data.items ?? [])
+    .map(item => ({
+      id: item.id ?? '',
+      name: item.snippet?.title ?? 'Sin nombre',
+      thumbnailUrl:
+        item.snippet?.thumbnails?.medium?.url ??
+        item.snippet?.thumbnails?.default?.url ??
+        '',
+      subscribers: Number(item.statistics?.subscriberCount ?? 0),
+      viewCount: Number(item.statistics?.viewCount ?? 0),
+      customUrl: item.snippet?.customUrl,
+    }))
+    .filter(ch => ch.id);
+
+  return { connected: true, channels };
+}
+
 export async function uploadToYouTube(
   title: string,
   description: string,

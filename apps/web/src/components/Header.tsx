@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { Bell, ChevronDown, Check, AlertTriangle, Sparkles, Menu, LogOut } from 'lucide-react';
+import { Bell, ChevronDown, Check, AlertTriangle, Sparkles, Menu, LogOut, Link2 } from 'lucide-react';
 import { Channel, Notification } from '../types';
 import { useAuth } from '../context/AuthContext';
 import ProfileEditor from './ProfileEditor';
+import ChannelAvatar from './ChannelAvatar';
 
 interface HeaderProps {
   channels: Channel[];
   selectedChannel: Channel | null;
   setSelectedChannel: (channel: Channel) => void;
+  youtubeConnected: boolean;
+  channelsLoading: boolean;
+  onGoToSettings?: () => void;
   notifications: Notification[];
   setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
   onMenuClick?: () => void;
@@ -17,6 +21,9 @@ export default function Header({
   channels,
   selectedChannel,
   setSelectedChannel,
+  youtubeConnected,
+  channelsLoading,
+  onGoToSettings,
   notifications,
   setNotifications,
   onMenuClick
@@ -66,13 +73,30 @@ export default function Header({
         <div className="relative">
           <button
             id="channel-selector-btn"
-            onClick={() => channels.length > 0 && setShowChannelsDropdown(!showChannelsDropdown)}
-            disabled={channels.length === 0}
-            className="flex items-center gap-2 md:gap-3 px-3 py-1.5 rounded-xl bg-[#15191E] border border-white/10 hover:border-indigo-500/50 transition-all text-sm font-medium text-[#E6EDF2] disabled:opacity-60 disabled:cursor-default"
+            onClick={() => {
+              if (channels.length > 0) {
+                setShowChannelsDropdown(!showChannelsDropdown);
+              } else if (!channelsLoading && onGoToSettings) {
+                onGoToSettings();
+              }
+            }}
+            disabled={channelsLoading}
+            className="flex items-center gap-2 md:gap-3 px-3 py-1.5 rounded-xl bg-[#15191E] border border-white/10 hover:border-indigo-500/50 transition-all text-sm font-medium text-[#E6EDF2] disabled:opacity-60 disabled:cursor-default cursor-pointer"
           >
-            <span className="text-lg md:text-xl shrink-0">{selectedChannel?.avatar ?? '📺'}</span>
+            {selectedChannel ? (
+              <ChannelAvatar
+                avatar={selectedChannel.avatar}
+                name={selectedChannel.name}
+                className="w-6 h-6 md:w-7 md:h-7 rounded-full object-cover shrink-0"
+                emojiClassName="text-lg md:text-xl shrink-0"
+              />
+            ) : (
+              <span className="text-lg md:text-xl shrink-0">📺</span>
+            )}
             <span className="truncate max-w-[100px] sm:max-w-[180px] md:max-w-none">
-              {selectedChannel?.name ?? 'Sin canales'}
+              {channelsLoading
+                ? 'Cargando…'
+                : selectedChannel?.name ?? (youtubeConnected ? 'Seleccionar canal' : 'Sin canales')}
             </span>
             {selectedChannel && (
               <span className="hidden sm:inline text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 font-semibold border border-indigo-800/40">
@@ -82,16 +106,19 @@ export default function Header({
             {channels.length > 0 && (
               <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${showChannelsDropdown ? 'rotate-180' : ''}`} />
             )}
+            {!channelsLoading && channels.length === 0 && !youtubeConnected && (
+              <Link2 className="w-4 h-4 text-indigo-400 shrink-0" />
+            )}
           </button>
 
         {showChannelsDropdown && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setShowChannelsDropdown(false)} />
-            <div className="absolute left-0 mt-2 w-64 bg-[#15191E] border border-white/10 rounded-xl shadow-2xl p-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="absolute left-0 mt-2 w-72 bg-[#15191E] border border-white/10 rounded-xl shadow-2xl p-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150">
               <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Tus Canales y Proyectos
+                Canales de YouTube
               </div>
-              <div className="space-y-1 mt-1">
+              <div className="space-y-1 mt-1 max-h-80 overflow-y-auto">
                 {channels.map(chan => (
                   <button
                     id={`channel-btn-${chan.id}`}
@@ -100,22 +127,27 @@ export default function Header({
                       setSelectedChannel(chan);
                       setShowChannelsDropdown(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-                      selectedChannel.id === chan.id
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+                      selectedChannel?.id === chan.id
                         ? 'bg-indigo-950/40 text-indigo-300 border border-indigo-800/30'
                         : 'text-[#E6EDF2] hover:bg-white/5'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-lg">{chan.avatar}</span>
-                      <div className="text-left">
-                        <div className="font-medium">{chan.name}</div>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <ChannelAvatar
+                        avatar={chan.avatar}
+                        name={chan.name}
+                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                        emojiClassName="text-lg shrink-0"
+                      />
+                      <div className="text-left min-w-0">
+                        <div className="font-medium truncate">{chan.name}</div>
                         <div className="text-xs text-slate-400">
                           {chan.subscribers.toLocaleString()} suscriptores
                         </div>
                       </div>
                     </div>
-                    {selectedChannel.id === chan.id && <Check className="w-4 h-4 text-indigo-400" />}
+                    {selectedChannel?.id === chan.id && <Check className="w-4 h-4 text-indigo-400 shrink-0" />}
                   </button>
                 ))}
               </div>

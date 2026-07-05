@@ -409,6 +409,23 @@ export interface AppSettings {
   diskWarningThresholdGb: number;
   /** Per-agent prompt/skill overrides from Agent Studio. */
   agentOverrides?: AgentOverridesMap;
+  /** YouTube channel ID selected for multichannel operations. */
+  activeChannelId?: string;
+}
+
+/** YouTube channel returned by GET /integrations/youtube/channels. */
+export interface YouTubeChannelInfo {
+  id: string;
+  name: string;
+  thumbnailUrl: string;
+  subscribers: number;
+  viewCount: number;
+  customUrl?: string;
+}
+
+export interface YouTubeChannelsResponse {
+  connected: boolean;
+  channels: YouTubeChannelInfo[];
 }
 
 /** Disk usage snapshot for the operations dashboard. */
@@ -508,6 +525,58 @@ export interface CreateChannelInput {
   status?: string;
   subscribers?: number;
   avatar?: string;
+}
+
+/** Workspace collaborator role (Equipos). */
+export type TeamRole = 'owner' | 'editor' | 'viewer';
+
+export const TEAM_ROLES = ['owner', 'editor', 'viewer'] as const;
+
+/** Active team member persisted by the API. */
+export interface TeamMemberRecord {
+  id: string;
+  userId?: string;
+  email: string;
+  displayName: string;
+  role: TeamRole;
+  avatarInitial: string;
+  joinedAt: string;
+  lastActiveAt?: string;
+}
+
+/** Pending email invite before the collaborator signs in. */
+export interface TeamInviteRecord {
+  id: string;
+  email: string;
+  role: Exclude<TeamRole, 'owner'>;
+  invitedAt: string;
+  invitedByUserId?: string;
+}
+
+/** Team roster stored in team.json on the API server. */
+export interface TeamData {
+  ownerUserId?: string;
+  members: TeamMemberRecord[];
+  invites: TeamInviteRecord[];
+}
+
+export interface TeamResponse extends TeamData {
+  currentUserId?: string;
+  canManage: boolean;
+}
+
+export interface SyncTeamOwnerInput {
+  email: string;
+  displayName: string;
+}
+
+export interface CreateTeamInviteInput {
+  email: string;
+  role: Exclude<TeamRole, 'owner'>;
+}
+
+export function isTeamRole(value: unknown): value is TeamRole {
+  return typeof value === 'string' && (TEAM_ROLES as readonly string[]).includes(value);
 }
 
 export function isJobType(value: unknown): value is JobType {
