@@ -49,10 +49,18 @@ afterEach(() => {
 });
 
 describe('Official dashboard shell', () => {
-  it('renders the full official sidebar navigation', () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse([]));
+  it('renders the full official sidebar navigation', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/auth/status')) {
+        return jsonResponse({ authRequired: false, apiKeyAuth: false, supabaseAuth: false });
+      }
+      return jsonResponse([]);
+    });
 
     renderApp('projects');
+
+    await waitFor(() => expect(screen.getByRole('navigation')).toBeInTheDocument());
 
     const nav = screen.getByRole('navigation');
     for (const label of SIDEBAR_ITEMS) {
@@ -60,18 +68,29 @@ describe('Official dashboard shell', () => {
     }
   });
 
-  it('renders home dashboard without crashing before episodes load', () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => {}));
+  it('renders home dashboard without crashing before episodes load', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/auth/status')) {
+        return jsonResponse({ authRequired: false, apiKeyAuth: false, supabaseAuth: false });
+      }
+      return new Promise(() => {});
+    });
 
     renderApp('home');
 
-    expect(screen.getByText(/Buenos días|Buenas tardes|Buenas noches/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/Buenos días|Buenas tardes|Buenas noches/)).toBeInTheDocument(),
+    );
     expect(document.getElementById('quick-actions-fab')).toBeInTheDocument();
   });
 
   it('loads real episodes from the backend into the Projects view', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
+      if (url.includes('/auth/status')) {
+        return jsonResponse({ authRequired: false, apiKeyAuth: false, supabaseAuth: false });
+      }
       if (url.includes('/episodes/ep-1')) {
         return jsonResponse({
           ...sampleEpisode,

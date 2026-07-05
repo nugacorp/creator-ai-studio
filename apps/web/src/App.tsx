@@ -19,6 +19,7 @@ import TeamsView from './components/TeamsView';
 import SettingsView from './components/SettingsView';
 import DemoModeBanner from './components/DemoModeBanner';
 import LoginView from './components/LoginView';
+import AuthMisconfiguredView from './components/AuthMisconfiguredView';
 import { useAuth } from './context/AuthContext';
 
 import {
@@ -35,11 +36,13 @@ import {
 } from '@creator-ai-studio/shared';
 import {
   createEpisode,
+  fetchAuthStatus,
   fetchChannels,
   fetchEpisodeDetail,
   fetchEpisodes,
   updateEpisode,
   updateEpisodeProjectStatus,
+  type AuthStatus,
 } from './api';
 
 function episodeToProject(episode: EpisodeSummary, content?: EpisodeDetail['content']): VideoProject {
@@ -69,6 +72,8 @@ interface AppProps {
 
 export function App({ initialView = 'home' }: AppProps = {}) {
   const { authEnabled, loading, session } = useAuth();
+  const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
+  const [authStatusLoading, setAuthStatusLoading] = useState(true);
   const [currentView, setCurrentView] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('view') ?? initialView;
@@ -84,6 +89,26 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const mainRef = useRef<HTMLElement>(null);
 
   const activeProject = projects.find(p => p.id === activeProjectId);
+  const authRequired = authStatus?.authRequired ?? false;
+  const canAccessApi =
+    !authRequired || (authEnabled && Boolean(session));
+
+  useEffect(() => {
+    let active = true;
+    void fetchAuthStatus()
+      .then(status => {
+        if (active) setAuthStatus(status);
+      })
+      .catch(() => {
+        if (active) setAuthStatus({ authRequired: false, apiKeyAuth: false, supabaseAuth: false });
+      })
+      .finally(() => {
+        if (active) setAuthStatusLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -117,8 +142,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   }, [loadProjects]);
 
   useEffect(() => {
+    if (!canAccessApi) return;
     void loadProjects();
-  }, [loadProjects]);
+  }, [loadProjects, canAccessApi]);
 
   // Make the switch into a workspace unmistakable: scroll the content area back
   // to the top whenever the selected episode's workspace opens.
@@ -129,6 +155,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   }, [currentView, activeProjectId]);
 
   useEffect(() => {
+    if (!canAccessApi) return;
     void fetchChannels()
       .then(data =>
         setChannels(
@@ -143,7 +170,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
         ),
       )
       .catch(() => undefined);
-  }, []);
+  }, [canAccessApi]);
 
   const handleContinueWorking = (projectId: string) => {
     setActiveProjectId(projectId);
@@ -242,12 +269,16 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     }
   };
 
-  if (authEnabled && loading) {
+  if (authStatusLoading || (authEnabled && loading)) {
     return (
       <div className="min-h-screen bg-[#0B0F14] flex items-center justify-center text-sm text-[#8B949E]">
         Cargando sesión…
       </div>
     );
+  }
+
+  if (authRequired && !authEnabled) {
+    return <AuthMisconfiguredView />;
   }
 
   if (authEnabled && !session) {

@@ -105,6 +105,17 @@ if [ -f "$SRC_DIR/.env.supabase.local" ]; then
   set +a
 fi
 
+# Web build args: accept VITE_* or derive from SUPABASE_URL / SUPABASE_ANON_KEY.
+if [ -z "${VITE_SUPABASE_URL:-}" ] && [ -n "${SUPABASE_URL:-}" ]; then
+  export VITE_SUPABASE_URL="$SUPABASE_URL"
+fi
+if [ -z "${VITE_SUPABASE_ANON_KEY:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+  export VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+fi
+if [ -z "${VITE_SUPABASE_ANON_KEY:-}" ] && [ -n "${VITE_SUPABASE_PUBLISHABLE_KEY:-}" ]; then
+  export VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_PUBLISHABLE_KEY"
+fi
+
 echo "=== Migrating secrets to persistent volume ==="
 API_CONTAINER=$(docker ps -q -f name=api-z7b1ieqp66a7e43cywaz816w | head -1 || true)
 if [ -n "$API_CONTAINER" ]; then
@@ -125,12 +136,19 @@ echo "=== Building API image (${COMMIT}) ==="
 docker build -f "$SRC_DIR/Dockerfile.api" -t "z7b1ieqp66a7e43cywaz816w_api:${COMMIT}" "$SRC_DIR"
 
 echo "=== Building Web image (${COMMIT}) ==="
+# .env.supabase.local often defines SUPABASE_URL / SUPABASE_ANON_KEY for the API;
+# map those to Vite build args when VITE_* are not set explicitly.
+VITE_SUPABASE_URL="${VITE_SUPABASE_URL:-${SUPABASE_URL:-}}"
+VITE_SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-}}"
 WEB_BUILD_ARGS=(--build-arg "VITE_API_BASE_URL=/api")
-if [ -n "${VITE_SUPABASE_URL:-}" ]; then
+if [ -n "${VITE_SUPABASE_URL}" ]; then
   WEB_BUILD_ARGS+=(--build-arg "VITE_SUPABASE_URL=${VITE_SUPABASE_URL}")
 fi
-if [ -n "${VITE_SUPABASE_ANON_KEY:-}" ]; then
+if [ -n "${VITE_SUPABASE_ANON_KEY}" ]; then
   WEB_BUILD_ARGS+=(--build-arg "VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}")
+fi
+if [ -n "${SUPABASE_URL:-}" ] && [ -z "${VITE_SUPABASE_ANON_KEY}" ]; then
+  echo "WARN: SUPABASE_URL is set but VITE_SUPABASE_ANON_KEY/SUPABASE_ANON_KEY is missing; web login will be disabled" >&2
 fi
 docker build -f "$SRC_DIR/Dockerfile.web" \
   "${WEB_BUILD_ARGS[@]}" \
@@ -160,6 +178,7 @@ domain = os.environ["CAS_REDEPLOY_DOMAIN"]
 compose_path = os.environ["CAS_REDEPLOY_COMPOSE"]
 supabase_url = os.environ.get("SUPABASE_URL") or "https://iiokqyedkylwhonbrrvo.supabase.co"
 service_role = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+jwt_secret = os.environ.get("SUPABASE_JWT_SECRET", "")
 cas_api_key = os.environ.get("CAS_API_KEY", "")
 
 p = Path(compose_path)
@@ -217,6 +236,8 @@ def inject_env(text, service, key, value, anchor):
 # API service runtime env.
 text = inject_env(text, "api", "CAS_PUBLIC_URL", "https://" + domain, "LOCAL_STORAGE_PATH")
 text = inject_env(text, "api", "SUPABASE_URL", supabase_url, "LOCAL_STORAGE_PATH")
+if jwt_secret:
+    text = inject_env(text, "api", "SUPABASE_JWT_SECRET", jwt_secret, "SUPABASE_URL")
 if service_role:
     text = inject_env(text, "api", "SUPABASE_SERVICE_ROLE_KEY", service_role, "SUPABASE_URL")
 text = inject_env(text, "api", "REDIS_URL", "redis://redis:6379", "CAS_SECRETS_KEY")
@@ -228,7 +249,7 @@ if cas_api_key:
 # Idempotency guard: refuse to write a compose that declares a managed key twice
 # in the same service (this is the failure the work order fixes). No secret
 # values are printed -- only the offending service/key name.
-managed = ("CAS_API_KEY", "CAS_PUBLIC_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "REDIS_URL")
+managed = ("CAS_API_KEY", "CAS_PUBLIC_URL", "SUPABASE_URL", "SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "REDIS_URL")
 for service in ("api", "worker"):
     blk = find_service_block(text, service)
     if blk is None:

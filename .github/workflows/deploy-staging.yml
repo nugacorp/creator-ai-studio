@@ -3,8 +3,13 @@
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   VPS_HOST      — e.g. 217.76.56.66
 #   VPS_SSH_KEY   — private SSH key (PEM) for deploy user
-# Optional:
-#   VPS_USER      — defaults to root
+# Optional (staging auth — synced to /root/creator-ai-studio/.env.supabase.local):
+#   VPS_USER                  — defaults to root
+#   SUPABASE_URL              — e.g. https://iiokqyedkylwhonbrrvo.supabase.co
+#   SUPABASE_ANON_KEY         — Dashboard → API → anon / publishable key
+#   SUPABASE_JWT_SECRET       — Dashboard → API → JWT Secret
+#   SUPABASE_SERVICE_ROLE_KEY — optional Postgres sync
+#   CAS_API_KEY               — worker + machine-to-machine Bearer
 #
 # The VPS must have Docker, the Coolify app at /data/coolify/applications/...,
 # and /root/creator-ai-studio as sync target.
@@ -49,6 +54,25 @@ jobs:
             --exclude '*.enc' \
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" \
             ./ "${VPS_USER}@${VPS_HOST}:/root/creator-ai-studio/"
+
+      - name: Sync Supabase env on VPS
+        env:
+          VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CAS_API_KEY: ${{ secrets.CAS_API_KEY }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            "${VPS_USER}@${VPS_HOST}" \
+            "SUPABASE_URL='${SUPABASE_URL}' \
+             SUPABASE_ANON_KEY='${SUPABASE_ANON_KEY}' \
+             SUPABASE_JWT_SECRET='${SUPABASE_JWT_SECRET}' \
+             SUPABASE_SERVICE_ROLE_KEY='${SUPABASE_SERVICE_ROLE_KEY}' \
+             CAS_API_KEY='${CAS_API_KEY}' \
+             bash /root/creator-ai-studio/scripts/vps-sync-supabase-env.sh"
 
       - name: Redeploy staging stack
         env:
