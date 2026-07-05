@@ -224,6 +224,17 @@ export async function generateSubtitles(
   });
 }
 
+export async function renderEpisodeVideo(
+  episodeId: string,
+  options?: { force?: boolean },
+): Promise<{ ok: boolean; message: string; videoUrl?: string; skipped?: boolean }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/render`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options?.force ? { force: true } : {}),
+  });
+}
+
 export async function updateStageStatus(
   id: string,
   stage: EpisodeStage,

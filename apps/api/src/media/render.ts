@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import type { Scene } from '@creator-ai-studio/shared';
 import { areMocksAllowed } from '../config/mocks.js';
 import { computeSlideDurationSeconds, probeMediaDurationSeconds } from './audio-probe.js';
 
@@ -42,33 +43,124 @@ async function resolveAudioPath(episodeDir: string): Promise<string | null> {
   return null;
 }
 
+async function createPlaceholderSlide(dest: string): Promise<void> {
+  await execFileAsync(
+    'ffmpeg',
+    [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'color=c=0x1a2332:s=1920x1080:d=1',
+      '-frames:v',
+      '1',
+      dest,
+    ],
+    { timeout: 30_000 },
+  );
+}
+
+export interface ResolvedSlide {
+  path: string;
+  /** Scene timing hint in seconds (0 = distribute evenly). */
+  durationHint: number;
+}
+
+function slideFilenameForIndex(index: number): string {
+  return `slide-${String(index).padStart(3, '0')}.png`;
+}
+
+/** Resolve one slide per scene — prefers on-disk assets over authenticated API URLs. */
+export async function resolveSceneSlides(
+  episodeDir: string,
+  scenes: Scene[],
+): Promise<ResolvedSlide[]> {
+  const assetsDir = path.join(episodeDir, '04-assets');
+  await mkdir(assetsDir, { recursive: true });
+  const slides: ResolvedSlide[] = [];
+
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i]!;
+    const indexedPath = path.join(assetsDir, slideFilenameForIndex(i));
+
+    if (existsSync(indexedPath)) {
+      slides.push({ path: indexedPath, durationHint: scene.duration ?? 0 });
+      continue;
+    }
+
+    const urlName = scene.imageUrl?.match(/(slide-\d{3}\.png)/i)?.[1];
+    if (urlName) {
+      const fromUrl = path.join(assetsDir, urlName);
+      if (existsSync(fromUrl)) {
+        slides.push({ path: fromUrl, durationHint: scene.duration ?? 0 });
+        continue;
+      }
+    }
+
+    const url = scene.imageUrl?.trim();
+    if (
+      url &&
+      (url.startsWith('data:image') || url.startsWith('http://') || url.startsWith('https://'))
+    ) {
+      if (await downloadImage(url, indexedPath)) {
+        slides.push({ path: indexedPath, durationHint: scene.duration ?? 0 });
+        continue;
+      }
+    }
+
+    await createPlaceholderSlide(indexedPath);
+    slides.push({ path: indexedPath, durationHint: scene.duration ?? 0 });
+  }
+
+  return slides;
+}
+
+function distributeSlideDurations(
+  slides: ResolvedSlide[],
+  audioDuration: number,
+  fallbackPerSlide: number,
+): number[] {
+  if (slides.length === 0) return [];
+  if (audioDuration <= 0) {
+    return slides.map(s => (s.durationHint > 0 ? s.durationHint : fallbackPerSlide));
+  }
+  const weights = slides.map(s => (s.durationHint > 0 ? s.durationHint : fallbackPerSlide));
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0) || slides.length;
+  return weights.map(w => Math.max(3, (w / totalWeight) * audioDuration));
+}
+
 async function buildSlideList(
   episodeDir: string,
   sceneImageUrls: string[],
   thumbnailUrl?: string,
-): Promise<string[]> {
+  scenes?: Scene[],
+): Promise<ResolvedSlide[]> {
+  if (scenes && scenes.length > 0) {
+    return resolveSceneSlides(episodeDir, scenes);
+  }
+
   const assetsDir = path.join(episodeDir, '04-assets');
   await mkdir(assetsDir, { recursive: true });
-  const slides: string[] = [];
+  const slides: ResolvedSlide[] = [];
 
   const urls = sceneImageUrls.length > 0 ? sceneImageUrls : thumbnailUrl ? [thumbnailUrl] : [];
   let i = 0;
   for (const url of urls) {
     if (!url) continue;
 
-    const sceneImageMatch = url.match(/\/scene-images\/(slide-\d{3}\.png)$/);
+    const sceneImageMatch = url.match(/\/scene-images\/(slide-\d{3}\.png)$/i);
     if (sceneImageMatch) {
       const local = path.join(episodeDir, '04-assets', sceneImageMatch[1]!);
       if (existsSync(local)) {
-        slides.push(local);
+        slides.push({ path: local, durationHint: 0 });
         i++;
         continue;
       }
     }
 
-    const dest = path.join(assetsDir, `slide-${String(i).padStart(3, '0')}.png`);
+    const dest = path.join(assetsDir, slideFilenameForIndex(i));
     if (await downloadImage(url, dest)) {
-      slides.push(dest);
+      slides.push({ path: dest, durationHint: 0 });
       i++;
     }
   }
@@ -89,7 +181,7 @@ async function buildSlideList(
       ],
       { timeout: 30_000 },
     );
-    slides.push(placeholder);
+    slides.push({ path: placeholder, durationHint: 0 });
   }
 
   return slides;
@@ -104,7 +196,12 @@ export interface RenderResult {
 /** CPU slideshow + audio → 06-video/episode.mp4 */
 export async function renderEpisodeVideo(
   episodeDir: string,
-  options: { sceneImageUrls?: string[]; thumbnailUrl?: string; secondsPerSlide?: number },
+  options: {
+    sceneImageUrls?: string[];
+    scenes?: Scene[];
+    thumbnailUrl?: string;
+    secondsPerSlide?: number;
+  },
 ): Promise<RenderResult> {
   if (!(await checkFfmpeg())) {
     return { ok: false, message: 'ffmpeg no está instalado en el servidor' };
@@ -123,19 +220,27 @@ export async function renderEpisodeVideo(
     episodeDir,
     options.sceneImageUrls ?? [],
     options.thumbnailUrl,
+    options.scenes,
   );
 
   const audioDuration = await probeMediaDurationSeconds(audioPath);
-  const slideDuration =
-    options.secondsPerSlide ??
-    computeSlideDurationSeconds(audioDuration, slides.length);
+  const fallbackPerSlide =
+    options.secondsPerSlide ?? computeSlideDurationSeconds(audioDuration, slides.length);
+  const slideDurations = distributeSlideDurations(slides, audioDuration, fallbackPerSlide);
 
   const listFile = path.join(episodeDir, '04-assets', 'ffmpeg-slides.txt');
   const listContent = slides
-    .map(s => `file '${s.replace(/'/g, "'\\''")}'\nduration ${slideDuration.toFixed(3)}`)
+    .map((s, idx) => {
+      const dur = slideDurations[idx] ?? fallbackPerSlide;
+      return `file '${s.path.replace(/'/g, "'\\''")}'\nduration ${dur.toFixed(3)}`;
+    })
     .join('\n');
-  const lastSlide = slides[slides.length - 1];
-  await writeFile(listFile, `${listContent}\nfile '${lastSlide.replace(/'/g, "'\\''")}'\n`, 'utf8');
+  const lastSlide = slides[slides.length - 1]!;
+  await writeFile(
+    listFile,
+    `${listContent}\nfile '${lastSlide.path.replace(/'/g, "'\\''")}'\n`,
+    'utf8',
+  );
 
   const silentVideo = path.join(videoDir, '_slides.mp4');
   await execFileAsync(

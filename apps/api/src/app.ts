@@ -624,16 +624,18 @@ function registerRoutes(
       return { ok: true, skipped: true, videoUrl: normalized ?? episodeFileUrl(id, 'video') };
     }
     const { renderEpisodeVideo } = await import('./media/render.js');
-    const sceneUrls = episode.content.scenes.map(s => s.imageUrl).filter(Boolean);
     const result = await renderEpisodeVideo(dir, {
-      sceneImageUrls: sceneUrls,
+      scenes: episode.content.scenes,
+      sceneImageUrls: episode.content.scenes.map(s => s.imageUrl).filter(Boolean),
       thumbnailUrl: episode.content.thumbnailUrl,
     });
     if (result.ok) {
       const { episodeFileUrl } = await import('./media/media-urls.js');
+      const videoUrl = episodeFileUrl(id, 'video');
       await storage.updateEpisode(id, {
-        content: { videoUrl: episodeFileUrl(id, 'video') },
+        content: { videoUrl },
       });
+      return { ...result, videoUrl };
     }
     return result;
   });

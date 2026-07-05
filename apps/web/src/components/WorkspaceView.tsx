@@ -51,6 +51,7 @@ import {
   generateStoryboardFromScript,
   generateSubtitles,
   loadAuthenticatedMediaUrl,
+  renderEpisodeVideo,
   resolveEpisodeMediaUrl,
   updateStageStatus,
   type ElevenLabsVoice,
@@ -527,6 +528,32 @@ export default function WorkspaceView({
       triggerFeedback('error', 'No se pudieron generar subtítulos');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleRenderVideo = async () => {
+    setIsProcessing(true);
+    setProcessingMessage(
+      `Renderizando video con ${scenes.length} escena(s) y narración sincronizada…`,
+    );
+    try {
+      const data = await renderEpisodeVideo(project.id, { force: true });
+      if (!data.ok) {
+        triggerFeedback('error', data.message || 'No se pudo renderizar el video');
+        return;
+      }
+      const videoUrl = data.videoUrl ?? `/api/episodes/${project.id}/files/video`;
+      persistProject({ videoUrl });
+      triggerFeedback(
+        'success',
+        data.skipped ? 'Video ya existente — usa forzar si cambiaste escenas' : `✓ ${data.message}`,
+      );
+    } catch (err) {
+      console.error(err);
+      triggerFeedback('error', 'Error al exportar video — revisa narración e imágenes de escenas');
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
     }
   };
 
@@ -1117,17 +1144,12 @@ export default function WorkspaceView({
                   </div>
 
                   <button
-                    onClick={() => {
-                      setIsProcessing(true);
-                      setProcessingMessage('Compilando pistas, voces y música de fondo para generar render final...');
-                      setTimeout(() => {
-                        setIsProcessing(false);
-                        triggerFeedback('success', '✓ Render finalizado y guardado en biblioteca local');
-                      }, 3000);
-                    }}
-                    className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                    type="button"
+                    disabled={isProcessing}
+                    onClick={() => void handleRenderVideo()}
+                    className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
                   >
-                    Exportar Video Final
+                    Exportar Video Final ({scenes.length} escenas)
                   </button>
                 </div>
               </div>
@@ -1162,7 +1184,7 @@ export default function WorkspaceView({
                     <span>Imágenes</span>
                   </div>
                   <div className="flex-1 h-9 bg-sky-950/10 border border-sky-900/20 rounded-xl p-1 flex gap-1 relative overflow-hidden">
-                    {(scenes.length > 0 ? scenes.slice(0, 3) : [{ id: 'empty', duration: 0 }]).map(
+                    {(scenes.length > 0 ? scenes : [{ id: 'empty', duration: 0 } as Scene]).map(
                       (scene, idx) => (
                         <div
                           key={scene.id ?? idx}
