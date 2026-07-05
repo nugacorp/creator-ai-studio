@@ -47,6 +47,7 @@ describe('shared episode model', () => {
       'assets',
       'audio',
       'video',
+      'subtitles',
       'thumbnail',
       'seo',
       'shorts',
