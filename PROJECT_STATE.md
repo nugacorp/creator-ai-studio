@@ -8,15 +8,15 @@ Project State
 
 ## Version
 
-0.1.0
+0.2.0
 
 ## Status
 
-Draft
+Active — Production Readiness
 
 ## Author
 
-Hermes
+Cursor + Hermes
 
 ## Created
 
@@ -24,7 +24,7 @@ Hermes
 
 ## Last Updated
 
-2026-06-25
+2026-07-05
 
 ## Purpose
 
@@ -32,60 +32,52 @@ Maintain the official current state of Creator AI Studio.
 
 ## Scope
 
-Current phase: Phase 7 — Production Hardening (implementation complete, deploy verification pending).
+Current phase: **Production Readiness** — staging functional, production gates in progress.
 
-Estimated completion: 85%.
+Estimated completion: **~70%** toward production Definition of Done (code ~85%, credentials/E2E pending).
 
-Documents created:
+### Staging baseline
 
-- README.md
-- PROJECT_STATE.md
-- CHANGELOG.md
-- ROADMAP.md
-- DOCUMENT_REGISTRY.md
-- MASTER_INDEX.md
-- PROJECT_REGISTRY.json
-- .system/standards/DOCUMENTATION_STANDARD.md
-- .system/standards/DOCUMENT_STANDARD.md
-- templates/*.md
-- docs/01-architecture/TECH_STACK.md
-- docs/01-architecture/DEPLOYMENT_STAGING.md
+| Item | Value |
+|------|-------|
+| URL | https://creator-ai-studio.217.76.56.66.sslip.io |
+| Branch | `staging` @ `7cce96a` |
+| Services | api, web, worker, redis |
+| Auth | Supabase JWT + CAS_API_KEY worker |
 
-Documents pending:
+### Completed (code)
 
-- Blueprint documents
-- Architecture documents
-- Business documents
-- Product documents
-- AI system documents
-- Workflow documents
-- ADR records
+- AI provider diagnostics + fallback (CAS-CURSOR-WO-0033)
+- Security hardening (auth, rate limit, job claim)
+- Safe pipeline API (`run-safe-pipeline`, `publish-package`)
+- Worker pipeline modes (`buildPipelineStepKeys`)
+- Mock policy (`ALLOW_MOCKS`, `config/mocks.ts`)
+- Publish package builder (`10-publish/`)
 
-ADR registered: None.
+### Blockers (operations)
 
-Next objectives:
+1. **IA providers** — billing/credentials (Gemini OAuth, OpenAI quota, Claude balance)
+2. **E2E staging** — not yet signed off by Hermes
+3. **Production environment** — no separate Coolify app yet
+4. **Domain** — still sslip.io
 
-- Deploy and verify `staging` on Coolify with AI API keys configured.
-- Configure Supabase (optional) for Postgres + Auth when multi-user is needed.
-- Promote validated `staging` to `main` for daily production use.
+### Next objectives
 
-Blockers: None.
+1. PO: activate IA provider billing (FASE 1)
+2. Hermes: E2E staging checklist (FASE 12)
+3. Merge `feature/production-readiness` → `staging`
+4. Production Coolify app + domain (FASE 10–11)
 
-Last activity: Coolify staging deployment configuration prepared on 2026-06-25 for CAS-HERMES-DEPLOY-0023.
+### Related docs
 
-## Dependencies
-
-README.md
-
-## Related Documents
-
-MASTER_INDEX.md, ROADMAP.md, DOCUMENT_REGISTRY.md, DOCUMENTATION_STANDARD.md
+- [STAGING_SNAPSHOT.md](docs/02-operations/STAGING_SNAPSHOT.md)
+- [AI_CREDENTIALS_CHECKLIST.md](docs/02-operations/AI_CREDENTIALS_CHECKLIST.md)
+- [E2E_STAGING_CHECKLIST.md](docs/02-operations/E2E_STAGING_CHECKLIST.md)
+- [PRODUCTION_PROMOTION.md](docs/02-operations/PRODUCTION_PROMOTION.md)
 
 ## Change History
 
 | Date | Version | Author | Change |
 |---|---:|---|---|
-| 2026-06-25 | 0.1.0 | Hermes | Initial project state created. |
-| 2026-06-25 | 0.1.0 | Hermes | Added official documentation standard to project state. |
-| 2026-06-25 | 0.1.0 | Hermes | Normalized document to official documentation standard. |
-| 2026-06-25 | 0.1.0 | Hermes | Recorded Coolify staging deployment preparation. |
+| 2026-06-25 | 0.1.0 | Hermes | Initial project state |
+| 2026-07-05 | 0.2.0 | Cursor | Production Readiness baseline snapshot |

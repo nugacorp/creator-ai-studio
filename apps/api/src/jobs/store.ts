@@ -38,6 +38,7 @@ export async function createJob(episodeId: string, input: CreateJobInput): Promi
     type: input.type,
     status: 'pending',
     progress: 0,
+    ...(input.payload ? { payload: input.payload } : {}),
     createdAt: now,
     updatedAt: now,
   };

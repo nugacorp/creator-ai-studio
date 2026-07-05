@@ -1,10 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Clapperboard, CloudUpload, Loader2, Play, CheckCircle2, HardDrive, ExternalLink } from 'lucide-react';
 import {
+  Clapperboard,
+  CloudUpload,
+  Loader2,
+  Play,
+  CheckCircle2,
+  HardDrive,
+  ExternalLink,
+  Package,
+  ShieldAlert,
+} from 'lucide-react';
+import {
+  authorizePublish,
+  buildPublishPackage,
   confirmPublish,
   fetchStorageStats,
-  runEpisodePipeline,
+  runSafePipeline,
   fetchJob,
+  type PipelineMode,
+  type PublishChecklistItem,
   type StorageStats,
 } from '../api';
 
@@ -21,6 +35,8 @@ const STEP_LABELS: Record<string, string> = {
   thumbnail: 'Miniatura',
   render: 'Render de video',
   shorts: 'Short vertical',
+  publish_package: 'Paquete de publicación',
+  review: 'Listo para revisión',
   publish: 'Subida a YouTube',
   confirm: 'Confirmar publicación',
 };
@@ -36,6 +52,8 @@ export default function PipelinePanel({
   const [youtubeUrl, setYoutubeUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [storage, setStorage] = useState<StorageStats | null>(null);
+  const [checklist, setChecklist] = useState<PublishChecklistItem[] | null>(null);
+  const [publishReady, setPublishReady] = useState(false);
 
   useEffect(() => {
     void fetchStorageStats()
@@ -43,14 +61,14 @@ export default function PipelinePanel({
       .catch(() => setStorage(null));
   }, []);
 
-  const handleFullPipeline = async () => {
+  const startPipeline = async (mode: PipelineMode, label: string) => {
     setRunning(true);
     setError(null);
     setYoutubeUrl(null);
-    setMessage('Iniciando producción completa…');
+    setMessage(`Iniciando: ${label}…`);
     setProgress(5);
     try {
-      const job = await runEpisodePipeline(episodeId);
+      const job = await runSafePipeline(episodeId, mode);
       const poll = setInterval(async () => {
         try {
           const updated = await fetchJob(job.id);
@@ -68,8 +86,8 @@ export default function PipelinePanel({
             if (url) setYoutubeUrl(url);
             setMessage(
               url
-                ? '✓ Video subido a YouTube (privado). Revisa en Studio y confirma visibilidad.'
-                : '✓ Pipeline completado.',
+                ? '✓ Video subido a YouTube (privado). Revisa en Studio.'
+                : '✓ Pipeline completado sin publicar en YouTube.',
             );
             onPipelineComplete?.();
             void fetchStorageStats().then(setStorage);
@@ -77,8 +95,7 @@ export default function PipelinePanel({
           if (updated.status === 'failed') {
             clearInterval(poll);
             setRunning(false);
-            const errMsg = updated.error ?? 'El pipeline falló';
-            setError(errMsg);
+            setError(updated.error ?? 'El pipeline falló');
             setMessage(null);
           }
         } catch {
@@ -98,15 +115,70 @@ export default function PipelinePanel({
     }
   };
 
+  const handlePublishPackage = async () => {
+    setRunning(true);
+    setError(null);
+    setMessage('Generando paquete de publicación…');
+    try {
+      const result = await buildPublishPackage(episodeId);
+      setChecklist(result.checklist);
+      setPublishReady(result.ready);
+      setMessage(
+        result.ready
+          ? '✓ Paquete listo para revisión humana.'
+          : 'Paquete generado — faltan artefactos (ver checklist).',
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al generar paquete');
+      setMessage(null);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const handleAuthorizePublish = async () => {
+    if (!window.confirm('¿Autorizas la subida PRIVADA a YouTube? Esta acción no se puede deshacer.')) {
+      return;
+    }
+    setRunning(true);
+    setError(null);
+    setMessage('Autorizando publicación en YouTube (privado)…');
+    try {
+      const { job, checklist: pkgChecklist } = await authorizePublish(episodeId);
+      setChecklist(pkgChecklist);
+      const poll = setInterval(async () => {
+        const updated = await fetchJob(job.id);
+        setProgress(updated.progress);
+        setMessage(`${updated.result?.step ?? updated.type} — ${updated.progress}%`);
+        if (updated.status === 'completed') {
+          clearInterval(poll);
+          setRunning(false);
+          const url = updated.result?.youtubeUrl as string | undefined;
+          if (url) setYoutubeUrl(url);
+          setMessage('✓ Video subido a YouTube (privado).');
+          onPipelineComplete?.();
+        }
+        if (updated.status === 'failed') {
+          clearInterval(poll);
+          setRunning(false);
+          setError(updated.error ?? 'Publicación falló');
+          setMessage(null);
+        }
+      }, 2000);
+    } catch (err) {
+      setRunning(false);
+      setError(err instanceof Error ? err.message : 'No se pudo autorizar publicación');
+      setMessage(null);
+    }
+  };
+
   const handleConfirmPublish = async () => {
     setRunning(true);
     setError(null);
     setMessage('Confirmando publicación…');
     try {
       await confirmPublish(episodeId);
-      setMessage(
-        '✓ Publicación confirmada. Si autoArchiveOnPublish está activo en Configuración, el workspace se archivará en Drive.',
-      );
+      setMessage('✓ Publicación confirmada.');
       void fetchStorageStats().then(setStorage);
     } catch {
       setError('Error al confirmar publicación');
@@ -125,7 +197,7 @@ export default function PipelinePanel({
         <div>
           <h2 className="font-display font-bold text-base text-white">Producción automática</h2>
           <p className="text-[11px] text-slate-400">
-            Guion → SEO → voz → miniatura → video → short → YouTube (privado) → confirmar
+            Borrador seguro (sin YouTube) → revisión → publicación autorizada
           </p>
         </div>
       </div>
@@ -161,6 +233,17 @@ export default function PipelinePanel({
         </p>
       )}
 
+      {checklist && (
+        <ul className="text-[11px] space-y-1 rounded-xl border border-white/10 bg-[#0B0F14] p-3">
+          {checklist.map(item => (
+            <li key={item.key} className={item.ok ? 'text-emerald-400' : 'text-amber-400'}>
+              {item.ok ? '✓' : '○'} {item.label}
+              {item.detail ? ` — ${item.detail}` : ''}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {youtubeUrl && (
         <a
           href={youtubeUrl}
@@ -186,25 +269,48 @@ export default function PipelinePanel({
         <button
           type="button"
           disabled={running}
-          onClick={() => void handleFullPipeline()}
+          onClick={() => void startPipeline('production-draft', 'Producir borrador')}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold"
         >
           {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-          Producir video completo
+          Producir borrador
+        </button>
+        <button
+          type="button"
+          disabled={running}
+          onClick={() => void startPipeline('ready-for-review', 'Listo para revisión')}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0B0F14] border border-white/10 hover:border-indigo-500/40 text-xs font-semibold text-slate-300"
+        >
+          <CheckCircle2 className="w-4 h-4 text-indigo-400" />
+          Marcar listo
+        </button>
+        <button
+          type="button"
+          disabled={running}
+          onClick={() => void handlePublishPackage()}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0B0F14] border border-white/10 hover:border-amber-500/40 text-xs font-semibold text-slate-300"
+        >
+          <Package className="w-4 h-4 text-amber-400" />
+          Preparar publicación
+        </button>
+        <button
+          type="button"
+          disabled={running || (!publishReady && !checklist)}
+          onClick={() => void handleAuthorizePublish()}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-950/40 border border-rose-500/30 hover:border-rose-400/50 disabled:opacity-40 text-xs font-semibold text-rose-200"
+        >
+          <ShieldAlert className="w-4 h-4" />
+          Publicar en YouTube (privado)
         </button>
         <button
           type="button"
           disabled={running}
           onClick={() => void handleConfirmPublish()}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0B0F14] border border-white/10 hover:border-emerald-500/40 text-xs font-semibold text-slate-300"
+          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#0B0F14] border border-white/10 text-xs font-semibold text-slate-400"
         >
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          Ya publiqué en redes → archivar
+          <CloudUpload className="w-4 h-4" />
+          Ya publiqué → archivar
         </button>
-        <span className="flex items-center gap-1 text-[10px] text-slate-500 self-center">
-          <CloudUpload className="w-3 h-3" />
-          Requiere OAuth YouTube conectado en Configuración
-        </span>
       </div>
     </section>
   );

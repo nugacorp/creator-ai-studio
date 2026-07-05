@@ -12,9 +12,13 @@ const PIPELINE_STEP_LABELS: Record<string, string> = {
   thumbnail: 'Miniatura',
   render: 'Render de video',
   shorts: 'Short vertical',
+  publish_package: 'Paquete de publicación',
+  review: 'Listo para revisión',
   publish: 'Subida a YouTube',
   confirm: 'Confirmar publicación',
 };
+
+export type PipelineMode = 'production-draft' | 'ready-for-review' | 'publish-authorized';
 
 export function getReadyMessage(): string {
   return 'Creator AI Studio production worker ready.';
@@ -25,6 +29,7 @@ interface ProductionJob {
   episodeId: string;
   type: string;
   status: string;
+  payload?: Record<string, unknown>;
 }
 
 function apiHeaders(): Record<string, string> {
@@ -187,9 +192,17 @@ async function runShortsJob(job: ProductionJob): Promise<void> {
 }
 
 async function runPublishJob(job: ProductionJob): Promise<{ youtubeUrl?: string; videoId?: string }> {
+  // Human authorization must travel on the job payload; the API rejects
+  // uploads without it (403 publish_not_authorized).
+  if (job.payload?.authorized !== true) {
+    throw new Error(
+      'Publicación no autorizada: el job no tiene payload.authorized=true. ' +
+        'Usa el flujo de publicación autorizada.',
+    );
+  }
   const res = await apiFetch('/integrations/youtube/upload', {
     method: 'POST',
-    body: JSON.stringify({ episodeId: job.episodeId }),
+    body: JSON.stringify({ episodeId: job.episodeId, authorize: true }),
   });
   await assertOk(res, 'YouTube upload');
   const data = (await res.json()) as { url?: string; videoId?: string; status?: string };
@@ -206,23 +219,61 @@ async function runArchiveJob(job: ProductionJob): Promise<void> {
   await assertOk(res, 'archive');
 }
 
+async function runPublishPackageJob(job: ProductionJob): Promise<void> {
+  const res = await apiFetch(`/episodes/${job.episodeId}/publish-package`, { method: 'POST' });
+  await assertOk(res, 'publish package');
+}
+
+async function markEpisodeReadyForReview(job: ProductionJob): Promise<void> {
+  const res = await apiFetch(`/episodes/${job.episodeId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'review' }),
+  });
+  await assertOk(res, 'mark ready for review');
+}
+
+/** Resolve the pipeline mode from the job payload (safe default: draft). */
+export function resolvePipelineMode(job: ProductionJob): PipelineMode {
+  const mode = job.payload?.mode;
+  if (mode === 'ready-for-review' || mode === 'publish-authorized') return mode;
+  return 'production-draft';
+}
+
+/** Step keys per pipeline mode. Exported for tests. */
+export function buildPipelineStepKeys(mode: PipelineMode): string[] {
+  const draft = ['script', 'seo', 'tts', 'thumbnail', 'render', 'shorts', 'publish_package'];
+  if (mode === 'production-draft') return draft;
+  if (mode === 'ready-for-review') return [...draft, 'review'];
+  return [...draft, 'publish', 'confirm'];
+}
+
 async function runPipelineJob(job: ProductionJob): Promise<Record<string, unknown>> {
-  const steps: Array<{ key: string; fn: () => Promise<{ youtubeUrl?: string; videoId?: string } | void> }> = [
-    { key: 'script', fn: () => runScriptJob(job) },
-    { key: 'seo', fn: () => runSeoJob(job) },
-    { key: 'tts', fn: () => runTtsJob(job) },
-    { key: 'thumbnail', fn: () => runThumbnailJob(job) },
-    { key: 'render', fn: () => runRenderJob(job) },
-    { key: 'shorts', fn: () => runShortsJob(job) },
-    { key: 'publish', fn: () => runPublishJob(job) },
-    {
-      key: 'confirm',
-      fn: async () => {
-        const res = await apiFetch(`/episodes/${job.episodeId}/confirm-publish`, { method: 'POST' });
-        await assertOk(res, 'confirm publish');
-      },
+  const mode = resolvePipelineMode(job);
+
+  // Publishing steps additionally require the explicit authorization flag.
+  if (mode === 'publish-authorized' && job.payload?.authorized !== true) {
+    throw new Error(
+      'Pipeline en modo publish-authorized sin payload.authorized=true. Abortado por seguridad.',
+    );
+  }
+
+  const stepFns: Record<string, () => Promise<{ youtubeUrl?: string; videoId?: string } | void>> = {
+    script: () => runScriptJob(job),
+    seo: () => runSeoJob(job),
+    tts: () => runTtsJob(job),
+    thumbnail: () => runThumbnailJob(job),
+    render: () => runRenderJob(job),
+    shorts: () => runShortsJob(job),
+    publish_package: () => runPublishPackageJob(job),
+    review: () => markEpisodeReadyForReview(job),
+    publish: () => runPublishJob(job),
+    confirm: async () => {
+      const res = await apiFetch(`/episodes/${job.episodeId}/confirm-publish`, { method: 'POST' });
+      await assertOk(res, 'confirm publish');
     },
-  ];
+  };
+
+  const steps = buildPipelineStepKeys(mode).map(key => ({ key, fn: stepFns[key] }));
 
   let youtubeUrl: string | undefined;
   let videoId: string | undefined;
@@ -246,7 +297,7 @@ async function runPipelineJob(job: ProductionJob): Promise<Record<string, unknow
     }
   }
 
-  return { ok: true, youtubeUrl, videoId };
+  return { ok: true, mode, youtubeUrl, videoId };
 }
 
 export async function processJob(job: ProductionJob): Promise<void> {
@@ -262,6 +313,9 @@ export async function processJob(job: ProductionJob): Promise<void> {
       case 'script':
         await runScriptJob(job);
         break;
+      case 'seo':
+        await runSeoJob(job);
+        break;
       case 'tts':
         await runTtsJob(job);
         break;
@@ -276,6 +330,9 @@ export async function processJob(job: ProductionJob): Promise<void> {
         break;
       case 'publish':
         result = { ...(await runPublishJob(job)), ok: true };
+        break;
+      case 'publish_package':
+        await runPublishPackageJob(job);
         break;
       case 'archive':
         await runArchiveJob(job);

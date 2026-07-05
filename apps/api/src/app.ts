@@ -31,6 +31,11 @@ import { getSettings, saveSettings } from './settings/store.js';
 import { createChannel, deleteChannel, listChannels, updateChannel } from './channels/store.js';
 import { EpisodeStorage, resolveStoragePath } from './storage/index.js';
 import { getEpisodeForUser } from './storage/access.js';
+import {
+  getEpisodeMetadataSource,
+  listEpisodesFromSupabase,
+} from './db/episodes-metadata.js';
+import { areMocksAllowed } from './config/mocks.js';
 import { getGeminiAuth } from './secrets/google-auth.js';
 import { getSecret } from './secrets/resolver.js';
 import { resolveProvider } from './ai/router.js';
@@ -73,15 +78,26 @@ function registerRoutes(
 ): void {
   app.get(route(prefix, '/health'), async () => {
     const { checkSupabaseConnection } = await import('./db/supabase.js');
+    const { checkFfmpeg } = await import('./media/render.js');
     const supabase = await checkSupabaseConnection();
+    const ffmpegAvailable = await checkFfmpeg();
     return {
       status: 'ok',
       service: 'creator-ai-studio-api',
       supabase: supabase ?? 'not_configured',
+      ffmpegAvailable,
+      metadataSource: getEpisodeMetadataSource(),
+      mocksAllowed: areMocksAllowed(),
     };
   });
 
   app.get(route(prefix, '/episodes'), async (request): Promise<EpisodeSummary[]> => {
+    const source = getEpisodeMetadataSource();
+    if (source === 'supabase' || source === 'hybrid') {
+      const fromDb = await listEpisodesFromSupabase(request.userId);
+      if (fromDb && fromDb.length > 0) return fromDb;
+      if (source === 'supabase') return fromDb ?? [];
+    }
     return storage.listEpisodes(request.userId);
   });
 
@@ -267,11 +283,19 @@ function registerRoutes(
     const hasAiKey = Boolean(geminiAuth || openai || anthropic);
     const provider = await resolveProvider();
     const settings = await getSettings();
+    const { checkFfmpeg } = await import('./media/render.js');
+    const ffmpegAvailable = await checkFfmpeg();
+    const mocksAllowed = areMocksAllowed();
+    const demoMode =
+      mocksAllowed && (!hasAiKey || provider.name === 'demo');
     return {
-      demoMode: !hasAiKey || provider.name === 'demo',
+      demoMode,
+      mocksAllowed,
       aiProvider: provider.name,
       ttsProvider: settings.ttsProvider,
       ttsConfigured: Boolean(elevenlabs) || settings.ttsProvider === 'piper',
+      ffmpegAvailable,
+      metadataSource: getEpisodeMetadataSource(),
     };
   });
 
@@ -283,6 +307,7 @@ function registerRoutes(
   app.get(route(prefix, '/analytics'), async () => {
     const yt = await fetchYouTubeAnalytics('default');
     return {
+      isDemo: yt.isDemo ?? false,
       kpis: {
         views: yt.views,
         subscribers: yt.subscribers,
@@ -307,7 +332,20 @@ function registerRoutes(
   });
 
   app.post(route(prefix, '/integrations/youtube/upload'), async (request, reply) => {
-    const body = (request.body ?? {}) as { episodeId?: string };
+    const body = (request.body ?? {}) as { episodeId?: string; authorize?: boolean };
+
+    // FASE 3/6 safety gate: uploading to YouTube ALWAYS requires an explicit
+    // human authorization flag. Pipelines in draft/review mode never set it.
+    if (body.authorize !== true) {
+      reply.code(403);
+      return {
+        error: 'publish_not_authorized',
+        message:
+          'La subida a YouTube requiere autorización explícita (authorize: true). ' +
+          'Genera el publish package y confirma manualmente antes de publicar.',
+      };
+    }
+
     let episode = body.episodeId
       ? await getEpisodeForUser(storage, body.episodeId, request.userId)
       : null;
@@ -350,7 +388,7 @@ function registerRoutes(
     return { voices: await listElevenLabsVoices() };
   });
 
-  app.post(route(prefix, '/integrations/elevenlabs/tts'), async (request) => {
+  app.post(route(prefix, '/integrations/elevenlabs/tts'), async (request, reply) => {
     const body = (request.body ?? {}) as { text?: string; voiceId?: string; episodeId?: string };
     const { synthesizeEpisodeSpeech } = await import('./integrations/tts.js');
     let saveDir: string | undefined;
@@ -366,6 +404,22 @@ function registerRoutes(
       voiceId: body.voiceId,
       saveDir,
     });
+    // FASE 8: a "demo" TTS response means the provider is not configured.
+    // When mocks are blocked (production), fail loudly instead of silently
+    // returning empty/mock audio.
+    if (result.isDemo) {
+      const { areMocksAllowed } = await import('./config/mocks.js');
+      if (!areMocksAllowed()) {
+        reply.code(503);
+        return {
+          error: 'tts_not_configured',
+          message:
+            'TTS real no configurado (API key/voz faltante o proveedor sin saldo). ' +
+            'Mocks bloqueados en este entorno.',
+          provider: result.provider,
+        };
+      }
+    }
     if (body.episodeId && result.audioUrl && !result.isDemo) {
       const episode = await storage.getEpisode(body.episodeId);
       if (episode) {
@@ -516,10 +570,102 @@ function registerRoutes(
     }
     const { createJob } = await import('./jobs/store.js');
     const { enqueueJob } = await import('./jobs/queue.js');
-    const job = await createJob(id, { type: 'pipeline' });
+    // Legacy endpoint: now runs in draft mode (no YouTube). Use
+    // /run-safe-pipeline explicitly, or the FASE 6 authorized-publish flow.
+    const job = await createJob(id, {
+      type: 'pipeline',
+      payload: { mode: 'production-draft' },
+    });
     await enqueueJob(job);
     reply.code(201);
     return job;
+  });
+
+  // FASE 3 — safe pipeline: every content stage, never touches YouTube.
+  app.post(route(prefix, '/episodes/:id/run-safe-pipeline'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await getEpisodeForUser(storage, id, request.userId);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const body = (request.body ?? {}) as { mode?: string };
+    const { isPipelineMode } = await import('@creator-ai-studio/shared');
+    const mode = isPipelineMode(body.mode) ? body.mode : 'production-draft';
+    if (mode === 'publish-authorized') {
+      reply.code(403);
+      return {
+        error: 'publish_not_allowed_here',
+        message:
+          'run-safe-pipeline nunca publica. Usa el flujo de publicación autorizada (FASE 6).',
+      };
+    }
+    const { createJob } = await import('./jobs/store.js');
+    const { enqueueJob } = await import('./jobs/queue.js');
+    const job = await createJob(id, { type: 'pipeline', payload: { mode } });
+    await enqueueJob(job);
+    reply.code(201);
+    return job;
+  });
+
+  // FASE 3 — build the human-review publish package (no YouTube contact).
+  app.post(route(prefix, '/episodes/:id/publish-package'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await getEpisodeForUser(storage, id, request.userId);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'episodio no disponible en disco local' };
+    }
+    const { buildPublishPackage } = await import('./publish/package.js');
+    const result = await buildPublishPackage(episode, dir);
+    return result;
+  });
+
+  // FASE 6 — authorized YouTube publish (requires explicit human confirmation).
+  app.post(route(prefix, '/episodes/:id/authorize-publish'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { confirm?: boolean };
+    if (body.confirm !== true) {
+      reply.code(400);
+      return {
+        error: 'confirmation_required',
+        message: 'Envía { "confirm": true } para autorizar la subida a YouTube.',
+      };
+    }
+    const episode = await getEpisodeForUser(storage, id, request.userId);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'episodio no disponible en disco local' };
+    }
+    const { buildPublishPackage } = await import('./publish/package.js');
+    const pkg = await buildPublishPackage(episode, dir);
+    if (!pkg.ready) {
+      reply.code(400);
+      return {
+        error: 'publish_package_not_ready',
+        message: 'Completa todos los artefactos antes de publicar.',
+        checklist: pkg.checklist,
+      };
+    }
+    const { createJob } = await import('./jobs/store.js');
+    const { enqueueJob } = await import('./jobs/queue.js');
+    const job = await createJob(id, {
+      type: 'pipeline',
+      payload: { mode: 'publish-authorized', authorized: true },
+    });
+    await enqueueJob(job);
+    reply.code(201);
+    return { job, checklist: pkg.checklist };
   });
 
   app.post(route(prefix, '/calendar/events'), async (request, reply) => {

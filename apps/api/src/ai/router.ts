@@ -7,6 +7,7 @@ import type { AIProvider, AIProviderName, AIUsageLog } from './types.js';
 import { getGeminiAuth } from '../secrets/google-auth.js';
 import { getSecret } from '../secrets/resolver.js';
 import { getSettings } from '../settings/store.js';
+import { areMocksAllowed } from '../config/mocks.js';
 import {
   AIOperationFailedError,
   ProviderError,
@@ -38,6 +39,9 @@ function isFallbackEnabled(): boolean {
 }
 
 function isDemoFallbackAllowed(): boolean {
+  // FASE 8: demo AI is a mock — never allowed when mocks are blocked
+  // (production by default), regardless of AI_ALLOW_DEMO_FALLBACK.
+  if (!areMocksAllowed()) return false;
   return process.env.AI_ALLOW_DEMO_FALLBACK === 'true' || process.env.AI_ALLOW_DEMO_FALLBACK === '1';
 }
 
@@ -122,12 +126,21 @@ export async function createProvider(
       break;
     }
     case 'demo':
+      if (!areMocksAllowed()) {
+        throw new ProviderError({
+          provider: 'demo',
+          operation: 'configure',
+          statusCode: 403,
+          providerMessage: 'Demo provider blocked: mocks are not allowed in this environment.',
+          retryable: false,
+        });
+      }
       return new DemoAIProvider();
     default:
       break;
   }
 
-  if (allowDemo) {
+  if (allowDemo && areMocksAllowed()) {
     return new DemoAIProvider();
   }
 
