@@ -1318,36 +1318,15 @@ export default function WorkspaceView({
                 <span className="text-[10px] font-mono text-emerald-400/90 border border-emerald-500/20 bg-emerald-950/20 px-2.5 py-1 rounded-full">
                   Guion presente — edita abajo o usa sugerencias del Copiloto
                 </span>
+              ) : showGenerateScriptCta ? (
+                <span className="text-[10px] font-mono text-indigo-300/90 border border-indigo-500/20 bg-indigo-950/20 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                  {isGeneratingScript && <Loader2 className="w-3 h-3 animate-spin shrink-0" />}
+                  {isGeneratingScript ? 'Generando guion…' : 'Outline listo — genera arriba'}
+                </span>
               ) : (
-                <div className="flex flex-col items-stretch sm:items-end gap-1.5">
-                  <button
-                    type="button"
-                    disabled={!showGenerateScriptCta || isGeneratingScript}
-                    title={
-                      showGenerateScriptCta
-                        ? undefined
-                        : 'Completa el outline antes de generar el guion'
-                    }
-                    onClick={() => void handleGenerateScript()}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    {isGeneratingScript ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-3.5 h-3.5" />
-                    )}
-                    <span>{isGeneratingScript ? 'Generando guion…' : 'Generar guion con IA'}</span>
-                  </button>
-                  {showGenerateScriptCta && (
-                    <button
-                      type="button"
-                      onClick={scrollToPipelinePanel}
-                      className="text-[10px] font-semibold text-slate-400 hover:text-indigo-300 underline-offset-2 hover:underline cursor-pointer text-right"
-                    >
-                      Ejecutar desde pipeline → Guionista
-                    </button>
-                  )}
-                </div>
+                <span className="text-[10px] font-mono text-amber-300/90 border border-amber-500/20 bg-amber-950/20 px-2.5 py-1 rounded-full">
+                  Sin outline — añade puntos primero
+                </span>
               )}
             </div>
 

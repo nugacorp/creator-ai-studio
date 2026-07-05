@@ -97,12 +97,14 @@ describe('Workspace Guion generate script', () => {
 
     await waitFor(() =>
       expect(
-        screen.getAllByRole('button', { name: /Generar guion con IA/i }).length,
-      ).toBeGreaterThan(0),
+        screen.getByRole('button', { name: /Generar guion con IA/i }),
+      ).toBeInTheDocument(),
     );
 
     expect(screen.getByText(/Outline listo — genera el guion con el agente guionista/i)).toBeInTheDocument();
     expect(screen.getByText(/8 puntos en el outline/i)).toBeInTheDocument();
+    expect(screen.getByText(/Outline listo — genera arriba/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Generar guion con IA/i })).toHaveLength(1);
   });
 
   it('calls scriptwriter agent and loads generated script into the editor', async () => {
@@ -165,8 +167,8 @@ describe('Workspace Guion generate script', () => {
     renderApp();
     fireEvent.click(await screen.findByRole('button', { name: /Editar Workspace/i }));
 
-    const generateButtons = await screen.findAllByRole('button', { name: /Generar guion con IA/i });
-    fireEvent.click(generateButtons[0]!);
+    const generateButton = await screen.findByRole('button', { name: /Generar guion con IA/i });
+    fireEvent.click(generateButton);
 
     await waitFor(() => {
       const runCall = fetchMock.mock.calls.find(
