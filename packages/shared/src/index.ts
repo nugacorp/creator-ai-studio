@@ -63,6 +63,7 @@ export const EPISODE_STAGES = [
   'assets',
   'audio',
   'video',
+  'subtitles',
   'thumbnail',
   'seo',
   'shorts',
@@ -96,6 +97,7 @@ export const STAGE_EXPECTED_FILES: Partial<Record<EpisodeStage, string[]>> = {
   assets: ['04-assets/scene-assets.json'],
   audio: ['05-audio/voiceover.mp3'],
   video: ['06-video/episode.mp4'],
+  subtitles: ['06-subtitles/subtitles.srt'],
   thumbnail: ['07-thumbnail/thumbnail.png'],
   seo: ['08-seo/metadata.json'],
 };
@@ -139,6 +141,8 @@ export interface EpisodeContent {
   seoTags: string[];
   thumbnailUrl?: string;
   audioUrl?: string;
+  /** SRT subtitle track generated from scenes or script timing. */
+  subtitlesSrt?: string;
   videoUrl?: string;
   shortsUrl?: string;
   youtubeVideoId?: string;

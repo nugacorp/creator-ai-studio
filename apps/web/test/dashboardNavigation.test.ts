@@ -46,7 +46,7 @@ describe('dashboardNavigation', () => {
   });
 
   it('picks workspace tab from production status', () => {
-    expect(workspaceTabForProject(base({ status: 'Edición' }), 'en-produccion')).toBe('video');
+    expect(workspaceTabForProject(base({ status: 'Edición' }), 'en-produccion')).toBe('subtitulos');
     expect(workspaceTabForProject(base({ status: 'Miniatura' }), 'en-produccion')).toBe('thumbnail');
   });
 });

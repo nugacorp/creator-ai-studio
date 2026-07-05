@@ -139,6 +139,20 @@ export async function loadAuthenticatedMediaUrl(assetPath: string): Promise<stri
   return URL.createObjectURL(blob);
 }
 
+/** Map legacy narration paths to the authenticated files endpoint. */
+export function resolveEpisodeMediaUrl(episodeId: string, url: string | undefined): string | null {
+  if (!url?.trim()) return null;
+  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http')) return url;
+  if (url.includes(`/episodes/${episodeId}/files/`)) return url;
+  if (url.includes('/api/episodes/audio/') || (url.includes('narration.') && !url.includes('/files/'))) {
+    return `/api/episodes/${episodeId}/files/audio`;
+  }
+  if (url.includes('/api/episodes/media/video')) {
+    return `/api/episodes/${episodeId}/files/video`;
+  }
+  return url;
+}
+
 export async function fetchEpisodes(): Promise<EpisodeSummary[]> {
   return apiFetch<EpisodeSummary[]>('/episodes');
 }
@@ -196,6 +210,17 @@ export async function generateSceneImages(
       ...(options?.force ? { force: true } : {}),
       ...(options?.skipLlmRefine ? { skipLlmRefine: true } : {}),
     }),
+  });
+}
+
+export async function generateSubtitles(
+  episodeId: string,
+  options?: { force?: boolean },
+): Promise<{ subtitlesSrt: string; skipped?: boolean }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/subtitles/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options?.force ? { force: true } : {}),
   });
 }
 

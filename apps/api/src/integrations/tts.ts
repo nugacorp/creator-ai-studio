@@ -5,7 +5,7 @@ import { areMocksAllowed } from '../config/mocks.js';
 import { getSettings } from '../settings/store.js';
 import { synthesizeSpeech } from './elevenlabs.js';
 import { synthesizeWithPiper } from './piper.js';
-import { withProvider } from '../ai/router.js';
+import { episodeFileUrl } from '../media/media-urls.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -41,6 +41,7 @@ export interface TtsRequest {
   voiceId?: string;
   provider?: TtsProvider;
   saveDir?: string;
+  episodeId?: string;
 }
 
 export interface TtsResponse {
@@ -55,11 +56,14 @@ export async function synthesizeEpisodeSpeech(req: TtsRequest): Promise<TtsRespo
   const provider = req.provider ?? settings.ttsProvider ?? 'elevenlabs';
 
   if (provider === 'elevenlabs') {
-    const result = await synthesizeSpeech(req.text, req.voiceId, { saveDir: req.saveDir });
+    const result = await synthesizeSpeech(req.text, req.voiceId, {
+      saveDir: req.saveDir,
+      episodeId: req.episodeId,
+    });
     if (result.isDemo && req.saveDir && areMocksAllowed()) {
       const savedPath = await writeDemoSilentAudio(req.saveDir);
       return {
-        audioUrl: '/api/episodes/audio/narration.mp3',
+        audioUrl: req.episodeId ? episodeFileUrl(req.episodeId, 'audio') : '',
         isDemo: true,
         provider: 'elevenlabs',
         savedPath,
@@ -69,7 +73,10 @@ export async function synthesizeEpisodeSpeech(req: TtsRequest): Promise<TtsRespo
   }
 
   if (provider === 'piper') {
-    const result = await synthesizeWithPiper(req.text, { saveDir: req.saveDir });
+    const result = await synthesizeWithPiper(req.text, {
+      saveDir: req.saveDir,
+      episodeId: req.episodeId,
+    });
     return { ...result, provider: 'piper', audioUrl: result.audioUrl || '' };
   }
 
@@ -87,7 +94,7 @@ export async function synthesizeEpisodeSpeech(req: TtsRequest): Promise<TtsRespo
         const filePath = pathMod.join(req.saveDir, 'narration.mp3');
         await writeFile(filePath, Buffer.from(match[1], 'base64'));
         return {
-          audioUrl: '/api/episodes/audio/narration.mp3',
+          audioUrl: req.episodeId ? episodeFileUrl(req.episodeId, 'audio') : '',
           isDemo: false,
           provider: 'gemini',
           savedPath: filePath,

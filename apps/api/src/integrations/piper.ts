@@ -1,5 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { episodeFileUrl } from '../media/media-urls.js';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -34,7 +35,7 @@ export function isPiperAvailable(): boolean {
 /** Synthesize speech with Piper (CPU, no GPU). Requires PIPER_BIN + PIPER_MODEL on the server. */
 export async function synthesizeWithPiper(
   text: string,
-  options?: { saveDir?: string; voiceHint?: string },
+  options?: { saveDir?: string; voiceHint?: string; episodeId?: string },
 ): Promise<PiperResult> {
   const model = piperModel();
   if (!model || !existsSync(model)) {
@@ -77,7 +78,7 @@ export async function synthesizeWithPiper(
         { timeout: 60_000 },
       );
       return {
-        audioUrl: '/api/episodes/audio/narration.mp3',
+        audioUrl: options.episodeId ? episodeFileUrl(options.episodeId, 'audio') : '',
         isDemo: false,
         savedPath: mp3Path,
       };
@@ -86,7 +87,7 @@ export async function synthesizeWithPiper(
       const { copyFile } = await import('node:fs/promises');
       await copyFile(outFile, dest);
       return {
-        audioUrl: '/api/episodes/audio/narration.wav',
+        audioUrl: options.episodeId ? episodeFileUrl(options.episodeId, 'audio') : '',
         isDemo: false,
         savedPath: dest,
       };

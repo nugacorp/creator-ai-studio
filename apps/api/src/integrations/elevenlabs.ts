@@ -2,6 +2,7 @@ import process from 'node:process';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { getSecret } from '../secrets/resolver.js';
+import { episodeFileUrl } from '../media/media-urls.js';
 import { chunkTextForTts, prepareScriptForTts } from '../media/script-for-tts.js';
 
 const execFileAsync = promisify(execFile);
@@ -121,7 +122,7 @@ async function concatMp3Buffers(buffers: Buffer[], saveDir?: string): Promise<Bu
 export async function synthesizeSpeech(
   text: string,
   voiceId?: string,
-  options?: { saveDir?: string },
+  options?: { saveDir?: string; episodeId?: string },
 ): Promise<ElevenLabsResult> {
   const apiKey = await getSecret('ELEVENLABS_API_KEY');
   const voice =
@@ -157,7 +158,7 @@ export async function synthesizeSpeech(
     const filePath = path.join(options.saveDir, 'narration.mp3');
     await writeFile(filePath, buffer);
     return {
-      audioUrl: `/api/episodes/audio/narration.mp3`,
+      audioUrl: options.episodeId ? episodeFileUrl(options.episodeId, 'audio') : '',
       isDemo: false,
       savedPath: filePath,
     };

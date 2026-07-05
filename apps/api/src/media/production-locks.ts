@@ -30,6 +30,7 @@ export function stagesToInvalidate(
     pending.add('storyboard');
     pending.add('assets');
     pending.add('audio');
+    pending.add('subtitles');
     pending.add('video');
     pending.add('shorts');
     pending.add('seo');
@@ -37,11 +38,18 @@ export function stagesToInvalidate(
 
   if (sceneContentSignature(before.scenes) !== sceneContentSignature(after.scenes)) {
     pending.add('assets');
+    pending.add('subtitles');
     pending.add('video');
     pending.add('shorts');
   }
 
   if ((before.audioUrl ?? '') !== (after.audioUrl ?? '')) {
+    pending.add('subtitles');
+    pending.add('video');
+    pending.add('shorts');
+  }
+
+  if ((before.subtitlesSrt ?? '') !== (after.subtitlesSrt ?? '')) {
     pending.add('video');
     pending.add('shorts');
   }
@@ -87,6 +95,10 @@ export function hasAudioFile(episodeDir: string): boolean {
 
 export function hasVideoFile(episodeDir: string): boolean {
   return existsSync(path.join(episodeDir, '06-video', 'episode.mp4'));
+}
+
+export function hasSubtitlesFile(episodeDir: string): boolean {
+  return existsSync(path.join(episodeDir, '06-subtitles', 'subtitles.srt'));
 }
 
 export function hasThumbnailFile(episodeDir: string): boolean {

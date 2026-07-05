@@ -21,6 +21,7 @@ describe('production-locks', () => {
     expect(stages).toContain('storyboard');
     expect(stages).toContain('assets');
     expect(stages).toContain('audio');
+    expect(stages).toContain('subtitles');
   });
 
   it('does not invalidate assets when only imageUrl changes', () => {

@@ -290,6 +290,16 @@ export default function ProjectPipelinePanel({
             Editar contenido
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
+          {currentStep.column === 'Edición' && (
+            <button
+              type="button"
+              onClick={() => onGoToTab('subtitulos')}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-yellow-500/30 text-xs text-yellow-300 hover:text-yellow-200 cursor-pointer"
+            >
+              Subtítulos
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {activeRun && (

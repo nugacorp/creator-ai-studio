@@ -25,9 +25,20 @@ import {
   AudioLines,
   Download,
   AlertCircle,
-  Plus
+  Plus,
+  Subtitles,
+  CheckCircle2,
 } from 'lucide-react';
-import { VideoProject, Scene } from '../types';
+import { VideoProject, Scene, ProjectStatus } from '../types';
+import type { WorkspaceTab } from '../lib/dashboardNavigation';
+import {
+  aggregateStageStatus,
+  stagesForTab,
+  STAGE_STATUS_LABEL,
+  STAGE_STATUS_PILL,
+  validateTabForApproval,
+  shouldAdvanceKanban,
+} from '../lib/workspaceStages';
 import SceneImage from './SceneImage';
 import {
   aiGenerateImage,
@@ -35,24 +46,51 @@ import {
   aiSeo,
   aiTts,
   fetchElevenLabsVoices,
+  fetchEpisodeDetail,
   generateSceneImages,
   generateStoryboardFromScript,
+  generateSubtitles,
+  loadAuthenticatedMediaUrl,
+  resolveEpisodeMediaUrl,
   updateStageStatus,
   type ElevenLabsVoice,
 } from '../api';
-import type { EpisodeStage } from '@creator-ai-studio/shared';
+import type { EpisodeStage, EpisodeStageStatus } from '@creator-ai-studio/shared';
 
 interface WorkspaceViewProps {
   project: VideoProject;
   onUpdateProject: (updated: VideoProject) => void;
-  initialTab?: 'guion' | 'narracion' | 'escenas' | 'video' | 'thumbnail' | 'seo' | 'publicacion' | 'analytics';
-  forcedTab?: 'guion' | 'narracion' | 'escenas' | 'video' | 'thumbnail' | 'seo' | 'publicacion' | 'analytics';
+  initialTab?: WorkspaceTab;
+  forcedTab?: WorkspaceTab;
+  stageRefreshToken?: number;
+  onMoveProjectStatus?: (id: string, status: ProjectStatus) => Promise<void>;
 }
 
-export default function WorkspaceView({ project, onUpdateProject, initialTab, forcedTab }: WorkspaceViewProps) {
-  const [activeTab, setActiveTab] = useState<
-    'guion' | 'narracion' | 'escenas' | 'video' | 'thumbnail' | 'seo' | 'publicacion' | 'analytics'
-  >(initialTab ?? 'guion');
+const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: typeof FileText }[] = [
+  { id: 'guion', label: 'Guion', icon: FileText },
+  { id: 'narracion', label: 'Narración', icon: Volume2 },
+  { id: 'escenas', label: 'Escenas', icon: ImageIcon },
+  { id: 'subtitulos', label: 'Subtítulos', icon: Subtitles },
+  { id: 'video', label: 'Video / Timeline', icon: Play },
+  { id: 'thumbnail', label: 'Thumbnail', icon: Layers },
+  { id: 'seo', label: 'SEO', icon: Sparkles },
+  { id: 'publicacion', label: 'Publicación', icon: Clock },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+];
+
+export default function WorkspaceView({
+  project,
+  onUpdateProject,
+  initialTab,
+  forcedTab,
+  stageRefreshToken = 0,
+  onMoveProjectStatus,
+}: WorkspaceViewProps) {
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialTab ?? 'guion');
+  const [stageStatuses, setStageStatuses] = useState<Map<EpisodeStage, EpisodeStageStatus>>(
+    new Map(),
+  );
+  const [approvingTab, setApprovingTab] = useState<WorkspaceTab | null>(null);
   
   // General status
   const [isProcessing, setIsProcessing] = useState(false);
@@ -68,6 +106,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
   const [selectedVoice, setSelectedVoice] = useState('JBFqnCBsd6RMkjVDRZzb');
   const [elevenVoices, setElevenVoices] = useState<ElevenLabsVoice[]>([]);
   const [audioBase64, setAudioBase64] = useState<string | null>(null);
+  const [audioPlaybackUrl, setAudioPlaybackUrl] = useState<string | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -83,6 +122,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
         'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=600',
     );
     setSeoDescription(project.seoDescription);
+    setSubtitlesSrt(project.subtitlesSrt ?? '');
     if (project.audioUrl) setAudioBase64(project.audioUrl);
     if (initialTab) setActiveTab(initialTab);
   }, [
@@ -93,12 +133,52 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
     project.thumbnailUrl,
     project.audioUrl,
     project.seoDescription,
+    project.subtitlesSrt,
     initialTab,
   ]);
 
   useEffect(() => {
     if (forcedTab) setActiveTab(forcedTab);
   }, [forcedTab]);
+
+  useEffect(() => {
+    audioRef.current = null;
+    setIsPlayingAudio(false);
+
+    if (!audioBase64 || audioBase64 === 'demo_active') {
+      setAudioPlaybackUrl(null);
+      return;
+    }
+
+    if (audioBase64.startsWith('data:') || audioBase64.startsWith('blob:')) {
+      setAudioPlaybackUrl(audioBase64);
+      return;
+    }
+
+    const resolved = resolveEpisodeMediaUrl(project.id, audioBase64);
+    if (resolved?.startsWith('/')) {
+      let objectUrl: string | null = null;
+      let cancelled = false;
+      void loadAuthenticatedMediaUrl(resolved)
+        .then(url => {
+          if (cancelled) {
+            if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+            return;
+          }
+          objectUrl = url;
+          setAudioPlaybackUrl(url);
+        })
+        .catch(() => {
+          if (!cancelled) setAudioPlaybackUrl(null);
+        });
+      return () => {
+        cancelled = true;
+        if (objectUrl?.startsWith('blob:')) URL.revokeObjectURL(objectUrl);
+      };
+    }
+
+    setAudioPlaybackUrl(`data:audio/wav;base64,${audioBase64}`);
+  }, [audioBase64, project.id]);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(project.scenes[0]?.id || null);
 
   // Thumbnail State
@@ -113,46 +193,34 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
   const [seoDescription, setSeoDescription] = useState(project.seoDescription);
   const [seoTags, setSeoTags] = useState<string[]>(project.seoTags);
 
+  // Subtitles state
+  const [subtitlesSrt, setSubtitlesSrt] = useState(project.subtitlesSrt ?? '');
+
+  useEffect(() => {
+    let active = true;
+    void fetchEpisodeDetail(project.id)
+      .then(detail => {
+        if (!active) return;
+        const map = new Map<EpisodeStage, EpisodeStageStatus>();
+        for (const s of detail.stages) map.set(s.stage, s.status);
+        setStageStatuses(map);
+        if (detail.content.subtitlesSrt) setSubtitlesSrt(detail.content.subtitlesSrt);
+      })
+      .catch(() => {
+        // non-blocking — badges fall back to pending
+      });
+    return () => {
+      active = false;
+    };
+  }, [project.id, stageRefreshToken]);
+
   // Timeline playback state (Video Tab)
   const [timelineProgress, setTimelineProgress] = useState(0);
   const [isPlayingTimeline, setIsPlayingTimeline] = useState(false);
   const timelineIntervalRef = useRef<any>(null);
 
   // Sync state changes back to parent
-  const STAGE_BY_TAB: Partial<
-    Record<typeof activeTab, EpisodeStage | EpisodeStage[]>
-  > = {
-    guion: 'script',
-    escenas: ['storyboard', 'assets'],
-    narracion: 'audio',
-    video: 'video',
-    thumbnail: 'thumbnail',
-    seo: 'seo',
-  };
-
-  const handleApproveSection = async () => {
-    const stages = STAGE_BY_TAB[activeTab];
-    if (!stages) {
-      triggerFeedback('error', 'No hay etapa de producción para aprobar en esta pestaña.');
-      return;
-    }
-    handleSaveChanges();
-    try {
-      const list = Array.isArray(stages) ? stages : [stages];
-      for (const stage of list) {
-        await updateStageStatus(project.id, stage, 'completed');
-      }
-      triggerFeedback(
-        'success',
-        `✓ Sección aprobada — el pipeline no regenerará ${list.join(' / ')} hasta que edites el contenido`,
-      );
-    } catch (err) {
-      console.error(err);
-      triggerFeedback('error', 'No se pudo aprobar la sección');
-    }
-  };
-
-  const handleSaveChanges = () => {
+  const persistProject = (patch: Partial<VideoProject> = {}) => {
     onUpdateProject({
       ...project,
       script: scriptText,
@@ -161,9 +229,94 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
       thumbnailUrl,
       seoTitles,
       seoDescription,
-      seoTags
+      seoTags,
+      subtitlesSrt,
+      ...patch,
     });
+  };
+
+  const handleApproveSection = async (tab: WorkspaceTab = activeTab) => {
+    const stages = stagesForTab(tab);
+    const validation = validateTabForApproval(tab, project, {
+      subtitlesSrt,
+      audioReady: Boolean(audioBase64 && audioBase64 !== 'demo_active'),
+    });
+    if (!validation.ok) {
+      triggerFeedback('error', validation.message ?? 'Completa el contenido antes de aprobar.');
+      return;
+    }
+
+    persistProject();
+    setApprovingTab(tab);
+    try {
+      for (const stage of stages) {
+        await updateStageStatus(project.id, stage, 'completed');
+        setStageStatuses(prev => new Map(prev).set(stage, 'completed'));
+      }
+      const advance = shouldAdvanceKanban(tab, project.status);
+      if (advance && onMoveProjectStatus) {
+        await onMoveProjectStatus(project.id, advance);
+      }
+      triggerFeedback(
+        'success',
+        advance
+          ? `✓ Sección aprobada — proyecto avanzado a «${advance}»`
+          : `✓ Sección aprobada — el pipeline no regenerará esta etapa hasta que edites el contenido`,
+      );
+    } catch (err) {
+      console.error(err);
+      triggerFeedback('error', 'No se pudo aprobar la sección');
+    } finally {
+      setApprovingTab(null);
+    }
+  };
+
+  const handleSaveChanges = () => {
+    persistProject();
     triggerFeedback('success', '✓ Cambios guardados con éxito');
+  };
+
+  const renderSectionFooter = (tab: WorkspaceTab) => {
+    const status = aggregateStageStatus(stagesForTab(tab), stageStatuses);
+    const validation = validateTabForApproval(tab, project, {
+      subtitlesSrt,
+      audioReady: Boolean(audioBase64 && audioBase64 !== 'demo_active'),
+    });
+    const isApproving = approvingTab === tab;
+
+    return (
+      <div className="mt-6 pt-4 border-t border-[rgba(255,255,255,0.05)] flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider font-mono">
+            Estado de la sección
+          </span>
+          <span
+            className={`rounded-full border px-2.5 py-0.5 text-[10px] font-mono uppercase ${STAGE_STATUS_PILL[status]}`}
+          >
+            {STAGE_STATUS_LABEL[status]}
+          </span>
+          {status === 'completed' && (
+            <span className="text-[10px] text-slate-500">
+              Puedes seguir editando; al guardar se invalidarán etapas dependientes.
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          disabled={isApproving || !validation.ok}
+          title={validation.ok ? undefined : validation.message}
+          onClick={() => void handleApproveSection(tab)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 disabled:opacity-40 text-emerald-300 border border-emerald-800/40 text-xs font-bold transition-all cursor-pointer"
+        >
+          {isApproving ? (
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          ) : status === 'completed' ? (
+            <CheckCircle2 className="w-3.5 h-3.5" />
+          ) : null}
+          {status === 'completed' ? 'Re-aprobar sección' : 'Aprobar sección'}
+        </button>
+      </div>
+    );
   };
 
   const triggerFeedback = (type: 'success' | 'error', text: string) => {
@@ -217,12 +370,6 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
         if (data.generated > 0) generated += data.generated;
       }
       triggerFeedback('success', `✓ ${generated} imagen(es) generada(s)`);
-      try {
-        await updateStageStatus(project.id, 'storyboard', 'completed');
-        await updateStageStatus(project.id, 'assets', 'completed');
-      } catch {
-        // non-blocking
-      }
     } catch (err) {
       console.error(err);
       triggerFeedback(
@@ -305,12 +452,13 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
       return;
     }
 
-    if (!audioRef.current && audioBase64) {
-      const src = audioBase64.startsWith('data:') || audioBase64.startsWith('http') || audioBase64.startsWith('/')
-        ? audioBase64
-        : `data:audio/wav;base64,${audioBase64}`;
-      audioRef.current = new Audio(src);
+    if (!audioRef.current && audioPlaybackUrl) {
+      audioRef.current = new Audio(audioPlaybackUrl);
       audioRef.current.onended = () => setIsPlayingAudio(false);
+    }
+
+    if (audioRef.current && audioRef.current.src !== audioPlaybackUrl && audioPlaybackUrl) {
+      audioRef.current.src = audioPlaybackUrl;
     }
 
     if (audioRef.current) {
@@ -356,6 +504,27 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
     } catch (err) {
       console.error(err);
       triggerFeedback('error', 'Error al optimizar SEO');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleGenerateSubtitles = async () => {
+    setIsProcessing(true);
+    setProcessingMessage('Generando subtítulos desde escenas y guion…');
+    try {
+      const data = await generateSubtitles(project.id);
+      if (data.subtitlesSrt) {
+        setSubtitlesSrt(data.subtitlesSrt);
+        persistProject({ subtitlesSrt: data.subtitlesSrt });
+        triggerFeedback(
+          'success',
+          data.skipped ? 'Subtítulos ya existentes — revisa y aprueba' : '✓ Subtítulos SRT generados',
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      triggerFeedback('error', 'No se pudieron generar subtítulos');
     } finally {
       setIsProcessing(false);
     }
@@ -425,14 +594,6 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
 
         <div className="flex items-center gap-3">
           <button
-            type="button"
-            onClick={() => void handleApproveSection()}
-            className="px-4 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-800/40 text-xs font-bold transition-all cursor-pointer"
-            title="Bloquea esta sección: el pipeline no la regenerará hasta que edites el contenido"
-          >
-            Aprobar sección
-          </button>
-          <button
             onClick={handleSaveChanges}
             className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-950/20 active:scale-98 cursor-pointer"
           >
@@ -443,22 +604,14 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
 
       {/* Tabs list */}
       <div className="flex items-center gap-1 border-b border-[rgba(255,255,255,0.05)] overflow-x-auto pb-1 scrollbar-none">
-        {[
-          { id: 'guion', label: 'Guion', icon: FileText },
-          { id: 'narracion', label: 'Narración', icon: Volume2 },
-          { id: 'escenas', label: 'Escenas', icon: ImageIcon },
-          { id: 'video', label: 'Video / Timeline', icon: Play },
-          { id: 'thumbnail', label: 'Thumbnail', icon: Layers },
-          { id: 'seo', label: 'SEO', icon: Sparkles },
-          { id: 'publicacion', label: 'Publicación', icon: Clock },
-          { id: 'analytics', label: 'Analytics', icon: BarChart3 }
-        ].map(tab => {
+        {WORKSPACE_TABS.map(tab => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
+          const tabStatus = aggregateStageStatus(stagesForTab(tab.id), stageStatuses);
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-semibold transition-all border-b-2 whitespace-nowrap cursor-pointer ${
                 isActive
                   ? 'border-indigo-500 bg-indigo-950/20 text-indigo-300'
@@ -467,6 +620,11 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
             >
               <Icon className="w-3.5 h-3.5" />
               <span>{tab.label}</span>
+              <span
+                className={`text-[8px] font-mono uppercase px-1.5 py-0.5 rounded border ${STAGE_STATUS_PILL[tabStatus]}`}
+              >
+                {STAGE_STATUS_LABEL[tabStatus]}
+              </span>
             </button>
           );
         })}
@@ -572,6 +730,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
 
           </div>
         )}
+        {activeTab === 'guion' && renderSectionFooter('guion')}
 
         {/* 2. NARRACION PANEL */}
         {activeTab === 'narracion' && (
@@ -624,10 +783,15 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
                     <AudioLines className="w-4 h-4 animate-bounce" />
-                    <span>✓ Voz narrada generada con éxito ({selectedVoice})</span>
+                    <span>
+                      {audioPlaybackUrl
+                        ? `✓ Voz narrada generada con éxito (${selectedVoice})`
+                        : 'Cargando audio…'}
+                    </span>
                   </div>
                 </div>
 
+                {audioPlaybackUrl && (
                 <div className="flex items-center gap-4">
                   <button
                     onClick={togglePlayVoice}
@@ -640,10 +804,12 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
                     <div className="text-[10px] text-emerald-300/80 mt-0.5">Hz: 24000 (PCM 16-bit) • Haz click para reproducir</div>
                   </div>
                 </div>
+                )}
               </div>
             )}
           </div>
         )}
+        {activeTab === 'narracion' && renderSectionFooter('narracion')}
 
         {/* 3. ESCENAS PANEL */}
         {activeTab === 'escenas' && (
@@ -823,6 +989,43 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
             )}
           </div>
         )}
+        {activeTab === 'escenas' && renderSectionFooter('escenas')}
+
+        {/* 3b. SUBTITULOS PANEL */}
+        {activeTab === 'subtitulos' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between pb-3 border-b border-[rgba(255,255,255,0.05)]">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white">Subtítulos (SRT)</h4>
+                <p className="text-[11px] text-[#8B949E] max-w-xl">
+                  Genera cues sincronizados desde las escenas (duración por toma) o párrafos del guion.
+                  Edita el texto antes de aprobar.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleGenerateSubtitles()}
+                disabled={isProcessing || (!scriptText.trim() && scenes.length === 0)}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Generar subtítulos
+              </button>
+            </div>
+            <textarea
+              value={subtitlesSrt}
+              onChange={e => setSubtitlesSrt(e.target.value)}
+              className="w-full h-80 bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-xl p-4 text-xs text-[#E6EDF2] leading-relaxed focus:outline-none focus:border-indigo-500/40 resize-none font-mono"
+              placeholder="1&#10;00:00:00,000 --> 00:00:05,000&#10;Primera línea de subtítulo…"
+            />
+            {subtitlesSrt.trim() && (
+              <p className="text-[10px] text-slate-500 font-mono">
+                {subtitlesSrt.split(/\n\n+/).filter(Boolean).length} cue(s) · formato SRT
+              </p>
+            )}
+          </div>
+        )}
+        {activeTab === 'subtitulos' && renderSectionFooter('subtitulos')}
 
         {/* 4. VIDEO TAB */}
         {activeTab === 'video' && (
@@ -1011,6 +1214,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
             </div>
           </div>
         )}
+        {activeTab === 'video' && renderSectionFooter('video')}
 
         {/* 5. THUMBNAIL TAB */}
         {activeTab === 'thumbnail' && (
@@ -1157,6 +1361,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
             </div>
           </div>
         )}
+        {activeTab === 'thumbnail' && renderSectionFooter('thumbnail')}
 
         {/* 6. SEO TAB */}
         {activeTab === 'seo' && (
@@ -1226,6 +1431,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
             </div>
           </div>
         )}
+        {activeTab === 'seo' && renderSectionFooter('seo')}
 
         {/* 7. PUBLICACION TAB */}
         {activeTab === 'publicacion' && (
@@ -1290,6 +1496,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
             </div>
           </div>
         )}
+        {activeTab === 'publicacion' && renderSectionFooter('publicacion')}
 
         {/* 8. ANALYTICS TAB */}
         {activeTab === 'analytics' && (
@@ -1318,6 +1525,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab, fo
             )}
           </div>
         )}
+        {activeTab === 'analytics' && renderSectionFooter('analytics')}
 
       </div>
     </div>

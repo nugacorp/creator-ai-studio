@@ -29,6 +29,7 @@ export const EPISODE_STAGE_DIRECTORIES = [
   '04-assets',
   '05-audio',
   '06-video',
+  '06-subtitles',
   '07-thumbnail',
   '08-seo',
   '09-shorts',

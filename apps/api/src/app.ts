@@ -135,7 +135,8 @@ function registerRoutes(
       reply.code(404);
       return { error: 'episode not found' };
     }
-    return detail;
+    const { normalizeEpisodeContentUrls } = await import('./media/media-urls.js');
+    return normalizeEpisodeContentUrls(detail);
   });
 
   app.get(route(prefix, '/episodes/:id/assets'), async (request, reply) => {
@@ -549,8 +550,9 @@ function registerRoutes(
           hasAudioFile(episodeDir) &&
           episode.content.audioUrl
         ) {
+          const { episodeFileUrl } = await import('./media/media-urls.js');
           return {
-            audioUrl: episode.content.audioUrl,
+            audioUrl: episodeFileUrl(body.episodeId, 'audio'),
             skipped: true,
             provider: 'elevenlabs',
             isDemo: false,
@@ -563,6 +565,7 @@ function registerRoutes(
         text: body.text ?? '',
         voiceId: body.voiceId,
         saveDir,
+        episodeId: body.episodeId,
       });
       // FASE 8: a "demo" TTS response means the provider is not configured.
       // When mocks are blocked (production), fail loudly instead of silently
@@ -581,12 +584,15 @@ function registerRoutes(
         }
       }
       if (body.episodeId && (result.savedPath || (result.audioUrl && !result.isDemo))) {
+        const { episodeFileUrl } = await import('./media/media-urls.js');
+        const audioUrl = episodeFileUrl(body.episodeId, 'audio');
         const episode = await storage.getEpisode(body.episodeId);
         if (episode) {
           await storage.updateEpisode(body.episodeId, {
-            content: { ...episode.content, audioUrl: result.audioUrl },
+            content: { ...episode.content, audioUrl },
           });
         }
+        return { ...result, audioUrl };
       }
       return result;
     } catch (err) {
@@ -613,7 +619,9 @@ function registerRoutes(
     }
     const { isStageCompleted, hasVideoFile } = await import('./media/production-locks.js');
     if (!body.force && isStageCompleted(episode, 'video') && hasVideoFile(dir) && episode.content.videoUrl) {
-      return { ok: true, skipped: true, videoUrl: episode.content.videoUrl };
+      const { episodeFileUrl, normalizeEpisodeContentUrls } = await import('./media/media-urls.js');
+      const normalized = normalizeEpisodeContentUrls(episode).content.videoUrl;
+      return { ok: true, skipped: true, videoUrl: normalized ?? episodeFileUrl(id, 'video') };
     }
     const { renderEpisodeVideo } = await import('./media/render.js');
     const sceneUrls = episode.content.scenes.map(s => s.imageUrl).filter(Boolean);
@@ -622,11 +630,55 @@ function registerRoutes(
       thumbnailUrl: episode.content.thumbnailUrl,
     });
     if (result.ok) {
+      const { episodeFileUrl } = await import('./media/media-urls.js');
       await storage.updateEpisode(id, {
-        content: { videoUrl: '/api/episodes/media/video' },
+        content: { videoUrl: episodeFileUrl(id, 'video') },
       });
     }
     return result;
+  });
+
+  app.post(route(prefix, '/episodes/:id/subtitles/generate'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { force?: boolean };
+    const episode = await storage.getEpisode(id);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'episodio archivado — restáuralo desde Drive para editar' };
+    }
+    const { isStageCompleted, hasSubtitlesFile } = await import('./media/production-locks.js');
+    if (
+      !body.force &&
+      isStageCompleted(episode, 'subtitles') &&
+      hasSubtitlesFile(dir) &&
+      episode.content.subtitlesSrt?.trim()
+    ) {
+      return { ok: true, skipped: true, subtitlesSrt: episode.content.subtitlesSrt };
+    }
+    const script = episode.content.script?.trim();
+    if (!script && episode.content.scenes.length === 0) {
+      reply.code(400);
+      return {
+        error: 'no_source',
+        message: 'Necesitas un guion o escenas para generar subtítulos.',
+      };
+    }
+    const { generateSubtitlesSrt, writeSubtitlesFile } = await import('./media/subtitles.js');
+    const srt = generateSubtitlesSrt(episode.content);
+    if (!srt.trim()) {
+      reply.code(400);
+      return { error: 'empty_subtitles', message: 'No se pudo derivar texto para subtítulos.' };
+    }
+    await writeSubtitlesFile(dir, srt);
+    const updated = await storage.updateEpisode(id, {
+      content: { subtitlesSrt: srt },
+    });
+    return { ok: true, subtitlesSrt: srt, episode: updated };
   });
 
   app.post(route(prefix, '/episodes/:id/storyboard/from-script'), async (request, reply) => {

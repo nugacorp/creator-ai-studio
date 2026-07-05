@@ -69,6 +69,7 @@ function episodeToProject(episode: EpisodeSummary, content?: EpisodeDetail['cont
     seoTags: c?.seoTags ?? [],
     thumbnailUrl: c?.thumbnailUrl,
     audioUrl: c?.audioUrl,
+    subtitlesSrt: c?.subtitlesSrt,
     videoUrl: c?.videoUrl,
     scheduledAt: c?.scheduledAt,
   };
@@ -271,6 +272,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
           seoTags: updated.seoTags,
           thumbnailUrl: updated.thumbnailUrl,
           audioUrl: updated.audioUrl,
+          subtitlesSrt: updated.subtitlesSrt,
           scheduledAt: updated.scheduledAt,
           duration: updated.duration,
         },
@@ -466,6 +468,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                   onUpdateProject={handleUpdateProject}
                   initialTab={workspaceInitialTab ?? undefined}
                   forcedTab={workspaceForcedTab}
+                  stageRefreshToken={workspaceRefreshToken}
+                  onMoveProjectStatus={handleMoveProjectStatus}
                 />
               </div>
             ) : (

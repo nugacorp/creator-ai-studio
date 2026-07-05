@@ -12,6 +12,7 @@ export type WorkspaceTab =
   | 'guion'
   | 'narracion'
   | 'escenas'
+  | 'subtitulos'
   | 'video'
   | 'thumbnail'
   | 'seo'
@@ -71,7 +72,7 @@ export function workspaceTabForProject(project: VideoProject, section: Dashboard
   if (section === 'miniaturas-listas') return 'thumbnail';
   if (section === 'en-produccion') {
     if (project.status === 'Miniatura') return 'thumbnail';
-    if (project.status === 'Edición') return 'video';
+    if (project.status === 'Edición') return 'subtitulos';
     return 'narracion';
   }
   return 'guion';

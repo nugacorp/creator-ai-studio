@@ -108,7 +108,7 @@ describe('Workspace scene deletion', () => {
     renderApp('projects');
 
     fireEvent.click(await screen.findByRole('button', { name: /Editar Workspace/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /^Escenas$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Escenas/i }));
 
     const deleteButtons = await screen.findAllByTitle('Borrar escena');
     expect(deleteButtons).toHaveLength(2);

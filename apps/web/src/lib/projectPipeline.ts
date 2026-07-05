@@ -61,7 +61,7 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     agentName: 'Editor de Video',
     episodeStage: 'video',
     workspaceTab: 'video',
-    description: 'Render, timing de escenas y video final.',
+    description: 'Render, subtítulos, timing de escenas y video final.',
     relatedAgentIds: ['scene_asset_designer'],
   },
   {
