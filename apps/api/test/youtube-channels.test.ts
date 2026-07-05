@@ -1,24 +1,42 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app.js';
 import { EpisodeStorage } from '../src/storage/index.js';
+import { patchSecrets } from '../src/secrets/store.js';
+import { invalidateSecretCache } from '../src/secrets/resolver.js';
 
 describe('YouTube channels integration', () => {
   let storageDir: string;
+  let dataDir: string;
   let app: FastifyInstance;
+  let prevKey: string | undefined;
+  let prevData: string | undefined;
 
   beforeEach(async () => {
-    storageDir = await mkdtemp(path.join(tmpdir(), 'cas-yt-channels-'));
+    prevKey = process.env.CAS_SECRETS_KEY;
+    prevData = process.env.CAS_DATA_PATH;
+    dataDir = await mkdtemp(path.join(tmpdir(), 'cas-yt-data-'));
+    storageDir = path.join(dataDir, 'episodes');
+    process.env.CAS_SECRETS_KEY = 'test-master-key-for-unit-tests-32chars';
+    process.env.CAS_DATA_PATH = dataDir;
+    process.env.LOCAL_STORAGE_PATH = storageDir;
+    process.env.GOOGLE_OAUTH_CLIENT_ID = '123-test.apps.googleusercontent.com';
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'test-client-secret';
     app = buildApp({ storage: new EpisodeStorage(storageDir) });
     await app.ready();
+    vi.restoreAllMocks();
   });
 
   afterEach(async () => {
     await app.close();
-    await rm(storageDir, { recursive: true, force: true });
+    process.env.CAS_SECRETS_KEY = prevKey;
+    process.env.CAS_DATA_PATH = prevData;
+    delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+    delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    await rm(dataDir, { recursive: true, force: true });
   });
 
   it('GET /api/integrations/youtube/channels returns disconnected when OAuth is missing', async () => {
@@ -29,6 +47,66 @@ describe('YouTube channels integration', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ connected: false, channels: [] });
+  });
+
+  it('GET /api/integrations/youtube/channels refreshes on 401 and returns channels', async () => {
+    await patchSecrets({
+      googleOAuthAccessToken: 'access-expired',
+      googleOAuthRefreshToken: 'refresh-valid',
+      googleOAuthExpiresAt: String(Date.now() + 3600_000),
+      googleOAuthScopes: 'https://www.googleapis.com/auth/youtube.readonly openid email',
+      youtubeAccessToken: 'access-expired',
+    });
+    invalidateSecretCache();
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => 'Unauthorized',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: 'access-refreshed',
+          expires_in: 3600,
+          scope: 'youtube.readonly',
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'UC_test',
+              snippet: { title: 'Canal Test', thumbnails: { default: { url: 'https://x/y.jpg' } } },
+              statistics: { subscriberCount: '1000', viewCount: '5000' },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ email: 'creator@example.com' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/integrations/youtube/channels',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      connected: boolean;
+      channels: Array<{ id: string; name: string }>;
+      accountEmail?: string;
+    };
+    expect(body.connected).toBe(true);
+    expect(body.channels).toHaveLength(1);
+    expect(body.channels[0]).toMatchObject({ id: 'UC_test', name: 'Canal Test' });
+    expect(body.accountEmail).toBe('creator@example.com');
   });
 
   it('PATCH /api/settings accepts activeChannelId', async () => {

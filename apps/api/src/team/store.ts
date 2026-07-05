@@ -11,7 +11,7 @@ import type {
   TeamResponse,
   TeamRole,
 } from '@creator-ai-studio/shared';
-import { resolveStoragePath } from '../storage/index.js';
+import { resolveDataPath } from '../storage/index.js';
 
 const EMPTY_TEAM: TeamData = {
   members: [],
@@ -19,7 +19,7 @@ const EMPTY_TEAM: TeamData = {
 };
 
 function teamPath(): string {
-  return path.join(resolveStoragePath(), '..', 'team.json');
+  return path.join(resolveDataPath(), 'settings', 'team.json');
 }
 
 function avatarInitial(name: string): string {

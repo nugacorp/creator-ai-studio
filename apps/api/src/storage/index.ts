@@ -61,6 +61,23 @@ export function resolveStoragePath(): string {
   return path.resolve(process.env.LOCAL_STORAGE_PATH ?? DEFAULT_STORAGE_DIR);
 }
 
+/**
+ * Persistent data root (settings, secrets, jobs). Defaults to the parent of the
+ * episodes directory when LOCAL_STORAGE_PATH ends with `/episodes` (e.g.
+ * `/data/episodes` → `/data`). Override with CAS_DATA_PATH on the server.
+ */
+export function resolveDataPath(): string {
+  const configured = process.env.CAS_DATA_PATH?.trim();
+  if (configured) {
+    return path.resolve(configured);
+  }
+  const storage = resolveStoragePath();
+  if (path.basename(storage) === 'episodes') {
+    return path.dirname(storage);
+  }
+  return storage;
+}
+
 /** Convert a title into a URL/filesystem-friendly slug. */
 export function slugify(title: string): string {
   const slug = title

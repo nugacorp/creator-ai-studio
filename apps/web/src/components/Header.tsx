@@ -11,6 +11,8 @@ interface HeaderProps {
   setSelectedChannel: (channel: Channel) => void;
   youtubeConnected: boolean;
   channelsLoading: boolean;
+  channelsError?: string | null;
+  youtubeAccountEmail?: string | null;
   onGoToSettings?: () => void;
   onGoToMultichannel?: () => void;
   notifications: Notification[];
@@ -24,6 +26,8 @@ export default function Header({
   setSelectedChannel,
   youtubeConnected,
   channelsLoading,
+  channelsError,
+  youtubeAccountEmail,
   onGoToSettings,
   onGoToMultichannel,
   notifications,
@@ -36,6 +40,19 @@ export default function Header({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const showConnectLink = !channelsLoading && channels.length === 0 && !youtubeConnected;
+  const showChannelsError = !channelsLoading && channels.length === 0 && Boolean(channelsError);
+
+  const channelLabel = () => {
+    if (channelsLoading) return 'Cargando…';
+    if (selectedChannel?.name) return selectedChannel.name;
+    if (youtubeAccountEmail && youtubeConnected) {
+      return `Conectado como ${youtubeAccountEmail}`;
+    }
+    if (youtubeConnected) return 'Seleccionar canal';
+    if (channelsError) return 'YouTube sin canales';
+    return 'Conectar YouTube';
+  };
 
   const markAllAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -83,6 +100,13 @@ export default function Header({
               }
             }}
             disabled={channelsLoading}
+            title={
+              showConnectLink
+                ? 'Ir a Configuración → Integraciones'
+                : showChannelsError
+                  ? channelsError ?? undefined
+                  : undefined
+            }
             className="flex items-center gap-2 md:gap-3 px-3 py-1.5 rounded-xl bg-[#15191E] border border-white/10 hover:border-indigo-500/50 transition-all text-sm font-medium text-[#E6EDF2] disabled:opacity-60 disabled:cursor-default cursor-pointer"
           >
             {selectedChannel ? (
@@ -96,9 +120,7 @@ export default function Header({
               <span className="text-lg md:text-xl shrink-0">📺</span>
             )}
             <span className="truncate max-w-[100px] sm:max-w-[180px] md:max-w-none">
-              {channelsLoading
-                ? 'Cargando…'
-                : selectedChannel?.name ?? (youtubeConnected ? 'Seleccionar canal' : 'Sin canales')}
+              {channelLabel()}
             </span>
             {selectedChannel && (
               <span className="hidden sm:inline text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 font-semibold border border-indigo-800/40">
@@ -108,8 +130,11 @@ export default function Header({
             {channels.length > 0 && (
               <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${showChannelsDropdown ? 'rotate-180' : ''}`} />
             )}
-            {!channelsLoading && channels.length === 0 && !youtubeConnected && (
+            {showConnectLink && (
               <Link2 className="w-4 h-4 text-indigo-400 shrink-0" />
+            )}
+            {showChannelsError && (
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
             )}
           </button>
 
@@ -121,6 +146,11 @@ export default function Header({
                 <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   Canales de YouTube
                 </div>
+                {youtubeAccountEmail && (
+                  <p className="text-[10px] text-emerald-400/90 leading-relaxed">
+                    Conectado como {youtubeAccountEmail}
+                  </p>
+                )}
                 <p className="text-[10px] text-slate-500 leading-relaxed">
                   Una cuenta Google puede tener varios canales. Elige en cuál trabajar — toda la app
                   (proyectos, ideas, calendario, analytics) se filtra por este canal.

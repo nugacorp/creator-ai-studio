@@ -132,18 +132,43 @@ if [ -n "${SUPABASE_JWT_SECRET:-}" ]; then
   fi
 fi
 
-echo "=== Migrating secrets to persistent volume ==="
+echo "=== Migrating persistent data to /data volume ==="
 API_CONTAINER=$(docker ps -q -f name=api-z7b1ieqp66a7e43cywaz816w | head -1 || true)
 if [ -n "$API_CONTAINER" ]; then
   docker exec "$API_CONTAINER" sh -c '
-    if [ -f /data/secrets.enc ] && [ ! -f /data/episodes/.secrets/secrets.enc ]; then
-      mkdir -p /data/episodes/.secrets
-      cp /data/secrets.enc /data/episodes/.secrets/secrets.enc
-      echo "Migrated /data/secrets.enc -> /data/episodes/.secrets/secrets.enc"
+    set -e
+    mkdir -p /data/settings/.secrets /data/episodes /data/jobs
+
+    # Legacy secrets locations → /data/settings/.secrets/secrets.enc
+    if [ ! -f /data/settings/.secrets/secrets.enc ]; then
+      for legacy in /data/episodes/.secrets/secrets.enc /data/secrets.enc; do
+        if [ -f "$legacy" ]; then
+          cp "$legacy" /data/settings/.secrets/secrets.enc
+          echo "Migrated $legacy -> /data/settings/.secrets/secrets.enc"
+          break
+        fi
+      done
     fi
-    if [ -f /data/settings.json ] && [ ! -f /data/episodes/settings.json ]; then
-      cp /data/settings.json /data/episodes/settings.json
-      echo "Migrated settings.json into episodes volume"
+
+    # Legacy settings → /data/settings/settings.json
+    if [ ! -f /data/settings/settings.json ]; then
+      for legacy in /data/episodes/settings.json /data/settings.json; do
+        if [ -f "$legacy" ]; then
+          cp "$legacy" /data/settings/settings.json
+          echo "Migrated $legacy -> /data/settings/settings.json"
+          break
+        fi
+      done
+    fi
+
+    # Legacy channels/team at /data root
+    if [ -f /data/channels.json ] && [ ! -f /data/settings/channels.json ]; then
+      cp /data/channels.json /data/settings/channels.json
+      echo "Migrated channels.json into /data/settings/"
+    fi
+    if [ -f /data/team.json ] && [ ! -f /data/settings/team.json ]; then
+      cp /data/team.json /data/settings/team.json
+      echo "Migrated team.json into /data/settings/"
     fi
   ' || true
 fi
@@ -270,6 +295,7 @@ def inject_env(text, service, key, value, anchor):
 
 # API service runtime env.
 text = inject_env(text, "api", "CAS_PUBLIC_URL", "https://" + domain, "LOCAL_STORAGE_PATH")
+text = inject_env(text, "api", "CAS_DATA_PATH", "/data", "LOCAL_STORAGE_PATH")
 text = inject_env(text, "api", "SUPABASE_URL", supabase_url, "LOCAL_STORAGE_PATH")
 if jwt_secret:
     text = inject_env(text, "api", "SUPABASE_JWT_SECRET", jwt_secret, "SUPABASE_URL")
@@ -288,7 +314,7 @@ if cas_api_key:
 # Idempotency guard: refuse to write a compose that declares a managed key twice
 # in the same service (this is the failure the work order fixes). No secret
 # values are printed -- only the offending service/key name.
-managed = ("CAS_API_KEY", "CAS_PUBLIC_URL", "CAS_SECRETS_KEY", "GEMINI_API_KEY", "SUPABASE_URL", "SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "REDIS_URL")
+managed = ("CAS_API_KEY", "CAS_DATA_PATH", "CAS_PUBLIC_URL", "CAS_SECRETS_KEY", "GEMINI_API_KEY", "SUPABASE_URL", "SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY", "REDIS_URL")
 for service in ("api", "worker"):
     blk = find_service_block(text, service)
     if blk is None:

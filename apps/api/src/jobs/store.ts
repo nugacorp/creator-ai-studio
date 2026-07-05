@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { CreateJobInput, ProductionJob } from '@creator-ai-studio/shared';
-import { resolveStoragePath } from '../storage/index.js';
+import { resolveDataPath } from '../storage/index.js';
 import { dispatchWebhook } from '../integrations/webhooks.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,7 +14,7 @@ export function isValidJobId(id: string): boolean {
 }
 
 function jobsDir(): string {
-  return path.join(resolveStoragePath(), '..', 'jobs');
+  return path.join(resolveDataPath(), 'jobs');
 }
 
 async function ensureJobsDir(): Promise<void> {

@@ -156,7 +156,11 @@ export async function persistGoogleTokens(
     patch.googleOAuthRefreshToken = tokens.refresh_token;
   }
   if (tokens.scope) {
-    patch.googleOAuthScopes = tokens.scope;
+    const existing = (await getSecret('GOOGLE_OAUTH_SCOPES')) ?? '';
+    const merged = new Set(
+      [...existing.split(/\s+/), ...tokens.scope.split(/\s+/)].filter(Boolean),
+    );
+    patch.googleOAuthScopes = [...merged].join(' ');
   }
 
   if (purpose === 'youtube') {

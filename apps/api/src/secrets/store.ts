@@ -4,7 +4,7 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import type { SecretProvider, SecretSource, SecretStatus, SecretsPatch } from '@creator-ai-studio/shared';
-import { resolveStoragePath } from '../storage/index.js';
+import { resolveDataPath, resolveStoragePath } from '../storage/index.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
@@ -39,23 +39,33 @@ const PROVIDER_FIELDS: Record<SecretProvider, SecretStoreField[]> = {
 };
 
 function secretsDir(): string {
-  return path.join(resolveStoragePath(), '.secrets');
+  return path.join(resolveDataPath(), 'settings', '.secrets');
 }
 
 function secretsFilePath(): string {
   return path.join(secretsDir(), 'secrets.enc');
 }
 
-function legacySecretsFilePath(): string {
-  return path.join(resolveStoragePath(), '..', 'secrets.enc');
+/** Older locations that may still hold OAuth tokens on upgraded VPS instances. */
+function legacySecretsPaths(): string[] {
+  return [
+    path.join(resolveStoragePath(), '.secrets', 'secrets.enc'),
+    path.join(resolveDataPath(), 'secrets.enc'),
+    path.join(resolveStoragePath(), '..', 'secrets.enc'),
+  ];
 }
 
 async function ensureSecretsMigrated(): Promise<void> {
   const current = secretsFilePath();
-  const legacy = legacySecretsFilePath();
-  if (!existsSync(current) && existsSync(legacy)) {
-    await mkdir(secretsDir(), { recursive: true });
-    await copyFile(legacy, current);
+  if (existsSync(current)) {
+    return;
+  }
+  for (const legacy of legacySecretsPaths()) {
+    if (existsSync(legacy)) {
+      await mkdir(secretsDir(), { recursive: true });
+      await copyFile(legacy, current);
+      return;
+    }
   }
 }
 

@@ -497,6 +497,10 @@ export interface YouTubeChannelInfo {
 export interface YouTubeChannelsResponse {
   connected: boolean;
   channels: YouTubeChannelInfo[];
+  /** Google account email when OAuth tokens are valid. */
+  accountEmail?: string;
+  /** User-facing error when connected state cannot load channels. */
+  error?: string;
 }
 
 /** Disk usage snapshot for the operations dashboard. */

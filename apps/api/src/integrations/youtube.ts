@@ -1,8 +1,12 @@
 import { stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
-import { getSecret } from '../secrets/resolver.js';
-import { getValidGoogleAccessToken } from '../secrets/google-auth.js';
+import { getSecret, invalidateSecretCache } from '../secrets/resolver.js';
+import {
+  fetchGoogleAccountEmail,
+  getValidGoogleAccessToken,
+  refreshGoogleAccessTokenOrClear,
+} from '../secrets/google-auth.js';
 
 export interface YouTubeUploadResult {
   videoId: string;
@@ -119,41 +123,29 @@ export interface YouTubeChannelInfo {
 export interface YouTubeChannelsResult {
   connected: boolean;
   channels: YouTubeChannelInfo[];
+  accountEmail?: string;
+  error?: string;
 }
 
-/** List every YouTube channel the connected Google account can manage. */
-export async function fetchYouTubeChannels(): Promise<YouTubeChannelsResult> {
-  const dedicated = await getSecret('YOUTUBE_ACCESS_TOKEN');
-  const accessToken = await resolveYouTubeAccessToken();
-  if (!accessToken) {
-    return { connected: false, channels: [] };
-  }
-  if (!dedicated && !(await hasYouTubeScopes())) {
-    return { connected: false, channels: [] };
-  }
-
-  const response = await fetch(
+async function fetchChannelsFromYouTube(accessToken: string): Promise<Response> {
+  return fetch(
     'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true&maxResults=50',
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
+}
 
-  if (!response.ok) {
-    return { connected: true, channels: [] };
-  }
-
-  const data = (await response.json()) as {
-    items?: Array<{
-      id?: string;
-      snippet?: {
-        title?: string;
-        customUrl?: string;
-        thumbnails?: { default?: { url?: string }; medium?: { url?: string } };
-      };
-      statistics?: { subscriberCount?: string; viewCount?: string };
-    }>;
-  };
-
-  const channels = (data.items ?? [])
+function parseYouTubeChannelsResponse(data: {
+  items?: Array<{
+    id?: string;
+    snippet?: {
+      title?: string;
+      customUrl?: string;
+      thumbnails?: { default?: { url?: string }; medium?: { url?: string } };
+    };
+    statistics?: { subscriberCount?: string; viewCount?: string };
+  }>;
+}): YouTubeChannelInfo[] {
+  return (data.items ?? [])
     .map(item => ({
       id: item.id ?? '',
       name: item.snippet?.title ?? 'Sin nombre',
@@ -166,8 +158,74 @@ export async function fetchYouTubeChannels(): Promise<YouTubeChannelsResult> {
       customUrl: item.snippet?.customUrl,
     }))
     .filter(ch => ch.id);
+}
 
-  return { connected: true, channels };
+/** List every YouTube channel the connected Google account can manage. */
+export async function fetchYouTubeChannels(): Promise<YouTubeChannelsResult> {
+  const dedicated = await getSecret('YOUTUBE_ACCESS_TOKEN');
+  let accessToken = await resolveYouTubeAccessToken();
+  if (!accessToken) {
+    return { connected: false, channels: [] };
+  }
+  if (!dedicated && !(await hasYouTubeScopes())) {
+    return {
+      connected: false,
+      channels: [],
+      error: 'Faltan permisos de YouTube. Reconecta en Configuración → Integraciones.',
+    };
+  }
+
+  let response = await fetchChannelsFromYouTube(accessToken);
+
+  if (response.status === 401) {
+    invalidateSecretCache();
+    const refreshed =
+      (await getValidGoogleAccessToken({ forceRefresh: true })) ??
+      (await refreshGoogleAccessTokenOrClear());
+    if (!refreshed) {
+      return {
+        connected: false,
+        channels: [],
+        error: 'Sesión de YouTube expirada. Reconecta en Configuración → Integraciones.',
+      };
+    }
+    accessToken = refreshed;
+    response = await fetchChannelsFromYouTube(accessToken);
+  }
+
+  const accountEmail = await fetchGoogleAccountEmail(accessToken);
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    if (response.status === 403 && errText.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
+      return {
+        connected: false,
+        channels: [],
+        accountEmail,
+        error: 'Faltan permisos de YouTube. Pulsa Reconectar en la tarjeta YouTube.',
+      };
+    }
+    return {
+      connected: false,
+      channels: [],
+      accountEmail,
+      error: `YouTube API respondió ${response.status}. Revisa OAuth en Configuración → Integraciones.`,
+    };
+  }
+
+  const data = (await response.json()) as Parameters<typeof parseYouTubeChannelsResponse>[0];
+  const channels = parseYouTubeChannelsResponse(data);
+
+  if (channels.length === 0) {
+    return {
+      connected: true,
+      channels: [],
+      accountEmail,
+      error: 'No encontramos canales de YouTube en esta cuenta Google.',
+    };
+  }
+
+  return { connected: true, channels, accountEmail };
 }
 
 export async function uploadToYouTube(

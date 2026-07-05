@@ -3,12 +3,12 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ChannelRecord, CreateChannelInput } from '@creator-ai-studio/shared';
-import { resolveStoragePath } from '../storage/index.js';
+import { resolveDataPath } from '../storage/index.js';
 
 const DEFAULT_CHANNELS: ChannelRecord[] = [];
 
 function channelsPath(): string {
-  return path.join(resolveStoragePath(), '..', 'channels.json');
+  return path.join(resolveDataPath(), 'settings', 'channels.json');
 }
 
 async function readChannels(): Promise<ChannelRecord[]> {

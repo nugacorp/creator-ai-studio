@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AppSettings } from '@creator-ai-studio/shared';
 import { DEFAULT_PUBLISH_SCHEDULE } from '@creator-ai-studio/shared';
-import { resolveStoragePath } from '../storage/index.js';
+import { resolveDataPath, resolveStoragePath } from '../storage/index.js';
 
 const DEFAULT_SETTINGS: AppSettings = {
   ttsSampleRate: '24000',
@@ -17,10 +17,32 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 function settingsPath(): string {
-  return path.join(resolveStoragePath(), 'settings.json');
+  return path.join(resolveDataPath(), 'settings', 'settings.json');
+}
+
+function legacySettingsPaths(): string[] {
+  return [
+    path.join(resolveStoragePath(), 'settings.json'),
+    path.join(resolveDataPath(), 'settings.json'),
+  ];
+}
+
+async function ensureSettingsMigrated(): Promise<void> {
+  const current = settingsPath();
+  if (existsSync(current)) {
+    return;
+  }
+  for (const legacy of legacySettingsPaths()) {
+    if (existsSync(legacy)) {
+      await mkdir(path.dirname(current), { recursive: true });
+      await copyFile(legacy, current);
+      return;
+    }
+  }
 }
 
 export async function getSettings(): Promise<AppSettings> {
+  await ensureSettingsMigrated();
   const file = settingsPath();
   if (!existsSync(file)) {
     return { ...DEFAULT_SETTINGS };

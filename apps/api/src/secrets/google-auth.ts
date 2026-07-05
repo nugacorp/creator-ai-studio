@@ -6,35 +6,24 @@ export type GeminiAuth =
   | { mode: 'api_key'; value: string }
   | { mode: 'oauth'; accessToken: string };
 
-export async function getValidGoogleAccessToken(): Promise<string | undefined> {
-  const accessToken = await getSecret('GOOGLE_OAUTH_ACCESS_TOKEN');
-  const refreshToken = await getSecret('GOOGLE_OAUTH_REFRESH_TOKEN');
-  const expiresAtRaw = await getSecret('GOOGLE_OAUTH_EXPIRES_AT');
-
-  if (!accessToken) {
-    return undefined;
-  }
-
-  const expiresAt = expiresAtRaw ? Number(expiresAtRaw) : 0;
-  const needsRefresh = refreshToken && expiresAt > 0 && Date.now() > expiresAt - 60_000;
-
-  if (!needsRefresh) {
-    return accessToken;
-  }
-
-  const client = await getGoogleOAuthClient();
-  if (!client || !refreshToken) {
-    return accessToken;
-  }
-
-  const tokens = await refreshGoogleAccessToken({
-    refreshToken,
-    clientId: client.clientId,
-    clientSecret: client.clientSecret,
+export async function clearGoogleOAuthTokens(): Promise<void> {
+  invalidateSecretCache();
+  await patchSecrets({
+    googleOAuthAccessToken: '',
+    googleOAuthRefreshToken: '',
+    googleOAuthExpiresAt: '',
+    googleOAuthScopes: '',
+    youtubeAccessToken: '',
   });
+}
 
+async function persistRefreshedTokens(tokens: {
+  access_token?: string;
+  expires_in?: number;
+  scope?: string;
+}): Promise<string | undefined> {
   if (!tokens.access_token) {
-    return accessToken;
+    return undefined;
   }
 
   const nextExpiry = tokens.expires_in
@@ -45,10 +34,100 @@ export async function getValidGoogleAccessToken(): Promise<string | undefined> {
   await patchSecrets({
     googleOAuthAccessToken: tokens.access_token,
     googleOAuthExpiresAt: nextExpiry,
+    youtubeAccessToken: tokens.access_token,
     ...(tokens.scope ? { googleOAuthScopes: tokens.scope } : {}),
   });
 
   return tokens.access_token;
+}
+
+/** Refresh the Google access token, clearing stored OAuth on hard failure. */
+export async function refreshGoogleAccessTokenOrClear(): Promise<string | undefined> {
+  const refreshToken = await getSecret('GOOGLE_OAUTH_REFRESH_TOKEN');
+  if (!refreshToken) {
+    await clearGoogleOAuthTokens();
+    return undefined;
+  }
+
+  const client = await getGoogleOAuthClient();
+  if (!client) {
+    return undefined;
+  }
+
+  const tokens = await refreshGoogleAccessToken({
+    refreshToken,
+    clientId: client.clientId,
+    clientSecret: client.clientSecret,
+  });
+
+  if (!tokens.access_token || tokens.error) {
+    await clearGoogleOAuthTokens();
+    return undefined;
+  }
+
+  return persistRefreshedTokens(tokens);
+}
+
+export async function getValidGoogleAccessToken(options?: {
+  forceRefresh?: boolean;
+}): Promise<string | undefined> {
+  const accessToken = await getSecret('GOOGLE_OAUTH_ACCESS_TOKEN');
+  const refreshToken = await getSecret('GOOGLE_OAUTH_REFRESH_TOKEN');
+  const expiresAtRaw = await getSecret('GOOGLE_OAUTH_EXPIRES_AT');
+
+  if (!accessToken) {
+    return undefined;
+  }
+
+  const expiresAt = expiresAtRaw ? Number(expiresAtRaw) : 0;
+  const needsRefresh =
+    options?.forceRefresh ||
+    (Boolean(refreshToken) && expiresAt > 0 && Date.now() > expiresAt - 60_000);
+
+  if (!needsRefresh) {
+    return accessToken;
+  }
+
+  if (!refreshToken) {
+    if (options?.forceRefresh) {
+      await clearGoogleOAuthTokens();
+      return undefined;
+    }
+    return accessToken;
+  }
+
+  const client = await getGoogleOAuthClient();
+  if (!client) {
+    return accessToken;
+  }
+
+  const tokens = await refreshGoogleAccessToken({
+    refreshToken,
+    clientId: client.clientId,
+    clientSecret: client.clientSecret,
+  });
+
+  if (!tokens.access_token) {
+    if (options?.forceRefresh || tokens.error) {
+      await clearGoogleOAuthTokens();
+      return undefined;
+    }
+    return accessToken;
+  }
+
+  return persistRefreshedTokens(tokens);
+}
+
+/** Google account email for connected OAuth (openid/email scopes). */
+export async function fetchGoogleAccountEmail(accessToken: string): Promise<string | undefined> {
+  const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    return undefined;
+  }
+  const data = (await response.json()) as { email?: string };
+  return data.email?.trim() || undefined;
 }
 
 export async function getGeminiAuth(): Promise<GeminiAuth | undefined> {

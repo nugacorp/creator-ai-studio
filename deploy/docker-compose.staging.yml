@@ -8,6 +8,7 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 3000
       LOCAL_STORAGE_PATH: /data/episodes
+      CAS_DATA_PATH: /data
       CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:-https://creator-ai-studio.217.76.56.66.sslip.io}
       CAS_SECRETS_KEY: ${CAS_SECRETS_KEY:?Set CAS_SECRETS_KEY in Coolify (32+ chars) to enable UI API key storage}
       CAS_API_KEY: ${CAS_API_KEY:-}
@@ -25,7 +26,7 @@ services:
       ALLOW_MOCKS: ${ALLOW_MOCKS:-false}
       AI_ALLOW_DEMO_FALLBACK: ${AI_ALLOW_DEMO_FALLBACK:-false}
     volumes:
-      - creator-ai-studio-staging-episodes:/data/episodes
+      - creator-ai-studio-staging-data:/data
       - ${RCLONE_CONFIG_VOLUME:-creator-ai-studio-rclone-config}:/config/rclone:ro
     expose:
       - "3000"
@@ -75,7 +76,7 @@ services:
       REDIS_URL: redis://redis:6379
       CAS_API_KEY: ${CAS_API_KEY:-}
     volumes:
-      - creator-ai-studio-staging-episodes:/data/episodes
+      - creator-ai-studio-staging-data:/data
     depends_on:
       api:
         condition: service_healthy
@@ -90,5 +91,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  creator-ai-studio-staging-episodes:
+  creator-ai-studio-staging-data:
   creator-ai-studio-rclone-config:

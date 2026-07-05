@@ -26,7 +26,7 @@ describe('team routes', () => {
   });
 
   function teamFile(): string {
-    return path.join(rootDir, 'team.json');
+    return path.join(rootDir, 'settings', 'team.json');
   }
 
   it('GET /team returns an empty roster initially', async () => {

@@ -126,6 +126,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [youtubeConnected, setYoutubeConnected] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(true);
+  const [youtubeAccountEmail, setYoutubeAccountEmail] = useState<string | null>(null);
+  const [channelsError, setChannelsError] = useState<string | null>(null);
   const [projects, setProjects] = useState<VideoProject[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('');
@@ -241,6 +243,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
       const mapped = yt.channels.map(mapYouTubeChannel);
       setChannels(mapped);
       setYoutubeConnected(yt.connected);
+      setYoutubeAccountEmail(yt.accountEmail ?? null);
+      setChannelsError(yt.error ?? null);
 
       const storedId =
         settings.activeChannelId ??
@@ -251,6 +255,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     } catch {
       setChannels([]);
       setYoutubeConnected(false);
+      setYoutubeAccountEmail(null);
+      setChannelsError(null);
       setSelectedChannel(null);
     } finally {
       setChannelsLoading(false);
@@ -481,6 +487,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
           setSelectedChannel={handleSelectChannel}
           youtubeConnected={youtubeConnected}
           channelsLoading={channelsLoading}
+          channelsError={channelsError}
+          youtubeAccountEmail={youtubeAccountEmail}
           onGoToSettings={() => setCurrentView('settings')}
           onGoToMultichannel={() => setCurrentView('multichannel')}
           notifications={notifications}
