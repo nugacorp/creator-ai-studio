@@ -24,7 +24,7 @@ Cursor + Hermes
 
 ## Last Updated
 
-2026-07-05
+2026-07-05 (RCLONE_REMOTE deploy sync)
 
 ## Staging HEAD
 
@@ -87,7 +87,7 @@ Registry: `apps/api/src/agents/registry.ts`. CAS-HERMES-VAL v1.1 signed off loca
 | **Channel scoping** | `c1d1998` | Active YouTube channel |
 | **YouTube OAuth persistence** on `/data` volume + auto-refresh | `1ceae26` | VPS-safe tokens |
 | **Supabase web build-args** + `.env.supabase.local` VPS sync | `e478025`, `f454177` | Deploy/auth |
-| **Google Drive archive (rclone)** — auto-evict when over `maxActiveEpisodes` | `0cee3a4` | Code merged; **VPS rclone config still required** |
+| **Google Drive archive (rclone)** — auto-evict when over `maxActiveEpisodes` | `0cee3a4` | Code merged; **`RCLONE_REMOTE` synced (GH secret + deploy); OAuth `rclone.conf` on VPS still required** |
 | Google Lyria music integration | `1ba0237` | Optional provider |
 | Calendar hybrid local + YouTube feed | `7ef242d` | |
 
@@ -106,7 +106,7 @@ See [docs/02-operations/SUPABASE_AUTH.md](docs/02-operations/SUPABASE_AUTH.md) a
 |------|------------|
 | **Automatización** | UI shows workflow mockups; real automation engine not shipped — label **próximamente** |
 | **Shorts** | MVP crop/package; not full reframing pipeline |
-| **rclone / archive** | Code live; requires one-time `scripts/vps-setup-rclone.sh` + `RCLONE_REMOTE` in `.env.supabase.local` |
+| **rclone / archive** | Code live; requires one-time `scripts/vps-setup-rclone.sh` (OAuth); `RCLONE_REMOTE` now synced from GitHub Actions |
 | **Production** | No separate Coolify app; domain still sslip.io |
 | **Local dev CORS** | If web calls API cross-origin (wrong `VITE_API_BASE_URL`), UI silently shows **demo data** — see [AGENTS.md](AGENTS.md) |
 | **Metadata SoT** | Filesystem primary; Supabase sync write-only |
@@ -126,7 +126,7 @@ Music tests pass without Lyria credentials (`dcb557a`).
 
 1. **Production environment** — no separate Coolify app yet
 2. **Domain** — still sslip.io
-3. **rclone on VPS** — interactive OAuth setup pending if archive desired
+3. **rclone on VPS** � `RCLONE_REMOTE` synced; interactive OAuth (`vps-setup-rclone.sh`) still pending
 4. **E2E staging** — full TTS + FFmpeg render sign-off pending
 
 ### Next objectives
