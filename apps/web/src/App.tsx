@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import HomeView from './components/HomeView';
@@ -17,6 +17,7 @@ import ProductionView from './components/ProductionView';
 import MultichannelView from './components/MultichannelView';
 import TeamsView from './components/TeamsView';
 import SettingsView from './components/SettingsView';
+import DeleteEpisodeModal from './components/DeleteEpisodeModal';
 import DemoModeBanner from './components/DemoModeBanner';
 import LoginView from './components/LoginView';
 import AuthMisconfiguredView from './components/AuthMisconfiguredView';
@@ -34,6 +35,7 @@ import {
 } from '@creator-ai-studio/shared';
 import {
   createEpisode,
+  deleteEpisode,
   fetchAuthStatus,
   fetchChannels,
   fetchEpisodeDetail,
@@ -94,6 +96,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [workspaceInitialTab, setWorkspaceInitialTab] = useState<WorkspaceTab | null>(null);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [deleteWorkspaceTarget, setDeleteWorkspaceTarget] = useState<VideoProject | null>(null);
+  const [deletingEpisode, setDeletingEpisode] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
 
   const activeProject = projects.find(p => p.id === activeProjectId);
@@ -286,6 +290,21 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     }
   };
 
+  const handleDeleteEpisode = async (id: string) => {
+    try {
+      await deleteEpisode(id);
+      setProjects(prev => prev.filter(p => p.id !== id));
+      if (activeProjectId === id) {
+        setActiveProjectId('');
+        setCurrentView('projects');
+      }
+      handleAddNotification('Episodio eliminado permanentemente', 'success');
+    } catch {
+      handleAddNotification('No se pudo eliminar el episodio', 'error');
+      throw new Error('delete failed');
+    }
+  };
+
   const handleAddNotification = (message: string, type: 'success' | 'info' | 'warning' | 'error' = 'info') => {
     const newNotif: Notification = {
       id: `not_${Date.now()}`,
@@ -390,6 +409,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
               seriesList={INITIAL_SERIES}
               onCreateEpisode={handleCreateEpisode}
               onMoveProjectStatus={handleMoveProjectStatus}
+              onDeleteEpisode={handleDeleteEpisode}
               boardFilter={projectsBoardFilter}
               onClearBoardFilter={() => setProjectsBoardFilter(null)}
             />
@@ -409,7 +429,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                     <ArrowLeft className="w-4 h-4" />
                     Volver a Proyectos
                   </button>
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1 justify-center">
                     <span className="text-[11px] text-slate-500 font-mono uppercase tracking-wide shrink-0">
                       Workspace
                     </span>
@@ -420,6 +440,14 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                       {activeProject.status}
                     </span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteWorkspaceTarget(activeProject)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Eliminar
+                  </button>
                 </div>
                 <PipelinePanel
                   episodeId={activeProject.id}
@@ -494,6 +522,23 @@ export function App({ initialView = 'home' }: AppProps = {}) {
           {currentView === 'settings' && <SettingsView />}
         </main>
       </div>
+
+      <DeleteEpisodeModal
+        open={Boolean(deleteWorkspaceTarget)}
+        title={deleteWorkspaceTarget?.title ?? ''}
+        deleting={deletingEpisode}
+        onConfirm={() => {
+          if (!deleteWorkspaceTarget) return;
+          setDeletingEpisode(true);
+          void handleDeleteEpisode(deleteWorkspaceTarget.id)
+            .then(() => setDeleteWorkspaceTarget(null))
+            .catch(() => undefined)
+            .finally(() => setDeletingEpisode(false));
+        }}
+        onCancel={() => {
+          if (!deletingEpisode) setDeleteWorkspaceTarget(null);
+        }}
+      />
     </div>
   );
 }

@@ -35,9 +35,7 @@ export default function HomeView({
   const greeting = `${getTimeGreeting()}, ${greetingName}`;
 
   const continueProject =
-    projects.find(p => p.id === 'ansiedad_biblia' && p.progress < 100) ??
-    projects.find(p => p.progress < 100) ??
-    projects[0];
+    projects.find(p => p.progress < 100) ?? projects[0];
 
   const [isOpen, setIsOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<'new-project' | 'ai-script' | 'generate-thumbnail' | null>(null);

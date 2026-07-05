@@ -53,7 +53,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
   const [selectedOutlineIndex, setSelectedOutlineIndex] = useState(0);
 
   // Audio State (Narracion)
-  const [selectedVoice, setSelectedVoice] = useState('21m00Tcm4TlvDq8ikWAM');
+  const [selectedVoice, setSelectedVoice] = useState('JBFqnCBsd6RMkjVDRZzb');
   const [elevenVoices, setElevenVoices] = useState<ElevenLabsVoice[]>([]);
   const [audioBase64, setAudioBase64] = useState<string | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -483,9 +483,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                     ))
                   ) : (
                     <>
-                      <option value="21m00Tcm4TlvDq8ikWAM">Rachel (ElevenLabs — por defecto)</option>
-                      <option value="pNInz6obpgDQGcFmaJgB">Adam</option>
-                      <option value="EXAVITQu4vr4xnSDxMaL">Bella</option>
+                      <option value="JBFqnCBsd6RMkjVDRZzb">George (ElevenLabs — por defecto)</option>
                     </>
                   )}
                 </select>
@@ -692,8 +690,8 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                     <div className="absolute bottom-16 left-1/2 -translate-x-1/2 text-center w-full max-w-xl z-20 px-4">
                       <div className="bg-black/75 border border-yellow-500/30 text-yellow-400 font-bold px-4 py-2 rounded-xl text-xs sm:text-sm tracking-wide shadow-xl font-display leading-relaxed">
                         {isPlayingTimeline
-                          ? '"Confía, y entrega tu carga hoy al Creador del Universo..."'
-                          : '"¿Qué dice realmente la Biblia sobre la ansiedad?"'}
+                          ? (scriptText.slice(0, 80) || project.title)
+                          : project.title}
                       </div>
                     </div>
 
@@ -804,18 +802,19 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                     <span>Imágenes</span>
                   </div>
                   <div className="flex-1 h-9 bg-sky-950/10 border border-sky-900/20 rounded-xl p-1 flex gap-1 relative overflow-hidden">
-                    <div className="w-1/3 bg-sky-600/35 rounded border border-sky-500/30 flex items-center justify-between px-2 text-[9px] text-sky-200">
-                      <span>Toma 1: Ansiedad</span>
-                      <span>5s</span>
-                    </div>
-                    <div className="w-1/3 bg-sky-600/35 rounded border border-sky-500/30 flex items-center justify-between px-2 text-[9px] text-sky-200">
-                      <span>Toma 2: Biblia</span>
-                      <span>7s</span>
-                    </div>
-                    <div className="w-1/4 bg-sky-600/35 rounded border border-sky-500/30 flex items-center justify-between px-2 text-[9px] text-sky-200">
-                      <span>Toma 3: Flores</span>
-                      <span>5s</span>
-                    </div>
+                    {(scenes.length > 0 ? scenes.slice(0, 3) : [{ id: 'empty', duration: 0 }]).map(
+                      (scene, idx) => (
+                        <div
+                          key={scene.id ?? idx}
+                          className="flex-1 min-w-0 bg-sky-600/35 rounded border border-sky-500/30 flex items-center justify-between px-2 text-[9px] text-sky-200"
+                        >
+                          <span className="truncate">
+                            {scenes.length > 0 ? `Toma ${idx + 1}` : 'Añade escenas'}
+                          </span>
+                          <span>{scene.duration ? `${scene.duration}s` : '—'}</span>
+                        </div>
+                      ),
+                    )}
                   </div>
                 </div>
 
@@ -1122,7 +1121,10 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
 
               <button
                 onClick={() => {
-                  triggerFeedback('success', '✓ Distribución del video programada para el 29 de Junio');
+                  triggerFeedback(
+                    'success',
+                    'Programación pendiente — conecta YouTube OAuth y usa Publicar para agendar.',
+                  );
                 }}
                 className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
               >
@@ -1135,45 +1137,28 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
         {/* 8. ANALYTICS TAB */}
         {activeTab === 'analytics' && (
           <div className="space-y-6">
-            <h4 className="text-sm font-bold text-white">Métricas de Retención Clave</h4>
+            <h4 className="text-sm font-bold text-white">Métricas del episodio</h4>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[#0B0F14] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
-                <div className="text-[10px] text-[#8B949E] uppercase tracking-wider font-mono">Views Estimadas</div>
-                <div className="text-2xl font-bold text-white font-display mt-1">45,200</div>
-                <div className="text-[10px] text-emerald-400 font-semibold mt-1">✓ Superior al promedio habitual (+15%)</div>
+            {project.status === 'Publicado' ? (
+              <div className="rounded-xl border border-white/10 bg-[#0B0F14] p-6 space-y-3 text-center">
+                <p className="text-sm text-slate-300">
+                  Las métricas por video están en la vista global de Analytics cuando YouTube OAuth está
+                  conectado.
+                </p>
+                <p className="text-xs text-slate-500">
+                  Ejecuta el agente <strong className="text-slate-400">analytics_agent</strong> para un
+                  informe de rendimiento de este episodio.
+                </p>
               </div>
-              <div className="bg-[#0B0F14] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
-                <div className="text-[10px] text-[#8B949E] uppercase tracking-wider font-mono">Tiempo de Retención Promedio</div>
-                <div className="text-2xl font-bold text-white font-display mt-1">5m 12s</div>
-                <div className="text-[10px] text-[#8B949E] mt-1">De un video de 8:45 (59.4%)</div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0F14]/50 p-8 text-center space-y-2">
+                <p className="text-sm text-slate-400 font-medium">Sin métricas todavía</p>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                  Este episodio está en <strong className="text-slate-400">{project.status}</strong>. Las
+                  visualizaciones y engagement aparecerán después de publicar en YouTube.
+                </p>
               </div>
-              <div className="bg-[#0B0F14] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
-                <div className="text-[10px] text-[#8B949E] uppercase tracking-wider font-mono">CTR de Miniatura</div>
-                <div className="text-2xl font-bold text-white font-display mt-1">5.8%</div>
-                <div className="text-[10px] text-amber-400 font-semibold mt-1">⚡ Sugerencia de optimización disponible</div>
-              </div>
-            </div>
-
-            <div className="bg-[#0B0F14] p-4 rounded-xl border border-[rgba(255,255,255,0.05)] space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">Gráfica de Retención (%)</span>
-                <span className="text-[10px] text-[#8B949E]">Curva típica de video reflexivo</span>
-              </div>
-              
-              {/* Simple stylized visual representation of a chart since we can save token sizes */}
-              <div className="h-32 flex items-end gap-1.5 pt-4">
-                {[100, 85, 76, 70, 68, 65, 62, 59, 58, 55, 52, 50, 48, 45, 42, 40].map((val, idx) => (
-                  <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                    <div
-                      className="w-full bg-gradient-to-t from-indigo-600/40 to-indigo-500 rounded-t-sm"
-                      style={{ height: `${val}%` }}
-                    />
-                    <span className="text-[8px] text-[#8B949E] font-mono">{idx + 1}m</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
         )}
 

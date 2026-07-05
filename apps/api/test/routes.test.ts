@@ -215,6 +215,27 @@ describe('api routes', () => {
     expect(response.statusCode).toBe(404);
   });
 
+  it('DELETE /episodes/:id removes the episode workspace', async () => {
+    const episode = await createEpisode('Episodio a borrar');
+
+    const del = await app.inject({
+      method: 'DELETE',
+      url: `/episodes/${episode.id}`,
+    });
+    expect(del.statusCode).toBe(200);
+    expect((del.json() as { ok: boolean }).ok).toBe(true);
+
+    const gone = await app.inject({
+      method: 'GET',
+      url: `/episodes/${episode.id}`,
+    });
+    expect(gone.statusCode).toBe(404);
+
+    const list = await app.inject({ method: 'GET', url: '/episodes' });
+    const episodes = list.json() as EpisodeSummary[];
+    expect(episodes.some(e => e.id === episode.id)).toBe(false);
+  });
+
   it('POST /episodes rejects an empty title', async () => {
     const response = await app.inject({
       method: 'POST',

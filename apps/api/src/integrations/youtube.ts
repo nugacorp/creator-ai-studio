@@ -107,6 +107,7 @@ export interface YouTubeAnalyticsResult {
   chartData: number[];
   channelDistribution: Array<{ name: string; views: number; percentage: number }>;
   isDemo?: boolean;
+  connected?: boolean;
 }
 
 function formatEngagement(views: number, likes: number, comments: number): string {
@@ -131,6 +132,7 @@ export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTube
     engagement: '0%',
     chartData: [],
     channelDistribution: [],
+    connected: false,
   };
 
   if (!accessToken) {
@@ -147,6 +149,7 @@ export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTube
       chartData: [120, 180, 150, 220, 280, 310, 290],
       channelDistribution: [{ name: 'YouTube', views: 12500, percentage: 100 }],
       isDemo: true,
+      connected: false,
     };
   }
 
@@ -210,11 +213,6 @@ export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTube
     }
   }
 
-  if (chartData.length === 0 && views > 0) {
-    chartData = Array.from({ length: 7 }, () => Math.round(views / 7));
-    watchTimeHours = Math.round(views / 100);
-  }
-
   const engagementViews = periodViews > 0 ? periodViews : views;
 
   return {
@@ -224,5 +222,7 @@ export async function fetchYouTubeAnalytics(_channelId: string): Promise<YouTube
     engagement: formatEngagement(engagementViews, totalLikes, totalComments),
     chartData,
     channelDistribution: [{ name: channelName, views, percentage: 100 }],
+    connected: true,
+    isDemo: false,
   };
 }

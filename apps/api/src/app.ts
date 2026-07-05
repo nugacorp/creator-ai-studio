@@ -277,6 +277,25 @@ function registerRoutes(
     return detail;
   });
 
+  app.delete(route(prefix, '/episodes/:id'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const existing = await getEpisodeForUser(storage, id, request.userId);
+    if (existing === null) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+
+    const deleted = await storage.deleteEpisode(id);
+    if (!deleted) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+
+    const { deleteEpisodeFromSupabase } = await import('./db/episodes-sync.js');
+    await deleteEpisodeFromSupabase(id);
+    return { ok: true, id };
+  });
+
   app.patch(route(prefix, '/episodes/:id/status'), { schema: { body: updateEpisodeStatusBody } }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as { projectStatus?: string };
@@ -418,8 +437,11 @@ function registerRoutes(
 
   app.get(route(prefix, '/analytics'), async () => {
     const yt = await fetchYouTubeAnalytics('default');
+    const hasData = yt.views > 0 || yt.chartData.length > 0;
     return {
       isDemo: yt.isDemo ?? false,
+      connected: Boolean(yt.connected),
+      hasData,
       kpis: {
         views: yt.views,
         subscribers: yt.subscribers,
@@ -511,36 +533,44 @@ function registerRoutes(
         saveDir = pathMod.join(resolveStoragePath(), episode.workspacePath, '05-audio');
       }
     }
-    const result = await synthesizeEpisodeSpeech({
-      text: body.text ?? '',
-      voiceId: body.voiceId,
-      saveDir,
-    });
-    // FASE 8: a "demo" TTS response means the provider is not configured.
-    // When mocks are blocked (production), fail loudly instead of silently
-    // returning empty/mock audio.
-    if (result.isDemo) {
-      const { areMocksAllowed } = await import('./config/mocks.js');
-      if (!areMocksAllowed()) {
-        reply.code(503);
-        return {
-          error: 'tts_not_configured',
-          message:
-            'TTS real no configurado (API key/voz faltante o proveedor sin saldo). ' +
-            'Mocks bloqueados en este entorno.',
-          provider: result.provider,
-        };
+    try {
+      const result = await synthesizeEpisodeSpeech({
+        text: body.text ?? '',
+        voiceId: body.voiceId,
+        saveDir,
+      });
+      // FASE 8: a "demo" TTS response means the provider is not configured.
+      // When mocks are blocked (production), fail loudly instead of silently
+      // returning empty/mock audio.
+      if (result.isDemo) {
+        const { areMocksAllowed } = await import('./config/mocks.js');
+        if (!areMocksAllowed()) {
+          reply.code(503);
+          return {
+            error: 'tts_not_configured',
+            message:
+              'TTS real no configurado (API key/voz faltante o proveedor sin saldo). ' +
+              'Mocks bloqueados en este entorno.',
+            provider: result.provider,
+          };
+        }
       }
-    }
-    if (body.episodeId && (result.savedPath || (result.audioUrl && !result.isDemo))) {
-      const episode = await storage.getEpisode(body.episodeId);
-      if (episode) {
-        await storage.updateEpisode(body.episodeId, {
-          content: { ...episode.content, audioUrl: result.audioUrl },
-        });
+      if (body.episodeId && (result.savedPath || (result.audioUrl && !result.isDemo))) {
+        const episode = await storage.getEpisode(body.episodeId);
+        if (episode) {
+          await storage.updateEpisode(body.episodeId, {
+            content: { ...episode.content, audioUrl: result.audioUrl },
+          });
+        }
       }
+      return result;
+    } catch (err) {
+      reply.code(502);
+      return {
+        error: 'elevenlabs_tts_failed',
+        message: err instanceof Error ? err.message : 'ElevenLabs TTS failed',
+      };
     }
-    return result;
   });
 
   app.post(route(prefix, '/episodes/:id/render'), async (request, reply) => {

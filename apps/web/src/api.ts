@@ -137,6 +137,12 @@ export async function updateEpisodeProjectStatus(
   });
 }
 
+export async function deleteEpisode(id: string): Promise<{ ok: boolean; id: string }> {
+  return apiFetch<{ ok: boolean; id: string }>(`/episodes/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function updateStageStatus(
   id: string,
   stage: EpisodeStage,
@@ -202,6 +208,8 @@ export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
 
 export interface AnalyticsData {
   isDemo?: boolean;
+  connected?: boolean;
+  hasData?: boolean;
   kpis: { views: number; subscribers: number; watchTimeHours: number; engagement: string };
   chartData: number[];
   channelDistribution?: Array<{ name: string; views: number; percentage: number }>;

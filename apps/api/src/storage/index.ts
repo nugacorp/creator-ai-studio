@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import {
@@ -233,6 +233,23 @@ export class EpisodeStorage {
   async removeFromArchivedIndex(id: string): Promise<void> {
     const index = await this.readArchivedIndex();
     await this.writeArchivedIndex(index.filter(e => e.id !== id));
+  }
+
+  /** Permanently delete an episode workspace and remove archived index entries. */
+  async deleteEpisode(id: string): Promise<boolean> {
+    const located = await this.findEpisode(id);
+    if (located !== null) {
+      await rm(located.dir, { recursive: true, force: true });
+      return true;
+    }
+
+    const archived = (await this.readArchivedIndex()).some(e => e.id === id);
+    if (archived) {
+      await this.removeFromArchivedIndex(id);
+      return true;
+    }
+
+    return false;
   }
 
   /** Read full detail for one episode, or null if it does not exist. */

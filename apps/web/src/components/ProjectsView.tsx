@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, ArrowLeft, ArrowRight, Video, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, ArrowLeft, ArrowRight, Video, Search, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { VideoProject, ProjectStatus } from '../types';
-import Sparkline from './Sparkline';
+import DeleteEpisodeModal from './DeleteEpisodeModal';
 import {
   filterProjectsBySection,
   highlightColumnForSection,
@@ -16,6 +16,7 @@ interface ProjectsViewProps {
   seriesList: string[];
   onCreateEpisode: (title: string) => Promise<void>;
   onMoveProjectStatus?: (id: string, status: ProjectStatus) => Promise<void>;
+  onDeleteEpisode?: (id: string) => Promise<void>;
   boardFilter?: DashboardSection | null;
   onClearBoardFilter?: () => void;
 }
@@ -38,6 +39,7 @@ export default function ProjectsView({
   seriesList,
   onCreateEpisode,
   onMoveProjectStatus,
+  onDeleteEpisode,
   boardFilter = null,
   onClearBoardFilter,
 }: ProjectsViewProps) {
@@ -50,6 +52,8 @@ export default function ProjectsView({
   const [newSeries, setNewSeries] = useState(seriesList[0]);
   const [newStatus, setNewStatus] = useState<ProjectStatus>('Ideas');
   const [newDuration, setNewDuration] = useState('08:00');
+  const [deleteTarget, setDeleteTarget] = useState<VideoProject | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const columnRefs = useRef<Partial<Record<ProjectStatus, HTMLDivElement | null>>>({});
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -138,6 +142,17 @@ export default function ProjectsView({
     await onCreateEpisode(newTitle.trim());
     setNewTitle('');
     setShowAddModal(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || !onDeleteEpisode) return;
+    setDeleting(true);
+    try {
+      await onDeleteEpisode(deleteTarget.id);
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -324,12 +339,18 @@ export default function ProjectsView({
                           </div>
                         </div>
 
-                        {/* Mini Sparkline Chart for Engagement Trend */}
-                        <Sparkline id={proj.id} />
+                        {proj.status === 'Publicado' ? (
+                          <p className="text-[10px] text-slate-500 italic bg-white/[0.02] border border-white/5 rounded-lg px-2 py-1.5">
+                            Métricas de engagement en Analytics (YouTube conectado).
+                          </p>
+                        ) : (
+                          <p className="text-[10px] text-slate-500 italic bg-white/[0.02] border border-white/5 rounded-lg px-2 py-1.5">
+                            Sin métricas — episodio aún no publicado.
+                          </p>
+                        )}
 
                         {/* Control Buttons (Move Card & Open) */}
                         <div className="flex items-center justify-between pt-1.5 border-t border-white/5">
-                          {/* Move Buttons */}
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => handleMoveCard(proj.id, 'left')}
@@ -349,13 +370,25 @@ export default function ProjectsView({
                             </button>
                           </div>
 
-                          {/* Open Workspace */}
-                          <button
-                            onClick={() => onOpenWorkspace(proj.id)}
-                            className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
-                          >
-                            Editar Workspace
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {onDeleteEpisode && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(proj)}
+                                className="p-1.5 rounded-lg bg-rose-950/30 border border-rose-900/30 text-rose-400 hover:text-rose-300 hover:bg-rose-950/50 transition-colors cursor-pointer"
+                                title="Eliminar episodio"
+                                aria-label={`Eliminar ${proj.title}`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => onOpenWorkspace(proj.id)}
+                              className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors cursor-pointer"
+                            >
+                              Editar Workspace
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -444,6 +477,16 @@ export default function ProjectsView({
           </div>
         </div>
       )}
+
+      <DeleteEpisodeModal
+        open={Boolean(deleteTarget)}
+        title={deleteTarget?.title ?? ''}
+        deleting={deleting}
+        onConfirm={() => void handleConfirmDelete()}
+        onCancel={() => {
+          if (!deleting) setDeleteTarget(null);
+        }}
+      />
     </div>
   );
 }

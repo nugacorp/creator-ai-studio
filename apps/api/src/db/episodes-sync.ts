@@ -32,3 +32,21 @@ export async function syncEpisodeToSupabase(detail: EpisodeDetail): Promise<void
     // Filesystem remains source of truth until full migration
   }
 }
+
+/** Remove episode row when Supabase is configured (best-effort). */
+export async function deleteEpisodeFromSupabase(id: string): Promise<void> {
+  const config = getSupabaseConfig();
+  if (!config) return;
+
+  try {
+    await fetch(`${config.url}/rest/v1/episodes?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: config.serviceRoleKey,
+        Authorization: `Bearer ${config.serviceRoleKey}`,
+      },
+    });
+  } catch {
+    // Non-blocking
+  }
+}

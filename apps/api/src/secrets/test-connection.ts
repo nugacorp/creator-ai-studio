@@ -69,10 +69,20 @@ export async function testSecretProvider(provider: SecretProvider): Promise<Secr
         const res = await fetch('https://api.elevenlabs.io/v1/user', {
           headers: { 'xi-api-key': key },
         });
+        let detail = '';
+        if (!res.ok) {
+          try {
+            const body = (await res.json()) as { detail?: { message?: string } | string };
+            if (typeof body.detail === 'object' && body.detail?.message) detail = `: ${body.detail.message}`;
+            else if (typeof body.detail === 'string') detail = `: ${body.detail}`;
+          } catch {
+            // ignore
+          }
+        }
         return {
           provider,
           ok: res.ok,
-          message: res.ok ? 'Conexión con ElevenLabs OK' : `ElevenLabs respondió ${res.status}`,
+          message: res.ok ? 'Conexión con ElevenLabs OK' : `ElevenLabs respondió ${res.status}${detail}`,
         };
       }
       case 'youtube': {

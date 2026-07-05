@@ -1,4 +1,13 @@
+import process from 'node:process';
 import { getSecret } from '../secrets/resolver.js';
+
+/** Default voice from ElevenLabs quickstart (George). */
+export const ELEVENLABS_DEFAULT_VOICE_ID = 'JBFqnCBsd6RMkjVDRZzb';
+
+/** Default TTS model — multilingual for Spanish/English narration. */
+export const ELEVENLABS_DEFAULT_MODEL_ID = 'eleven_multilingual_v2';
+
+const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io';
 
 export interface ElevenLabsVoice {
   voiceId: string;
@@ -13,6 +22,41 @@ export interface ElevenLabsResult {
   savedPath?: string;
 }
 
+export class ElevenLabsApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ElevenLabsApiError';
+    this.status = status;
+  }
+}
+
+function elevenLabsHeaders(apiKey: string): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    Accept: 'audio/mpeg',
+    'xi-api-key': apiKey,
+  };
+}
+
+async function parseApiError(response: Response): Promise<string> {
+  try {
+    const data = (await response.json()) as {
+      detail?: { message?: string; status?: string } | string;
+      message?: string;
+    };
+    if (typeof data.detail === 'object' && data.detail?.message) {
+      return data.detail.message;
+    }
+    if (typeof data.detail === 'string') return data.detail;
+    if (data.message) return data.message;
+  } catch {
+    // Response body was not JSON.
+  }
+  return `ElevenLabs respondió ${response.status}`;
+}
+
 export async function synthesizeSpeech(
   text: string,
   voiceId?: string,
@@ -22,26 +66,30 @@ export async function synthesizeSpeech(
   const voice =
     voiceId ??
     (await getSecret('ELEVENLABS_VOICE_ID')) ??
-    '21m00Tcm4TlvDq8ikWAM';
+    ELEVENLABS_DEFAULT_VOICE_ID;
+  const modelId =
+    (await getSecret('ELEVENLABS_MODEL_ID')) ??
+    process.env.ELEVENLABS_MODEL_ID ??
+    ELEVENLABS_DEFAULT_MODEL_ID;
 
   if (!apiKey) {
     return { audioUrl: '', isDemo: true };
   }
 
-  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}`, {
+  const url = new URL(`${ELEVENLABS_API_BASE}/v1/text-to-speech/${voice}`);
+  url.searchParams.set('output_format', 'mp3_44100_128');
+
+  const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'xi-api-key': apiKey,
-    },
+    headers: elevenLabsHeaders(apiKey),
     body: JSON.stringify({
       text: text.substring(0, 5000),
-      model_id: 'eleven_multilingual_v2',
+      model_id: modelId,
     }),
   });
 
   if (!response.ok) {
-    return { audioUrl: '', isDemo: true };
+    throw new ElevenLabsApiError(await parseApiError(response), response.status);
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
@@ -68,24 +116,45 @@ export async function listElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
   const apiKey = await getSecret('ELEVENLABS_API_KEY');
   if (!apiKey) return [];
 
-  const response = await fetch('https://api.elevenlabs.io/v1/voices', {
-    headers: { 'xi-api-key': apiKey },
-  });
-  if (!response.ok) return [];
+  const voices: ElevenLabsVoice[] = [];
+  let nextPageToken: string | null = null;
 
-  const data = (await response.json()) as {
-    voices?: Array<{
-      voice_id: string;
-      name: string;
-      category?: string;
-      preview_url?: string;
-    }>;
-  };
+  do {
+    const url = new URL(`${ELEVENLABS_API_BASE}/v2/voices`);
+    url.searchParams.set('page_size', '100');
+    if (nextPageToken) {
+      url.searchParams.set('next_page_token', nextPageToken);
+    }
 
-  return (data.voices ?? []).map(v => ({
-    voiceId: v.voice_id,
-    name: v.name,
-    category: v.category,
-    previewUrl: v.preview_url,
-  }));
+    const response = await fetch(url, {
+      headers: { 'xi-api-key': apiKey },
+    });
+    if (!response.ok) {
+      return voices;
+    }
+
+    const data = (await response.json()) as {
+      voices?: Array<{
+        voice_id: string;
+        name: string;
+        category?: string;
+        preview_url?: string;
+      }>;
+      has_more?: boolean;
+      next_page_token?: string | null;
+    };
+
+    for (const v of data.voices ?? []) {
+      voices.push({
+        voiceId: v.voice_id,
+        name: v.name,
+        category: v.category,
+        previewUrl: v.preview_url,
+      });
+    }
+
+    nextPageToken = data.has_more ? (data.next_page_token ?? null) : null;
+  } while (nextPageToken);
+
+  return voices;
 }

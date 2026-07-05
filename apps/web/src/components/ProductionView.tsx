@@ -1,4 +1,4 @@
-import { Sliders, CheckCircle2 } from 'lucide-react';
+import { Sliders } from 'lucide-react';
 import type { VideoProject } from '../types';
 
 interface ProductionViewProps {
@@ -42,22 +42,29 @@ export default function ProductionView({ projects }: ProductionViewProps) {
 
         <div className="bg-[#15191E] border border-white/5 rounded-3xl p-5 space-y-4 flex flex-col justify-between">
           <div>
-            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">Tareas Críticas Pendientes</h4>
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">En producción</h4>
             <div className="space-y-3.5 mt-4">
-              {[
-                'Revisar ortografía del guion de "La historia de Moisés"',
-                'Sintetizar locución con TTS para Proverbios 3',
-                'Escalar miniatura de ansiedad a 4K con Súper-Resolución'
-              ].map((task, idx) => (
-                <div key={idx} className="flex items-center gap-3 p-2.5 rounded-xl bg-[#0B0F14] border border-white/5">
-                  <CheckCircle2 className="w-4 h-4 text-slate-500" />
-                  <span className="text-xs text-[#E6EDF2] font-medium">{task}</span>
-                </div>
-              ))}
+              {projects.filter(p => p.status !== 'Publicado' && p.progress < 100).length === 0 ? (
+                <p className="text-xs text-slate-500 italic">No hay episodios activos en el pipeline.</p>
+              ) : (
+                projects
+                  .filter(p => p.status !== 'Publicado' && p.progress < 100)
+                  .slice(0, 5)
+                  .map(proj => (
+                    <div
+                      key={proj.id}
+                      className="flex items-center gap-3 p-2.5 rounded-xl bg-[#0B0F14] border border-white/5"
+                    >
+                      <span className="text-xs text-[#E6EDF2] font-medium truncate">
+                        {proj.title} — {proj.status} ({proj.progress}%)
+                      </span>
+                    </div>
+                  ))
+              )}
             </div>
           </div>
           <p className="text-[10px] text-[#8B949E] italic leading-normal font-mono pt-4">
-            * Presiona cualquier tarjeta en la pestaña &quot;Proyectos&quot; para tomar acción.
+            Datos del pipeline real. Abre un proyecto para continuar la producción.
           </p>
         </div>
       </div>

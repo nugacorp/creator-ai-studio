@@ -32,11 +32,7 @@ export default function CalendarView() {
           })),
         ),
       )
-      .catch(() =>
-        setEvents([
-          { id: '1', title: '¿Qué dice la Biblia sobre la ansiedad?', date: '2026-06-29', time: '18:00', channel: 'YouTube Principal', status: 'scheduled' },
-        ]),
-      );
+      .catch(() => setEvents([]));
   }, []);
 
   const [showAddEventModal, setShowAddEventModal] = useState(false);

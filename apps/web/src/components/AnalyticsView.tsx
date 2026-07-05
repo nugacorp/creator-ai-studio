@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, TrendingUp, Users, Eye, Play, Sparkles, ArrowUpRight } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Eye, Play, Sparkles, Link2 } from 'lucide-react';
 import { fetchAnalytics } from '../api';
 
 type ChannelTab = 'Todos' | 'YouTube' | 'TikTok' | 'Instagram';
@@ -30,31 +30,34 @@ export default function AnalyticsView() {
   const [activeChannelTab, setActiveChannelTab] = useState<ChannelTab>('Todos');
   const [analytics, setAnalytics] = useState({
     isDemo: false,
+    connected: false,
+    hasData: false,
     views: 0,
     subscribers: 0,
     watchTimeHours: 0,
     engagement: '0%',
-    chartData: [0] as number[],
-    channelDistribution: [{ name: 'YouTube', views: 0, percentage: 100 }],
+    chartData: [] as number[],
+    channelDistribution: [] as Array<{ name: string; views: number; percentage: number }>,
   });
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     void fetchAnalytics()
-      .then(data =>
+      .then(data => {
+        setLoadError(false);
         setAnalytics({
           isDemo: data.isDemo ?? false,
+          connected: data.connected ?? false,
+          hasData: data.hasData ?? (data.kpis.views > 0 || data.chartData.length > 0),
           views: data.kpis.views,
           subscribers: data.kpis.subscribers,
           watchTimeHours: data.kpis.watchTimeHours,
           engagement: data.kpis.engagement,
-          chartData: data.chartData.length > 0 ? data.chartData : [0],
-          channelDistribution:
-            data.channelDistribution && data.channelDistribution.length > 0
-              ? data.channelDistribution
-              : [{ name: 'YouTube', views: data.kpis.views, percentage: 100 }],
-        }),
-      )
-      .catch(() => undefined);
+          chartData: data.chartData ?? [],
+          channelDistribution: data.channelDistribution ?? [],
+        });
+      })
+      .catch(() => setLoadError(true));
   }, []);
 
   const channelMultiplier =
@@ -66,54 +69,74 @@ export default function AnalyticsView() {
           ? 0
           : 1;
 
+  const showRealData = analytics.hasData && !analytics.isDemo && analytics.connected;
+  const showEmpty = !showRealData && !analytics.isDemo;
   const chart = useMemo(() => buildChartPaths(analytics.chartData), [analytics.chartData]);
   const chartMax = Math.max(...analytics.chartData, 1);
 
   const mainStats = [
     {
       label: 'Visualizaciones totales',
-      count: Math.round(analytics.views * channelMultiplier).toLocaleString(),
-      change: analytics.chartData.length > 1 ? 'API' : 'Demo',
-      trend: 'up',
+      count: showRealData ? Math.round(analytics.views * channelMultiplier).toLocaleString() : '—',
+      sub: showRealData ? 'YouTube Analytics' : 'Sin datos',
       icon: Eye,
     },
     {
       label: 'Tiempo de reproducción (horas)',
-      count: Math.round(analytics.watchTimeHours * channelMultiplier).toLocaleString(),
-      change: '14 días',
-      trend: 'up',
+      count: showRealData ? Math.round(analytics.watchTimeHours * channelMultiplier).toLocaleString() : '—',
+      sub: showRealData ? '14 días' : 'Sin datos',
       icon: Play,
     },
     {
-      label: 'Nuevos suscriptores',
-      count: Math.round(analytics.subscribers * channelMultiplier).toLocaleString(),
-      change: 'Canal',
-      trend: 'up',
+      label: 'Suscriptores',
+      count: showRealData ? Math.round(analytics.subscribers * channelMultiplier).toLocaleString() : '—',
+      sub: showRealData ? 'Canal conectado' : 'Sin datos',
       icon: Users,
     },
     {
-      label: 'CTR Promedio',
-      count: analytics.engagement,
-      change: 'Engagement',
-      trend: 'up',
+      label: 'Engagement',
+      count: showRealData ? analytics.engagement : '—',
+      sub: showRealData ? 'Likes + comentarios / views' : 'Sin datos',
       icon: TrendingUp,
     },
   ];
 
-  const channelDistribution = analytics.channelDistribution.map(ch => ({
-    name: ch.name,
-    views: ch.views.toLocaleString(),
-    percentage: ch.percentage,
-    color: 'bg-rose-500',
-  }));
+  const channelDistribution =
+    analytics.channelDistribution.length > 0
+      ? analytics.channelDistribution.map(ch => ({
+          name: ch.name,
+          views: ch.views.toLocaleString(),
+          percentage: ch.percentage,
+          color: 'bg-rose-500',
+        }))
+      : [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {analytics.isDemo && (
         <p className="text-xs rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-amber-200">
-          Datos de demostración — conecta YouTube OAuth en Configuración para métricas reales.
+          Modo demo local — estos números no son reales. En staging/producción conecta YouTube OAuth en
+          Configuración.
         </p>
       )}
+
+      {showEmpty && !loadError && (
+        <div className="rounded-xl border border-white/10 bg-[#15191E] px-4 py-6 text-center space-y-3">
+          <Link2 className="w-8 h-8 text-slate-500 mx-auto" />
+          <p className="text-sm text-slate-300 font-medium">Sin métricas de YouTube todavía</p>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            Conecta Google/YouTube en Configuración → Integraciones. Solo verás datos reales cuando el
+            canal esté autorizado y YouTube Analytics responda.
+          </p>
+        </div>
+      )}
+
+      {loadError && (
+        <p className="text-xs rounded-xl border border-rose-500/30 bg-rose-950/20 px-4 py-3 text-rose-200">
+          No se pudieron cargar las métricas. Verifica la conexión con la API.
+        </p>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#15191E] p-4.5 rounded-2xl border border-[rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-indigo-500/10 rounded-2xl text-indigo-400">
@@ -121,9 +144,7 @@ export default function AnalyticsView() {
           </div>
           <div>
             <h2 className="font-display font-bold text-base text-white">Rendimiento de Canales</h2>
-            <p className="text-[11px] text-[#8B949E]">
-              Datos de YouTube Analytics cuando OAuth está conectado
-            </p>
+            <p className="text-[11px] text-[#8B949E]">Solo datos reales de YouTube Analytics (OAuth)</p>
           </div>
         </div>
 
@@ -152,7 +173,7 @@ export default function AnalyticsView() {
           return (
             <div
               key={i}
-              className="bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl p-4.5 space-y-3 shadow-md hover:border-indigo-500/30 transition-all"
+              className="bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl p-4.5 space-y-3 shadow-md"
             >
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-[#8B949E] font-mono leading-none">{st.label}</span>
@@ -160,11 +181,9 @@ export default function AnalyticsView() {
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
-              <div className="flex items-end justify-between pt-1">
+              <div className="pt-1">
                 <span className="text-2xl font-bold font-display text-white">{st.count}</span>
-                <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-0.5 bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-900/40">
-                  <ArrowUpRight className="w-3 h-3" /> {st.change}
-                </span>
+                <p className="text-[10px] text-slate-500 mt-1">{st.sub}</p>
               </div>
             </div>
           );
@@ -177,47 +196,46 @@ export default function AnalyticsView() {
             <h4 className="text-xs font-bold text-white font-mono uppercase tracking-wider">
               Visualizaciones diarias
             </h4>
-            <span className="text-[10px] text-emerald-400 font-mono font-bold">Últimos 14 días</span>
+            <span className="text-[10px] text-slate-500 font-mono font-bold">Últimos 14 días</span>
           </div>
 
-          <div className="h-60 relative w-full pt-4">
-            <svg viewBox="0 0 500 200" className="w-full h-full text-indigo-500 overflow-visible">
-              <defs>
-                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
-                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <line x1="0" y1="50" x2="500" y2="50" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
-              <line x1="0" y1="100" x2="500" y2="100" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
-              <line x1="0" y1="150" x2="500" y2="150" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
-
-              {chart.area && <path d={chart.area} fill="url(#areaGrad)" />}
-              {chart.line && (
-                <path d={chart.line} fill="none" stroke="#8b5cf6" strokeWidth="3.5" strokeLinecap="round" />
-              )}
-              {chart.points.map((point, index) => (
-                <circle
-                  key={index}
-                  cx={point.x}
-                  cy={point.y}
-                  r={index === chart.points.length - 1 ? 5 : 4.5}
-                  fill="#a78bfa"
-                  stroke="#0B0F14"
-                  strokeWidth="1.5"
-                  className={index === chart.points.length - 1 ? 'animate-pulse' : undefined}
-                />
-              ))}
-            </svg>
-
-            <div className="absolute top-1/4 left-10 text-[9px] font-mono text-[#8B949E]">
-              {Math.round(chartMax).toLocaleString()} views
+          {analytics.chartData.length === 0 ? (
+            <div className="h-60 flex items-center justify-center text-sm text-slate-500 italic">
+              {showEmpty ? 'Conecta YouTube para ver la serie temporal' : 'Sin serie diaria disponible'}
             </div>
-            <div className="absolute top-2/4 left-10 text-[9px] font-mono text-[#8B949E]">
-              {Math.round(chartMax / 2).toLocaleString()} views
+          ) : (
+            <div className="h-60 relative w-full pt-4">
+              <svg viewBox="0 0 500 200" className="w-full h-full text-indigo-500 overflow-visible">
+                <defs>
+                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
+                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <line x1="0" y1="50" x2="500" y2="50" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
+                <line x1="0" y1="100" x2="500" y2="100" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
+                <line x1="0" y1="150" x2="500" y2="150" stroke="rgba(255,255,255,0.05)" strokeDasharray="3,3" />
+                {chart.area && <path d={chart.area} fill="url(#areaGrad)" />}
+                {chart.line && (
+                  <path d={chart.line} fill="none" stroke="#8b5cf6" strokeWidth="3.5" strokeLinecap="round" />
+                )}
+                {chart.points.map((point, index) => (
+                  <circle
+                    key={index}
+                    cx={point.x}
+                    cy={point.y}
+                    r={4.5}
+                    fill="#a78bfa"
+                    stroke="#0B0F14"
+                    strokeWidth="1.5"
+                  />
+                ))}
+              </svg>
+              <div className="absolute top-1/4 left-10 text-[9px] font-mono text-[#8B949E]">
+                {Math.round(chartMax).toLocaleString()} views
+              </div>
             </div>
-            <div className="absolute top-3/4 left-10 text-[9px] font-mono text-[#8B949E]">0</div>
-          </div>
+          )}
         </div>
 
         <div className="bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl p-6 space-y-5 shadow-lg flex flex-col justify-between">
@@ -226,37 +244,37 @@ export default function AnalyticsView() {
               <h4 className="text-xs font-bold text-white font-mono uppercase tracking-wider">
                 Distribución de Tráfico
               </h4>
-              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
             </div>
 
-            <div className="space-y-4.5">
-              {channelDistribution.map((ch, idx) => (
-                <div key={idx} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-[#E6EDF2]">{ch.name}</span>
-                    <span className="text-[#8B949E] font-mono">
-                      {ch.views} ({ch.percentage}%)
-                    </span>
+            {channelDistribution.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-6 text-center">Sin datos de tráfico</p>
+            ) : (
+              <div className="space-y-4.5">
+                {channelDistribution.map((ch, idx) => (
+                  <div key={idx} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-[#E6EDF2]">{ch.name}</span>
+                      <span className="text-[#8B949E] font-mono">
+                        {ch.views} ({ch.percentage}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-[#0B0F14] rounded-full overflow-hidden p-[1px] border border-[rgba(255,255,255,0.05)]">
+                      <div className={`h-full ${ch.color} rounded-full`} style={{ width: `${ch.percentage}%` }} />
+                    </div>
                   </div>
-                  <div className="w-full h-2 bg-[#0B0F14] rounded-full overflow-hidden p-[1px] border border-[rgba(255,255,255,0.05)]">
-                    <div className={`h-full ${ch.color} rounded-full`} style={{ width: `${ch.percentage}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="bg-[#0B0F14] p-4.5 rounded-2xl border border-indigo-900/10 space-y-2 relative overflow-hidden">
-            <div className="absolute top-3 right-3 opacity-10">
-              <Sparkles className="w-12 h-12 text-indigo-400" />
-            </div>
             <div className="flex items-center gap-1.5 text-indigo-400 text-xs font-bold">
               <Sparkles className="w-4 h-4" />
               <span>Agente Analítico IA</span>
             </div>
             <p className="text-[10px] text-[#8B949E] leading-relaxed">
-              Conecta YouTube OAuth en Configuración para ver métricas reales de los últimos 14 días.
-              TikTok e Instagram estarán disponibles en una fase posterior.
+              Ejecuta el agente <strong className="text-slate-300">analytics_agent</strong> en un episodio
+              publicado para recomendaciones basadas en datos reales.
             </p>
           </div>
         </div>

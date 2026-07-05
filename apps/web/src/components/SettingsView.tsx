@@ -64,7 +64,7 @@ const API_KEY_FIELDS: Array<{
     label: 'ElevenLabs',
     fields: [
       { key: 'elevenlabsApiKey', label: 'API Key', placeholder: 'xi-...' },
-      { key: 'elevenlabsVoiceId', label: 'Voice ID (opcional)', placeholder: '21m00Tcm4TlvDq8ikWAM', optional: true },
+      { key: 'elevenlabsVoiceId', label: 'Voice ID (opcional)', placeholder: 'JBFqnCBsd6RMkjVDRZzb', optional: true },
     ],
   },
   {
