@@ -17,6 +17,7 @@ episodes/
 secrets.enc
 settings.json
 channels.json
+team.json
 
 # Test artifacts
 coverage/

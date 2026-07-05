@@ -27,7 +27,7 @@ import { isSupabaseAuthEnabled } from './lib/supabase';
 import {
   INITIAL_SERIES,
 } from './data';
-import { Channel, VideoProject, Notification, TeamMember } from './types';
+import { Channel, VideoProject, Notification } from './types';
 import type { EpisodeDetail, EpisodeSummary } from '@creator-ai-studio/shared';
 import {
   EPISODE_STATUS_PROGRESS,
@@ -124,7 +124,6 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [workspaceInitialTab, setWorkspaceInitialTab] = useState<WorkspaceTab | null>(null);
   const [workspaceForcedTab, setWorkspaceForcedTab] = useState<WorkspaceTab | undefined>();
   const [workspaceForcedTabRequest, setWorkspaceForcedTabRequest] = useState(0);
-  const [team, setTeam] = useState<TeamMember[]>([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [deleteWorkspaceTarget, setDeleteWorkspaceTarget] = useState<VideoProject | null>(null);
   const [deletingEpisode, setDeletingEpisode] = useState(false);
@@ -582,17 +581,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             />
           )}
 
-          {currentView === 'teams' && (
-            <TeamsView
-              team={team}
-              onInvite={(name, role) => {
-                setTeam(prev => [
-                  ...prev,
-                  { id: `mem_${Date.now()}`, name, role, avatar: '👤', status: 'Online' },
-                ]);
-              }}
-            />
-          )}
+          {currentView === 'teams' && <TeamsView />}
 
           {currentView === 'settings' && <SettingsView />}
         </main>
