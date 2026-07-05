@@ -46,8 +46,12 @@ describe('resolveSceneSlides', () => {
   });
 
   it('does not skip scenes missing imageUrl when file exists at index', async () => {
-    await writeFile(path.join(episodeDir, '04-assets', 'slide-004.png'), fakeSceneSlideBuffer());
-    await writeFile(path.join(episodeDir, '04-assets', 'slide-005.png'), fakeSceneSlideBuffer());
+    for (let i = 0; i < 6; i++) {
+      await writeFile(
+        path.join(episodeDir, '04-assets', `slide-${String(i).padStart(3, '0')}.png`),
+        fakeSceneSlideBuffer(),
+      );
+    }
     const scenes = [
       ...Array.from({ length: 4 }, (_, i) => scene(`s${i}`, i, `/api/episodes/x/scene-images/slide-00${i}.png`)),
       scene('s4', 4, ''),
