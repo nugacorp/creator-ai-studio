@@ -13,6 +13,7 @@ import type { ProjectStatus } from '../types';
 import type { WorkspaceTab } from '../lib/dashboardNavigation';
 import {
   PIPELINE_STEPS,
+  agentDisplayName,
   agentsForStep,
   stepForColumn,
   stepIndex,
@@ -288,20 +289,7 @@ export default function ProjectPipelinePanel({
 
         <div className="flex flex-wrap gap-2">
           {stepAgents.map(agentId => {
-            const step = PIPELINE_STEPS.find(s => s.agentId === agentId);
-            const name =
-              step?.agentName ??
-              (agentId === 'doctrine_reviewer'
-                ? 'Revisor doctrinal'
-                : agentId === 'editorial_reviewer'
-                  ? 'Revisor editorial'
-                  : agentId === 'storyboard_designer'
-                    ? 'Storyboard'
-                    : agentId === 'scene_asset_designer'
-                      ? 'Assets visuales'
-                      : agentId === 'audio_engineer'
-                        ? 'Ingeniero audio'
-                        : agentId);
+            const name = agentDisplayName(agentId);
             return (
               <button
                 key={agentId}
@@ -359,14 +347,24 @@ export default function ProjectPipelinePanel({
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
           {viewingStep.column === 'Edición' && (
-            <button
-              type="button"
-              onClick={() => onGoToTab('subtitulos')}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-yellow-500/30 text-xs text-yellow-300 hover:text-yellow-200 cursor-pointer"
-            >
-              Subtítulos
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => onGoToTab('subtitulos')}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-yellow-500/30 text-xs text-yellow-300 hover:text-yellow-200 cursor-pointer"
+              >
+                Subtítulos
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onGoToTab('shorts')}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-fuchsia-500/30 text-xs text-fuchsia-300 hover:text-fuchsia-200 cursor-pointer"
+              >
+                Shorts
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </>
           )}
         </div>
 

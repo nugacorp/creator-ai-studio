@@ -71,7 +71,7 @@ import {
   type ElevenLabsVoice,
 } from '../api';
 import type { EpisodeStage, EpisodeStageStatus } from '@creator-ai-studio/shared';
-import { suggestNextPublishSlot, DEFAULT_PUBLISH_SCHEDULE } from '@creator-ai-studio/shared';
+import { suggestNextPublishSlot, DEFAULT_PUBLISH_SCHEDULE, formatNextPublishSlot } from '@creator-ai-studio/shared';
 
 interface WorkspaceViewProps {
   project: VideoProject;
@@ -160,6 +160,7 @@ export default function WorkspaceView({
   };
   const [scheduleDate, setScheduleDate] = useState(defaultScheduleDate);
   const [scheduleTime, setScheduleTime] = useState(defaultScheduleTime);
+  const [habitualSlotLabel, setHabitualSlotLabel] = useState<string | null>(null);
   const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null);
   const [schedulingPublish, setSchedulingPublish] = useState(false);
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
@@ -931,8 +932,10 @@ export default function WorkspaceView({
       setScheduleTime(
         `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`,
       );
-      triggerFeedback('success', '✓ Horario habitual aplicado (próximo lunes 15:00 o según configuración)');
+      setHabitualSlotLabel(formatNextPublishSlot(slot, 'longVideo'));
+      triggerFeedback('success', '✓ Horario habitual aplicado');
     } catch {
+      setHabitualSlotLabel(null);
       triggerFeedback('error', 'No se pudo cargar el horario habitual');
     }
   };
@@ -2100,7 +2103,7 @@ export default function WorkspaceView({
 
               <div className="space-y-2 lg:col-span-2">
                 <h4 className="text-[11px] font-bold text-[#8B949E] uppercase tracking-wider font-mono">
-                  Comentario fijado sugerido (YouTube)
+                  Comentario para fijar (YouTube)
                 </h4>
                 <p className="text-[10px] text-[#8B949E]">
                   YouTube no permite fijar vía API al subir — copia este texto y fíjalo manualmente en Studio.
@@ -2273,6 +2276,12 @@ export default function WorkspaceView({
               >
                 Usar horario habitual
               </button>
+
+              {habitualSlotLabel && (
+                <p className="text-[11px] text-indigo-300 bg-indigo-950/30 border border-indigo-500/20 rounded-xl px-3 py-2">
+                  {habitualSlotLabel}
+                </p>
+              )}
 
               {pinnedComment.trim() && (
                 <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-3 space-y-2">

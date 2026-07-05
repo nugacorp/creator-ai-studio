@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Brain, Check, Cpu, FolderKanban, Loader2, Save, Sparkles } from 'lucide-react';
-import type { AgentDefinition } from '@creator-ai-studio/shared';
+import type { AgentDefinition, AgentId } from '@creator-ai-studio/shared';
 import {
   fetchAgentConfig,
   fetchAgents,
   patchAgentOverrides,
   type AgentConfigResponse,
 } from '../api';
-import { PIPELINE_STEPS } from '../lib/projectPipeline';
+import { pipelineStepForAgent } from '../lib/projectPipeline';
 
 const AGENT_COLORS: Record<string, string> = {
   hermes: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
@@ -93,7 +93,7 @@ export default function AgentStudioView({ onOpenProjects }: AgentStudioViewProps
     if (selectedId) void loadConfig(selectedId);
   }, [selectedId, loadConfig]);
 
-  const pipelineStep = PIPELINE_STEPS.find(s => s.agentId === selectedId);
+  const pipelineStep = selectedId ? pipelineStepForAgent(selectedId as AgentId) : undefined;
 
   const handleSave = async () => {
     if (!selectedId) return;
@@ -171,7 +171,7 @@ export default function AgentStudioView({ onOpenProjects }: AgentStudioViewProps
         <aside className="bg-[#15191E] border border-white/5 rounded-2xl p-3 space-y-1 max-h-[70vh] overflow-y-auto">
           {agents.map(agent => {
             const colors = AGENT_COLORS[agent.id] ?? 'text-slate-300 bg-white/5 border-white/10';
-            const step = PIPELINE_STEPS.find(s => s.agentId === agent.id);
+            const step = pipelineStepForAgent(agent.id as AgentId);
             return (
               <button
                 key={agent.id}

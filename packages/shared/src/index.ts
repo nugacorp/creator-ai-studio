@@ -675,6 +675,8 @@ export function canTransitionStage(
 
 export {
   DEFAULT_PUBLISH_SCHEDULE,
+  formatNextPublishSlot,
+  formatPublishScheduleSummary,
   suggestNextPublishSlot,
   type PublishScheduleKind,
 } from './schedule.js';

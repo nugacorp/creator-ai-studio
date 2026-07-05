@@ -204,4 +204,25 @@ describe('ProjectPipelinePanel stepper navigation', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Editar contenido/i }));
     expect(onGoToTab).toHaveBeenCalledWith('analytics');
   });
+
+  it('shows Agente de Shorts pill when Edición step is selected', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/agent-runs')) return jsonResponse({ runs: [] });
+      if (url.includes('/episodes/ep-published')) return jsonResponse(episodeDetail);
+      return jsonResponse([]);
+    });
+
+    render(
+      <ProjectPipelinePanel
+        episodeId="ep-published"
+        projectStatus="Edición"
+        onGoToTab={() => undefined}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Agente de Shorts' })).toBeInTheDocument(),
+    );
+  });
 });

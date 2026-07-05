@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_PUBLISH_SCHEDULE,
+  formatNextPublishSlot,
+  formatPublishScheduleSummary,
   suggestNextPublishSlot,
 } from '../src/schedule.js';
 
@@ -28,5 +30,22 @@ describe('suggestNextPublishSlot', () => {
     const slot = suggestNextPublishSlot(DEFAULT_PUBLISH_SCHEDULE, 'shorts', from);
     expect(slot.getDay()).toBe(2); // Tuesday
     expect(slot.getHours()).toBe(10);
+  });
+});
+
+describe('formatPublishScheduleSummary', () => {
+  it('formats Camino Bíblico defaults in Spanish', () => {
+    const summary = formatPublishScheduleSummary(DEFAULT_PUBLISH_SCHEDULE);
+    expect(summary.longVideo).toContain('Video largo (lun 15:00)');
+    expect(summary.shorts).toContain('Shorts (mar/jue/sáb 10:00)');
+    expect(summary.timezone).toBe('America/Mexico_City');
+  });
+});
+
+describe('formatNextPublishSlot', () => {
+  it('includes kind and localized date', () => {
+    const slot = new Date(2026, 6, 6, 15, 0, 0);
+    const label = formatNextPublishSlot(slot, 'longVideo');
+    expect(label).toMatch(/Próximo video largo:/);
   });
 });

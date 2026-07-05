@@ -13,6 +13,43 @@ export const DEFAULT_PUBLISH_SCHEDULE: PublishSchedule = {
 
 export type PublishScheduleKind = 'longVideo' | 'shorts';
 
+const DAY_LABELS_SHORT = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'] as const;
+
+/** Human-readable summary for settings / calendar UI (Spanish). */
+export function formatPublishScheduleSummary(schedule: PublishSchedule): {
+  longVideo: string;
+  shorts: string;
+  timezone: string;
+} {
+  const lv = schedule.longVideo;
+  const longVideo = `Video largo (${DAY_LABELS_SHORT[lv.dayOfWeek] ?? '?'} ${String(lv.hour).padStart(2, '0')}:${String(lv.minute).padStart(2, '0')})`;
+  const shortsCfg = schedule.shorts ?? DEFAULT_PUBLISH_SCHEDULE.shorts!;
+  const days = [...shortsCfg.daysOfWeek]
+    .sort((a, b) => a - b)
+    .map(d => DAY_LABELS_SHORT[d] ?? '?')
+    .join('/');
+  const shorts = `Shorts (${days} ${String(shortsCfg.hour).padStart(2, '0')}:${String(shortsCfg.minute).padStart(2, '0')})`;
+  const timezone =
+    schedule.longVideo.timezone ??
+    shortsCfg.timezone ??
+    DEFAULT_PUBLISH_SCHEDULE.longVideo.timezone ??
+    'local';
+  return { longVideo, shorts, timezone };
+}
+
+/** Label for the next suggested slot (Spanish locale). */
+export function formatNextPublishSlot(slot: Date, kind: PublishScheduleKind): string {
+  const kindLabel = kind === 'longVideo' ? 'video largo' : 'Shorts';
+  const when = slot.toLocaleString('es-ES', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `Próximo ${kindLabel}: ${when}`;
+}
+
 function atLocalSlot(
   base: Date,
   dayOfWeek: number,

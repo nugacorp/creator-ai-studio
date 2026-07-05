@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Sliders, ShieldCheck, HelpCircle, ExternalLink, KeyRound, PlugZap, CheckCircle2, Loader2, LogIn } from 'lucide-react';
 import type { SecretAuthMethod, SecretProvider, SecretStatus } from '@creator-ai-studio/shared';
-import { DEFAULT_PUBLISH_SCHEDULE } from '@creator-ai-studio/shared';
+import {
+  DEFAULT_PUBLISH_SCHEDULE,
+  formatPublishScheduleSummary,
+} from '@creator-ai-studio/shared';
 import {
   fetchSecrets,
   fetchSettings,
@@ -81,6 +84,26 @@ const API_KEY_FIELDS: Array<{
     fields: [{ key: 'webhookUrl', label: 'URL', placeholder: 'https://...' }],
   },
 ];
+
+const SHORTS_DAY_OPTIONS = [
+  { value: 0, label: 'Dom' },
+  { value: 1, label: 'Lun' },
+  { value: 2, label: 'Mar' },
+  { value: 3, label: 'Mié' },
+  { value: 4, label: 'Jue' },
+  { value: 5, label: 'Vie' },
+  { value: 6, label: 'Sáb' },
+] as const;
+
+const TIMEZONE_OPTIONS = [
+  { value: 'America/Mexico_City', label: 'Ciudad de México (CST)' },
+  { value: 'America/Bogota', label: 'Bogotá (COT)' },
+  { value: 'America/Lima', label: 'Lima (PET)' },
+  { value: 'America/Santiago', label: 'Santiago (CLT)' },
+  { value: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires (ART)' },
+  { value: 'Europe/Madrid', label: 'Madrid (CET)' },
+  { value: 'UTC', label: 'UTC' },
+] as const;
 
 export default function SettingsView() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -270,6 +293,48 @@ export default function SettingsView() {
     if (authMethod === 'oauth') return 'OAuth';
     if (authMethod === 'api_key') return 'API Key';
     return 'Sin configurar';
+  };
+
+  const scheduleSummary = formatPublishScheduleSummary(
+    settings.publishSchedule ?? DEFAULT_PUBLISH_SCHEDULE,
+  );
+
+  const updateScheduleTimezone = (timezone: string) => {
+    setSettings(s => ({
+      ...s,
+      publishSchedule: {
+        ...DEFAULT_PUBLISH_SCHEDULE,
+        ...s.publishSchedule,
+        longVideo: {
+          ...(s.publishSchedule?.longVideo ?? DEFAULT_PUBLISH_SCHEDULE.longVideo),
+          timezone,
+        },
+        shorts: {
+          ...(s.publishSchedule?.shorts ?? DEFAULT_PUBLISH_SCHEDULE.shorts!),
+          timezone,
+        },
+      },
+    }));
+  };
+
+  const toggleShortsDay = (day: number) => {
+    setSettings(s => {
+      const current = s.publishSchedule?.shorts?.daysOfWeek ?? [2, 4, 6];
+      const next = current.includes(day)
+        ? current.filter(d => d !== day)
+        : [...current, day].sort((a, b) => a - b);
+      return {
+        ...s,
+        publishSchedule: {
+          ...DEFAULT_PUBLISH_SCHEDULE,
+          ...s.publishSchedule,
+          shorts: {
+            ...(s.publishSchedule?.shorts ?? DEFAULT_PUBLISH_SCHEDULE.shorts!),
+            daysOfWeek: next.length ? next : [day],
+          },
+        },
+      };
+    });
   };
 
   return (
@@ -646,6 +711,29 @@ export default function SettingsView() {
               <p className="text-[10px] text-slate-500">
                 Camino Bíblico: video largo los lunes 15:00; Shorts mar/jue/sáb 10:00 (hora local).
               </p>
+              <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 px-3 py-2 text-[11px] text-indigo-200 space-y-0.5">
+                <p>{scheduleSummary.longVideo}</p>
+                <p>{scheduleSummary.shorts}</p>
+                <p className="text-[10px] text-indigo-300/70 font-mono">Zona: {scheduleSummary.timezone}</p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-400 text-[10px] uppercase block">Zona horaria</label>
+                <select
+                  value={
+                    settings.publishSchedule?.longVideo.timezone ??
+                    DEFAULT_PUBLISH_SCHEDULE.longVideo.timezone ??
+                    'America/Mexico_City'
+                  }
+                  onChange={e => updateScheduleTimezone(e.target.value)}
+                  className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs"
+                >
+                  {TIMEZONE_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-slate-400 text-[10px] uppercase block">Video largo — día</label>
@@ -724,30 +812,28 @@ export default function SettingsView() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-slate-400 text-[10px] uppercase block">Shorts — días (CSV 0=Dom)</label>
-                  <input
-                    type="text"
-                    value={(settings.publishSchedule?.shorts?.daysOfWeek ?? [2, 4, 6]).join(',')}
-                    onChange={e => {
-                      const days = e.target.value
-                        .split(',')
-                        .map(v => Number(v.trim()))
-                        .filter(n => !Number.isNaN(n) && n >= 0 && n <= 6);
-                      setSettings(s => ({
-                        ...s,
-                        publishSchedule: {
-                          ...DEFAULT_PUBLISH_SCHEDULE,
-                          ...s.publishSchedule,
-                          shorts: {
-                            ...(s.publishSchedule?.shorts ?? DEFAULT_PUBLISH_SCHEDULE.shorts!),
-                            daysOfWeek: days.length ? days : [2, 4, 6],
-                          },
-                        },
-                      }));
-                    }}
-                    className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono"
-                    placeholder="2,4,6"
-                  />
+                  <label className="text-slate-400 text-[10px] uppercase block">Shorts — días</label>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {SHORTS_DAY_OPTIONS.map(day => {
+                      const selected = (settings.publishSchedule?.shorts?.daysOfWeek ?? [2, 4, 6]).includes(
+                        day.value,
+                      );
+                      return (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => toggleShortsDay(day.value)}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
+                            selected
+                              ? 'bg-fuchsia-600/80 border-fuchsia-500 text-white'
+                              : 'bg-[#0B0F14] border-white/10 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>

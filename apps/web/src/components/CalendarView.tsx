@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
-import { suggestNextPublishSlot, DEFAULT_PUBLISH_SCHEDULE } from '@creator-ai-studio/shared';
+import { suggestNextPublishSlot, DEFAULT_PUBLISH_SCHEDULE, formatNextPublishSlot } from '@creator-ai-studio/shared';
 import { fetchCalendarEvents, fetchSettings, type CalendarEvent as ApiCalendarEvent } from '../api';
 
 interface CalendarEvent {
@@ -90,6 +90,7 @@ export default function CalendarView() {
   const [newEventDate, setNewEventDate] = useState(() => today.toISOString().slice(0, 10));
   const [newEventTime, setNewEventTime] = useState('18:00');
   const [newEventChannel, setNewEventChannel] = useState('YouTube Principal');
+  const [slotPreviewLabel, setSlotPreviewLabel] = useState<string | null>(null);
 
   const dateStringForDay = (day: number) => {
     const y = baseDate.getFullYear();
@@ -135,8 +136,9 @@ export default function CalendarView() {
       setNewEventTime(
         `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`,
       );
+      setSlotPreviewLabel(formatNextPublishSlot(slot, kind));
     } catch {
-      // ignore — user can set manually
+      setSlotPreviewLabel(null);
     }
   };
 
@@ -371,9 +373,15 @@ export default function CalendarView() {
                   onClick={() => void applyHabitualSlot('shorts')}
                   className="px-3 py-1.5 rounded-xl border border-fuchsia-500/30 text-[10px] font-bold text-fuchsia-300 hover:bg-fuchsia-500/10"
                 >
-                  Slot Shorts
+                  Usar horario habitual (Shorts)
                 </button>
               </div>
+
+              {slotPreviewLabel && (
+                <p className="text-[11px] text-indigo-300 bg-indigo-950/30 border border-indigo-500/20 rounded-xl px-3 py-2">
+                  {slotPreviewLabel}
+                </p>
+              )}
 
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-[rgba(255,255,255,0.05)]/60">
                 <button

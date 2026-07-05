@@ -14,6 +14,30 @@ export interface PipelineStep {
   relatedAgentIds?: AgentId[];
 }
 
+/** Display names for agents that appear as related pills (not primary column owners). */
+export const RELATED_AGENT_NAMES: Partial<Record<AgentId, string>> = {
+  doctrine_reviewer: 'Revisor doctrinal',
+  editorial_reviewer: 'Revisor editorial',
+  storyboard_designer: 'Storyboard',
+  scene_asset_designer: 'Assets visuales',
+  audio_engineer: 'Ingeniero audio',
+  shorts_agent: 'Agente de Shorts',
+};
+
+export function agentDisplayName(agentId: AgentId): string {
+  const step = PIPELINE_STEPS.find(s => s.agentId === agentId);
+  if (step) return step.agentName;
+  return RELATED_AGENT_NAMES[agentId] ?? agentId;
+}
+
+/** Kanban column for an agent (primary owner or related pill). */
+export function pipelineStepForAgent(agentId: AgentId): PipelineStep | undefined {
+  return (
+    PIPELINE_STEPS.find(s => s.agentId === agentId) ??
+    PIPELINE_STEPS.find(s => s.relatedAgentIds?.includes(agentId))
+  );
+}
+
 /** Kanban columns aligned with production agents (one project = one column at a time). */
 export const PIPELINE_STEPS: PipelineStep[] = [
   {
