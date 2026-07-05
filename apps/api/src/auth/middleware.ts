@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { timingSafeEqual } from 'node:crypto';
 import process from 'node:process';
-import { isSupabaseAuthConfigured, verifySupabaseAccessToken } from './supabase-jwt.js';
+import { getAuthConfig } from './config.js';
+import { verifySupabaseAccessToken } from './supabase-jwt.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -9,7 +10,15 @@ declare module 'fastify' {
   }
 }
 
-const PUBLIC_PATHS = new Set(['/health', '/api/health']);
+const PUBLIC_PATHS = new Set([
+  '/health',
+  '/api/health',
+  '/auth/status',
+  '/api/auth/status',
+  // Non-secret operational flags (demoMode, provider names) — used by DemoModeBanner and ops checks.
+  '/system/mode',
+  '/api/system/mode',
+]);
 const PUBLIC_PATH_PREFIXES = ['/oauth/', '/api/oauth/'];
 
 function isPublicPath(pathname: string): boolean {
@@ -30,10 +39,10 @@ function safeEquals(a: string, b: string): boolean {
 }
 
 export function registerAuthHook(app: FastifyInstance): void {
-  const apiKey = process.env.CAS_API_KEY;
-  const supabaseAuth = isSupabaseAuthConfigured();
+  const { apiKeyAuth, supabaseAuth } = getAuthConfig();
+  const apiKeyValue = process.env.CAS_API_KEY;
 
-  if (!apiKey && !supabaseAuth) {
+  if (!apiKeyAuth && !supabaseAuth) {
     // Fail closed in production: never expose the API without authentication.
     if (process.env.NODE_ENV === 'production') {
       throw new Error(
@@ -58,7 +67,7 @@ export function registerAuthHook(app: FastifyInstance): void {
     const token =
       bearerToken ?? (typeof headerKey === 'string' ? headerKey : undefined);
 
-    if (apiKey && token && safeEquals(token, apiKey)) {
+    if (apiKeyAuth && apiKeyValue && token && safeEquals(token, apiKeyValue)) {
       return;
     }
 
@@ -68,13 +77,13 @@ export function registerAuthHook(app: FastifyInstance): void {
         request.userId = verified.userId;
         return;
       }
-      if (!apiKey) {
+      if (!apiKeyAuth) {
         reply.code(401);
         return reply.send({ error: 'invalid_token' });
       }
     }
 
-    if (apiKey || supabaseAuth) {
+    if (apiKeyAuth || supabaseAuth) {
       reply.code(401);
       return reply.send({ error: 'unauthorized' });
     }

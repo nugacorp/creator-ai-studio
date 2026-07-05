@@ -73,10 +73,14 @@ Migraciones en `supabase/migrations/`:
 | `VITE_SUPABASE_URL` | Build web | Cliente Supabase |
 | `VITE_SUPABASE_ANON_KEY` | Build web | Cliente Supabase |
 | `SUPABASE_JWT_SECRET` | API | Validar JWT (`Project Settings → API → JWT Secret`) |
-| `SUPABASE_URL` | API (opcional) | Sync Postgres |
+| `SUPABASE_URL` | API (opcional) | Sync Postgres + JWKS fallback |
 | `SUPABASE_SERVICE_ROLE_KEY` | API (opcional) | Sync Postgres |
 
-Tras definir `VITE_*`, **rebuild** la imagen web. Con `SUPABASE_JWT_SECRET` en la API, todas las rutas `/api/*` (excepto health y OAuth) requieren `Authorization: Bearer <access_token>`.
+**VPS:** guarda los valores reales en `/root/creator-ai-studio/.env.supabase.local` (no en git). `scripts/vps-redeploy.sh` los carga para inyectar `SUPABASE_*` en la API y pasar `VITE_SUPABASE_*` al build de la web. Si faltan `VITE_*`, el dashboard no muestra login y verás `401 unauthorized` en todas las rutas protegidas.
+
+Endpoint público de diagnóstico: `GET /api/auth/status` → `{ authRequired, apiKeyAuth, supabaseAuth }`.
+
+Tras definir `VITE_*`, **rebuild** la imagen web. Con auth activa, las rutas `/api/*` (excepto health, auth/status y OAuth) requieren `Authorization: Bearer <access_token>` o `CAS_API_KEY`.
 
 ## 5. Desarrollo local
 
@@ -111,6 +115,6 @@ SUPABASE_JWT_SECRET=<JWT secret de supabase status>
 
 ## Notas
 
-- Sin `VITE_SUPABASE_*`, la web sigue **sin login** (comportamiento actual).
+- Sin `VITE_SUPABASE_*`, la web muestra una pantalla de **configuración requerida** cuando `/api/auth/status` indica `authRequired: true` (no intenta cargar el dashboard sin login).
 - OAuth Google en Configuración ≠ login Supabase; son flujos distintos.
 - Fase 2: asignar `user_id` al crear episodios en API cuando `request.userId` esté presente.

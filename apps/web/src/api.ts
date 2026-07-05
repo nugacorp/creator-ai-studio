@@ -26,6 +26,27 @@ export function setApiAccessToken(token: string | null): void {
   apiAccessToken = token;
 }
 
+export class ApiUnauthorizedError extends Error {
+  constructor() {
+    super('unauthorized');
+    this.name = 'ApiUnauthorizedError';
+  }
+}
+
+export interface AuthStatus {
+  authRequired: boolean;
+  apiKeyAuth: boolean;
+  supabaseAuth: boolean;
+}
+
+export async function fetchAuthStatus(): Promise<AuthStatus> {
+  const response = await fetch(`${API_BASE_URL}/auth/status`);
+  if (!response.ok) {
+    throw new Error(`API error (${response.status})`);
+  }
+  return (await response.json()) as AuthStatus;
+}
+
 function authHeaders(extra?: HeadersInit): Headers {
   const headers = new Headers(extra);
   if (apiAccessToken) {
@@ -37,6 +58,9 @@ function authHeaders(extra?: HeadersInit): Headers {
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = authHeaders(init?.headers);
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  if (response.status === 401) {
+    throw new ApiUnauthorizedError();
+  }
   if (!response.ok) {
     throw new Error(`API error (${response.status})`);
   }

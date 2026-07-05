@@ -12,6 +12,7 @@ import {
   type UpdateStageInput,
 } from '@creator-ai-studio/shared';
 import { registerAuthHook } from './auth/middleware.js';
+import { getAuthConfig } from './auth/config.js';
 import { registerHardening } from './http/hardening.js';
 import {
   channelBody,
@@ -38,7 +39,7 @@ import {
 import { areMocksAllowed } from './config/mocks.js';
 import { getGeminiAuth } from './secrets/google-auth.js';
 import { getSecret } from './secrets/resolver.js';
-import { resolveProvider } from './ai/router.js';
+import { resolveProviderName } from './ai/router.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -90,6 +91,8 @@ function registerRoutes(
       mocksAllowed: areMocksAllowed(),
     };
   });
+
+  app.get(route(prefix, '/auth/status'), async () => getAuthConfig());
 
   app.get(route(prefix, '/episodes'), async (request): Promise<EpisodeSummary[]> => {
     const source = getEpisodeMetadataSource();
@@ -281,17 +284,17 @@ function registerRoutes(
     const anthropic = await getSecret('ANTHROPIC_API_KEY');
     const elevenlabs = await getSecret('ELEVENLABS_API_KEY');
     const hasAiKey = Boolean(geminiAuth || openai || anthropic);
-    const provider = await resolveProvider();
+    const aiProvider = await resolveProviderName('script');
     const settings = await getSettings();
     const { checkFfmpeg } = await import('./media/render.js');
     const ffmpegAvailable = await checkFfmpeg();
     const mocksAllowed = areMocksAllowed();
     const demoMode =
-      mocksAllowed && (!hasAiKey || provider.name === 'demo');
+      mocksAllowed && (!hasAiKey || aiProvider === 'demo');
     return {
       demoMode,
       mocksAllowed,
-      aiProvider: provider.name,
+      aiProvider,
       ttsProvider: settings.ttsProvider,
       ttsConfigured: Boolean(elevenlabs) || settings.ttsProvider === 'piper',
       ffmpegAvailable,
