@@ -476,7 +476,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             />
           )}
 
-          {currentView === 'ideas' && (
+          {currentView === 'contenido' && (
             <IdeasView
               onOpenWorkspace={projectId => {
                 setActiveProjectId(projectId);

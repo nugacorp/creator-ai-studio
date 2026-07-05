@@ -1,7 +1,6 @@
 import {
   Home,
   FolderKanban,
-  FileVideo,
   Bot,
   Library,
   Calendar,
@@ -26,9 +25,8 @@ interface SidebarProps {
 export default function Sidebar({ currentView, setCurrentView, mobileOpen = false, setMobileOpen }: SidebarProps) {
   const menuItems = [
     { id: 'home', label: 'Home', icon: Home },
-    { id: 'ideas', label: 'Ideas', icon: Lightbulb },
     { id: 'projects', label: 'Proyectos', icon: FolderKanban },
-    { id: 'workspace', label: 'Contenido', icon: FileVideo },
+    { id: 'contenido', label: 'Contenido', icon: Lightbulb },
     { id: 'copilot', label: 'IA Copilot', icon: Bot },
     { id: 'library', label: 'Biblioteca IA', icon: Library },
     { id: 'calendar', label: 'Publicaciones', icon: Calendar },
