@@ -457,11 +457,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             <HomeView
               onContinueWorking={handleContinueWorking}
               onNavigateToSection={handleNavigateToSection}
+              onGoToProjects={() => setCurrentView('projects')}
               projects={projects}
-              setProjects={setProjects}
-              onAddNotification={handleAddNotification}
               onCreateEpisode={handleCreateEpisode}
-              onAddNewScript={handleAddNewScript}
             />
           )}
 
@@ -531,6 +529,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                   forcedTabRequest={workspaceForcedTabRequest}
                   stageRefreshToken={workspaceRefreshToken}
                   onMoveProjectStatus={handleMoveProjectStatus}
+                  onGoToChannelAnalytics={() => setCurrentView('analytics')}
                 />
               </div>
             ) : (
@@ -560,7 +559,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
 
           {currentView === 'analytics' && <AnalyticsView />}
 
-          {currentView === 'automation' && <AutomationView episodeId={activeProject?.id} />}
+          {currentView === 'automation' && <AutomationView />}
 
           {currentView === 'agents' && (
             <AgentStudioView onOpenProjects={() => setCurrentView('projects')} />

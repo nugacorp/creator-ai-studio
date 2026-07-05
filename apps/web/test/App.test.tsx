@@ -102,7 +102,7 @@ describe('Official dashboard shell', () => {
     await waitFor(() =>
       expect(screen.getByText(/Buenos días|Buenas tardes|Buenas noches/)).toBeInTheDocument(),
     );
-    expect(document.getElementById('quick-actions-fab')).toBeInTheDocument();
+    expect(document.getElementById('new-project-btn')).toBeInTheDocument();
   });
 
   it('loads real episodes from the backend into the Projects view', async () => {

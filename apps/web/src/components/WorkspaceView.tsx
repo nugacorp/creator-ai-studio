@@ -75,6 +75,7 @@ interface WorkspaceViewProps {
   forcedTabRequest?: number;
   stageRefreshToken?: number;
   onMoveProjectStatus?: (id: string, status: ProjectStatus) => Promise<void>;
+  onGoToChannelAnalytics?: () => void;
 }
 
 const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: typeof FileText }[] = [
@@ -97,6 +98,7 @@ export default function WorkspaceView({
   forcedTabRequest = 0,
   stageRefreshToken = 0,
   onMoveProjectStatus,
+  onGoToChannelAnalytics,
 }: WorkspaceViewProps) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialTab ?? 'guion');
   const [stageStatuses, setStageStatuses] = useState<Map<EpisodeStage, EpisodeStageStatus>>(
@@ -2095,26 +2097,51 @@ export default function WorkspaceView({
         {/* 8. ANALYTICS TAB */}
         {activeTab === 'analytics' && (
           <div className="space-y-6">
-            <h4 className="text-sm font-bold text-white">Métricas del episodio</h4>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h4 className="text-sm font-bold text-white">Métricas del episodio</h4>
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 px-2 py-0.5 rounded border border-white/5">
+                Nivel episodio
+              </span>
+            </div>
 
             {project.status === 'Publicado' ? (
-              <div className="rounded-xl border border-white/10 bg-[#0B0F14] p-6 space-y-3 text-center">
+              <div className="rounded-xl border border-white/10 bg-[#0B0F14] p-6 space-y-4 text-center">
                 <p className="text-sm text-slate-300">
-                  Las métricas por video están en la vista global de Analytics cuando YouTube OAuth está
-                  conectado.
+                  Las métricas agregadas del canal (vistas, suscriptores, engagement) están en el dashboard
+                  global de Analytics.
                 </p>
                 <p className="text-xs text-slate-500">
                   Ejecuta el agente <strong className="text-slate-400">analytics_agent</strong> para un
                   informe de rendimiento de este episodio.
                 </p>
+                {onGoToChannelAnalytics && (
+                  <button
+                    type="button"
+                    onClick={onGoToChannelAnalytics}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Ver Analytics del canal
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0F14]/50 p-8 text-center space-y-2">
+              <div className="rounded-xl border border-dashed border-white/10 bg-[#0B0F14]/50 p-8 text-center space-y-3">
                 <p className="text-sm text-slate-400 font-medium">Sin métricas todavía</p>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
                   Este episodio está en <strong className="text-slate-400">{project.status}</strong>. Las
                   visualizaciones y engagement aparecerán después de publicar en YouTube.
                 </p>
+                {onGoToChannelAnalytics && (
+                  <button
+                    type="button"
+                    onClick={onGoToChannelAnalytics}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-slate-300 hover:text-white hover:border-indigo-500/40 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Ir al dashboard de Analytics del canal
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             )}
           </div>
