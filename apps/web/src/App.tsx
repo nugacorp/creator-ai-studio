@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import HomeView from './components/HomeView';
@@ -80,6 +81,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [activeProjectId, setActiveProjectId] = useState<string>('ansiedad_biblia');
   const [team, setTeam] = useState<TeamMember[]>(TEAM_MEMBERS);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
 
   const activeProject = projects.find(p => p.id === activeProjectId) || projects[0];
 
@@ -120,6 +122,14 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     void loadProjects();
   }, [loadProjects]);
 
+  // Make the switch into a workspace unmistakable: scroll the content area back
+  // to the top whenever the selected episode's workspace opens.
+  useEffect(() => {
+    if (currentView === 'workspace') {
+      mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
+    }
+  }, [currentView, activeProjectId]);
+
   useEffect(() => {
     void fetchChannels()
       .then(data =>
@@ -145,6 +155,10 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const handleOpenWorkspace = (projectId: string) => {
     setActiveProjectId(projectId);
     setCurrentView('workspace');
+  };
+
+  const handleBackToProjects = () => {
+    setCurrentView('projects');
   };
 
   const handleUpdateProject = async (updated: VideoProject) => {
@@ -260,7 +274,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
           onMenuClick={() => setMobileSidebarOpen(true)}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-7xl w-full mx-auto">
+        <main ref={mainRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-7xl w-full mx-auto">
           <DemoModeBanner />
           {currentView === 'home' && (
             <HomeView
@@ -284,13 +298,49 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             />
           )}
 
-          {currentView === 'workspace' && activeProject && (
-            <div className="space-y-6">
-              <PipelinePanel episodeId={activeProject.id} episodeTitle={activeProject.title} />
-              <ProductionStagesPanel episodeId={activeProject.id} />
-              <WorkspaceView project={activeProject} onUpdateProject={handleUpdateProject} />
-            </div>
-          )}
+          {currentView === 'workspace' &&
+            (activeProject ? (
+              // key={id} remounts the workspace per episode so its editable state
+              // always reflects the selected episode (not the previously opened one).
+              <div key={activeProject.id} className="space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3 bg-[#15191E] border border-white/5 rounded-2xl px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={handleBackToProjects}
+                    className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Volver a Proyectos
+                  </button>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[11px] text-slate-500 font-mono uppercase tracking-wide shrink-0">
+                      Workspace
+                    </span>
+                    <span className="text-xs font-bold text-white truncate italic">
+                      &quot;{activeProject.title}&quot;
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-950/40 text-indigo-300 border border-indigo-800/20 shrink-0">
+                      {activeProject.status}
+                    </span>
+                  </div>
+                </div>
+                <PipelinePanel episodeId={activeProject.id} episodeTitle={activeProject.title} />
+                <ProductionStagesPanel episodeId={activeProject.id} />
+                <WorkspaceView project={activeProject} onUpdateProject={handleUpdateProject} />
+              </div>
+            ) : (
+              <div className="bg-[#15191E] border border-white/5 rounded-2xl p-8 text-center space-y-4">
+                <p className="text-sm text-slate-400">No hay ningún episodio seleccionado.</p>
+                <button
+                  type="button"
+                  onClick={handleBackToProjects}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver a Proyectos
+                </button>
+              </div>
+            ))}
 
           {currentView === 'copilot' && <CopilotView episodeTitle={activeProject?.title} />}
 
