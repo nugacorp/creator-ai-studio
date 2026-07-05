@@ -61,7 +61,9 @@ If SSH OAuth paste fails on the VPS, use the workflow **Setup rclone on VPS** (`
 
 3. Ensure **`VPS_HOST`**, **`VPS_SSH_KEY`**, and optional **`VPS_USER`** / **`RCLONE_REMOTE`** secrets exist (same as deploy-staging).
 
-4. Run the workflow:
+4. Add the secret, then either:
+   - Push to **`staging`** (Deploy Staging applies the token when `RCLONE_OAUTH_TOKEN_JSON` is set), or
+   - Run workflow **Setup rclone on VPS** (requires this workflow file on the default branch), or
 
    ```bash
    gh workflow run setup-rclone-vps.yml
