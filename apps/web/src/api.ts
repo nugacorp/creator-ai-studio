@@ -785,11 +785,23 @@ export async function aiGenerateMusic(body: {
   });
 }
 
+export async function renderEpisodeShorts(
+  episodeId: string,
+): Promise<{ ok: boolean; message: string; rendered?: Array<{ id: string; filename: string }> }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/shorts`, { method: 'POST' });
+}
+
 export async function aiSeo(
   title: string,
   script: string,
-): Promise<{ titles?: string[]; description?: string; tags?: string[] }> {
-  return apiFetch<{ titles?: string[]; description?: string; tags?: string[] }>('/gemini/seo', {
+): Promise<{
+  titles?: string[];
+  description?: string;
+  tags?: string[];
+  chapters?: { time: string; title: string }[];
+  pinnedComment?: string;
+}> {
+  return apiFetch('/gemini/seo', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title, script }),

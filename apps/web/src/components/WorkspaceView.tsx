@@ -30,8 +30,10 @@ import {
   ListOrdered,
   Subtitles,
   CheckCircle2,
+  Smartphone,
+  Copy,
 } from 'lucide-react';
-import { VideoProject, Scene, ProjectStatus } from '../types';
+import { VideoProject, Scene, ProjectStatus, EpisodeShort } from '../types';
 import type { WorkspaceTab } from '../lib/dashboardNavigation';
 import {
   aggregateStageStatus,
@@ -60,12 +62,16 @@ import {
   generateSubtitles,
   loadAuthenticatedMediaUrl,
   renderEpisodeVideo,
+  renderEpisodeShorts,
+  runEpisodeAgent,
+  fetchSettings,
   resolveEpisodeMediaUrl,
   updateEpisode,
   updateStageStatus,
   type ElevenLabsVoice,
 } from '../api';
 import type { EpisodeStage, EpisodeStageStatus } from '@creator-ai-studio/shared';
+import { suggestNextPublishSlot, DEFAULT_PUBLISH_SCHEDULE } from '@creator-ai-studio/shared';
 
 interface WorkspaceViewProps {
   project: VideoProject;
@@ -84,6 +90,7 @@ const WORKSPACE_TABS: { id: WorkspaceTab; label: string; icon: typeof FileText }
   { id: 'escenas', label: 'Escenas', icon: ImageIcon },
   { id: 'subtitulos', label: 'Subtítulos', icon: Subtitles },
   { id: 'video', label: 'Video / Timeline', icon: Play },
+  { id: 'shorts', label: 'Shorts', icon: Smartphone },
   { id: 'thumbnail', label: 'Thumbnail', icon: Layers },
   { id: 'seo', label: 'SEO', icon: Sparkles },
   { id: 'publicacion', label: 'Publicación', icon: Clock },
@@ -178,6 +185,8 @@ export default function WorkspaceView({
   const [seoTitles, setSeoTitles] = useState<string[]>(project.seoTitles);
   const [seoDescription, setSeoDescription] = useState(project.seoDescription);
   const [seoTags, setSeoTags] = useState<string[]>(project.seoTags);
+  const [pinnedComment, setPinnedComment] = useState(project.pinnedComment ?? '');
+  const [episodeShorts, setEpisodeShorts] = useState<EpisodeShort[]>(project.shorts ?? []);
 
   // Subtitles state
   const [subtitlesSrt, setSubtitlesSrt] = useState(project.subtitlesSrt ?? '');
@@ -194,6 +203,8 @@ export default function WorkspaceView({
     setSeoTitles(project.seoTitles);
     setSeoDescription(project.seoDescription);
     setSeoTags(project.seoTags);
+    setPinnedComment(project.pinnedComment ?? '');
+    setEpisodeShorts(project.shorts ?? []);
     setSubtitlesSrt(project.subtitlesSrt ?? '');
     if (project.audioUrl) setAudioBase64(project.audioUrl);
     if (project.videoUrl) setVideoSourceUrl(project.videoUrl);
@@ -218,6 +229,8 @@ export default function WorkspaceView({
     project.seoTitles,
     project.seoDescription,
     project.seoTags,
+    project.pinnedComment,
+    project.shorts,
     project.subtitlesSrt,
     project.scheduledAt,
     initialTab,
@@ -422,6 +435,8 @@ export default function WorkspaceView({
       seoTitles,
       seoDescription,
       seoTags,
+      pinnedComment,
+      shorts: episodeShorts,
       subtitlesSrt,
       videoUrl: videoSourceUrl,
       musicUrl: musicSourceUrl,
@@ -891,13 +906,85 @@ export default function WorkspaceView({
       setSeoTitles(titles);
       setSeoDescription(description);
       setSeoTags(tags);
-      persistProject({ seoTitles: titles, seoDescription: description, seoTags: tags });
+      if (data.pinnedComment) setPinnedComment(data.pinnedComment);
+      persistProject({
+        seoTitles: titles,
+        seoDescription: description,
+        seoTags: tags,
+        pinnedComment: data.pinnedComment ?? pinnedComment,
+      });
       triggerFeedback('success', '✓ SEO optimizado por el Agente Especialista IA');
     } catch (err) {
       console.error(err);
       triggerFeedback('error', 'Error al optimizar SEO');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleSuggestHabitualSchedule = async () => {
+    try {
+      const settings = await fetchSettings();
+      const schedule = settings.publishSchedule ?? DEFAULT_PUBLISH_SCHEDULE;
+      const slot = suggestNextPublishSlot(schedule, 'longVideo');
+      setScheduleDate(slot.toISOString().slice(0, 10));
+      setScheduleTime(
+        `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`,
+      );
+      triggerFeedback('success', '✓ Horario habitual aplicado (próximo lunes 15:00 o según configuración)');
+    } catch {
+      triggerFeedback('error', 'No se pudo cargar el horario habitual');
+    }
+  };
+
+  const handleRunShortsAgent = async () => {
+    setIsProcessing(true);
+    setProcessingMessage('Agente de Shorts analizando momentos virales…');
+    try {
+      await runEpisodeAgent(project.id, 'shorts_agent');
+      triggerFeedback('success', '✓ Agente de Shorts encolado — recarga en unos segundos');
+      setTimeout(() => {
+        void fetchEpisodeDetail(project.id)
+          .then(detail => {
+            if (detail.content.shorts?.length) {
+              setEpisodeShorts(detail.content.shorts);
+              persistProject({ shorts: detail.content.shorts });
+            }
+          })
+          .catch(() => undefined);
+      }, 3000);
+    } catch (err) {
+      triggerFeedback('error', err instanceof Error ? err.message : 'Error al ejecutar agente Shorts');
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
+    }
+  };
+
+  const handleRenderShorts = async () => {
+    if (!project.videoUrl && !videoSourceUrl) {
+      triggerFeedback('error', 'Renderiza el video largo antes de generar Shorts');
+      return;
+    }
+    setIsProcessing(true);
+    setProcessingMessage('Recortando Shorts 9:16 desde timestamps…');
+    try {
+      const result = await renderEpisodeShorts(project.id);
+      if (!result.ok) {
+        triggerFeedback('error', result.message || 'No se pudieron renderizar los Shorts');
+        return;
+      }
+      const detail = await fetchEpisodeDetail(project.id);
+      if (detail.content.shorts?.length) {
+        setEpisodeShorts(detail.content.shorts);
+        persistProject({ shorts: detail.content.shorts, shortsUrl: detail.content.shortsUrl });
+      }
+      triggerFeedback('success', `✓ ${result.message}`);
+    } catch (err) {
+      triggerFeedback('error', err instanceof Error ? err.message : 'Error al renderizar Shorts');
+    } finally {
+      setIsProcessing(false);
+      setProcessingMessage('');
     }
   };
 
@@ -2011,10 +2098,108 @@ export default function WorkspaceView({
                 />
               </div>
 
+              <div className="space-y-2 lg:col-span-2">
+                <h4 className="text-[11px] font-bold text-[#8B949E] uppercase tracking-wider font-mono">
+                  Comentario fijado sugerido (YouTube)
+                </h4>
+                <p className="text-[10px] text-[#8B949E]">
+                  YouTube no permite fijar vía API al subir — copia este texto y fíjalo manualmente en Studio.
+                </p>
+                <textarea
+                  value={pinnedComment}
+                  onChange={e => setPinnedComment(e.target.value)}
+                  className="w-full h-24 bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-xl p-4 text-xs text-[#E6EDF2] leading-relaxed focus:outline-none focus:border-indigo-500/40 resize-none"
+                  placeholder="¿Qué versículo te impactó más? Compártelo abajo…"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!pinnedComment.trim()) return;
+                    void navigator.clipboard.writeText(pinnedComment);
+                    triggerFeedback('success', '✓ Comentario copiado al portapapeles');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#15191E] border border-white/10 text-[10px] font-bold text-indigo-300 hover:text-white cursor-pointer"
+                >
+                  <Copy className="w-3 h-3" />
+                  Copiar comentario
+                </button>
+              </div>
+
             </div>
           </div>
         )}
         {activeTab === 'seo' && renderSectionFooter('seo')}
+
+        {/* SHORTS TAB */}
+        {activeTab === 'shorts' && (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[rgba(255,255,255,0.05)]">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white">Shorts multi-momento</h4>
+                <p className="text-[11px] text-[#8B949E]">
+                  El agente identifica 3–5 ganchos; el render recorta 9:16 desde el timestamp correcto (MVP: smart crop, sin TTS por short).
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={() => void handleRunShortsAgent()}
+                  className="px-4 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Analizar con IA
+                </button>
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={() => void handleRenderShorts()}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Renderizar Shorts
+                </button>
+              </div>
+            </div>
+
+            {episodeShorts.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-xs text-[#8B949E]">
+                Sin Shorts todavía. Ejecuta el agente después de tener guion y video renderizado.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {episodeShorts.map((short, idx) => (
+                  <div
+                    key={short.id}
+                    className="bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-xl p-4 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-fuchsia-400 font-bold">SHORT {idx + 1}</span>
+                      {short.startTime != null && (
+                        <span className="text-[10px] text-[#8B949E] font-mono">@{short.startTime}s</span>
+                      )}
+                    </div>
+                    <h5 className="text-sm font-bold text-white">{short.title}</h5>
+                    <p className="text-[11px] text-[#8B949E] line-clamp-2">{short.description}</p>
+                    {short.hashtags && short.hashtags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {short.hashtags.map(tag => (
+                          <span key={tag} className="text-[9px] text-indigo-300 font-mono">
+                            {tag.startsWith('#') ? tag : `#${tag}`}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {short.videoPath && (
+                      <p className="text-[10px] text-emerald-400 font-mono">{short.videoPath}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {activeTab === 'shorts' && renderSectionFooter('shorts')}
 
         {/* 7. PUBLICACION TAB */}
         {activeTab === 'publicacion' && (
@@ -2080,6 +2265,34 @@ export default function WorkspaceView({
                   />
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => void handleSuggestHabitualSchedule()}
+                className="w-full py-2 rounded-xl border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Usar horario habitual
+              </button>
+
+              {pinnedComment.trim() && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-950/20 p-3 space-y-2">
+                  <p className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">
+                    Comentario fijado (copiar en YouTube Studio)
+                  </p>
+                  <p className="text-xs text-slate-300 whitespace-pre-wrap">{pinnedComment}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(pinnedComment);
+                      triggerFeedback('success', '✓ Comentario copiado');
+                    }}
+                    className="text-[10px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Copiar
+                  </button>
+                </div>
+              )}
 
               <button
                 type="button"

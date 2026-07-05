@@ -62,7 +62,7 @@ export const PIPELINE_STEPS: PipelineStep[] = [
     episodeStage: 'video',
     workspaceTab: 'video',
     description: 'Render, subtítulos, timing de escenas y video final.',
-    relatedAgentIds: ['scene_asset_designer'],
+    relatedAgentIds: ['scene_asset_designer', 'shorts_agent'],
   },
   {
     column: 'Miniatura',
@@ -109,6 +109,7 @@ export function agentsForStep(step: PipelineStep): AgentId[] {
 export function workspaceTabForAgent(agentId: AgentId, fallback: WorkspaceTab): WorkspaceTab {
   if (agentId === 'storyboard_designer' || agentId === 'scene_asset_designer') return 'escenas';
   if (agentId === 'audio_engineer') return 'narracion';
+  if (agentId === 'shorts_agent') return 'shorts';
   const step = PIPELINE_STEPS.find(s => s.agentId === agentId);
   return step?.workspaceTab ?? fallback;
 }

@@ -9,6 +9,7 @@ export const STAGES_BY_TAB: Record<WorkspaceTab, EpisodeStage | EpisodeStage[]> 
   escenas: ['storyboard', 'assets'],
   subtitulos: 'subtitles',
   video: 'video',
+  shorts: 'shorts',
   thumbnail: 'thumbnail',
   seo: 'seo',
   publicacion: 'publishing',
@@ -22,6 +23,7 @@ export const COLUMN_AFTER_TAB_APPROVE: Partial<Record<WorkspaceTab, ProjectStatu
   escenas: 'Edición',
   subtitulos: 'Edición',
   video: 'Miniatura',
+  shorts: 'Programado',
   thumbnail: 'Programado',
   seo: 'Programado',
   publicacion: 'Publicado',
@@ -93,6 +95,11 @@ export function validateTabForApproval(
     case 'video':
       if (!project.videoUrl) {
         return { ok: false, message: 'Exporta o genera el video antes de aprobar esta sección.' };
+      }
+      return { ok: true };
+    case 'shorts':
+      if (!(project.shorts?.length ?? 0) && !project.shortsUrl) {
+        return { ok: false, message: 'Genera al menos un Short antes de aprobar.' };
       }
       return { ok: true };
     case 'thumbnail':

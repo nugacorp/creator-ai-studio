@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
-import { fetchCalendarEvents, type CalendarEvent as ApiCalendarEvent } from '../api';
+import { suggestNextPublishSlot, DEFAULT_PUBLISH_SCHEDULE } from '@creator-ai-studio/shared';
+import { fetchCalendarEvents, fetchSettings, type CalendarEvent as ApiCalendarEvent } from '../api';
 
 interface CalendarEvent {
   id: string;
@@ -123,6 +124,20 @@ export default function CalendarView() {
     setEvents(prev => [...prev, newEv]);
     setNewEventTitle('');
     setShowAddEventModal(false);
+  };
+
+  const applyHabitualSlot = async (kind: 'longVideo' | 'shorts') => {
+    try {
+      const settings = await fetchSettings();
+      const schedule = settings.publishSchedule ?? DEFAULT_PUBLISH_SCHEDULE;
+      const slot = suggestNextPublishSlot(schedule, kind);
+      setNewEventDate(slot.toISOString().slice(0, 10));
+      setNewEventTime(
+        `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`,
+      );
+    } catch {
+      // ignore — user can set manually
+    }
   };
 
   return (
@@ -341,6 +356,23 @@ export default function CalendarView() {
                     className="w-full bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500/50"
                   />
                 </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void applyHabitualSlot('longVideo')}
+                  className="px-3 py-1.5 rounded-xl border border-indigo-500/30 text-[10px] font-bold text-indigo-300 hover:bg-indigo-500/10"
+                >
+                  Usar horario habitual (largo)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void applyHabitualSlot('shorts')}
+                  className="px-3 py-1.5 rounded-xl border border-fuchsia-500/30 text-[10px] font-bold text-fuchsia-300 hover:bg-fuchsia-500/10"
+                >
+                  Slot Shorts
+                </button>
               </div>
 
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-[rgba(255,255,255,0.05)]/60">

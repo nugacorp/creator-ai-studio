@@ -22,6 +22,7 @@ const AGENT_COLORS: Record<string, string> = {
   video_editor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
   thumbnail_designer: 'text-pink-400 bg-pink-500/10 border-pink-500/20',
   seo_optimizer: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+  shorts_agent: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20',
   analytics_agent: 'text-lime-400 bg-lime-500/10 border-lime-400/20',
 };
 

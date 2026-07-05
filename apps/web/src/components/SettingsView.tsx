@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sliders, ShieldCheck, HelpCircle, ExternalLink, KeyRound, PlugZap, CheckCircle2, Loader2, LogIn } from 'lucide-react';
 import type { SecretAuthMethod, SecretProvider, SecretStatus } from '@creator-ai-studio/shared';
+import { DEFAULT_PUBLISH_SCHEDULE } from '@creator-ai-studio/shared';
 import {
   fetchSecrets,
   fetchSettings,
@@ -20,6 +21,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoArchiveOnPublish: true,
   maxActiveEpisodes: 1,
   diskWarningThresholdGb: 5,
+  publishSchedule: DEFAULT_PUBLISH_SCHEDULE,
 };
 
 const GOOGLE_OAUTH_SETUP: Array<{ key: keyof SecretsPatch; label: string; placeholder: string }> = [
@@ -632,6 +634,119 @@ export default function SettingsView() {
                       }))
                     }
                     className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-white/5 space-y-3">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                Horario habitual de publicación
+              </h4>
+              <p className="text-[10px] text-slate-500">
+                Camino Bíblico: video largo los lunes 15:00; Shorts mar/jue/sáb 10:00 (hora local).
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-400 text-[10px] uppercase block">Video largo — día</label>
+                  <select
+                    value={settings.publishSchedule?.longVideo.dayOfWeek ?? 1}
+                    onChange={e =>
+                      setSettings(s => ({
+                        ...s,
+                        publishSchedule: {
+                          ...DEFAULT_PUBLISH_SCHEDULE,
+                          ...s.publishSchedule,
+                          longVideo: {
+                            ...(s.publishSchedule?.longVideo ?? DEFAULT_PUBLISH_SCHEDULE.longVideo),
+                            dayOfWeek: Number(e.target.value),
+                          },
+                        },
+                      }))
+                    }
+                    className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs"
+                  >
+                    <option value={0}>Domingo</option>
+                    <option value={1}>Lunes</option>
+                    <option value={2}>Martes</option>
+                    <option value={3}>Miércoles</option>
+                    <option value={4}>Jueves</option>
+                    <option value={5}>Viernes</option>
+                    <option value={6}>Sábado</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 text-[10px] uppercase block">Video largo — hora</label>
+                  <input
+                    type="time"
+                    value={`${String(settings.publishSchedule?.longVideo.hour ?? 15).padStart(2, '0')}:${String(settings.publishSchedule?.longVideo.minute ?? 0).padStart(2, '0')}`}
+                    onChange={e => {
+                      const [h, m] = e.target.value.split(':').map(Number);
+                      setSettings(s => ({
+                        ...s,
+                        publishSchedule: {
+                          ...DEFAULT_PUBLISH_SCHEDULE,
+                          ...s.publishSchedule,
+                          longVideo: {
+                            ...(s.publishSchedule?.longVideo ?? DEFAULT_PUBLISH_SCHEDULE.longVideo),
+                            hour: h ?? 15,
+                            minute: m ?? 0,
+                          },
+                        },
+                      }));
+                    }}
+                    className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-400 text-[10px] uppercase block">Shorts — hora</label>
+                  <input
+                    type="time"
+                    value={`${String(settings.publishSchedule?.shorts?.hour ?? 10).padStart(2, '0')}:${String(settings.publishSchedule?.shorts?.minute ?? 0).padStart(2, '0')}`}
+                    onChange={e => {
+                      const [h, m] = e.target.value.split(':').map(Number);
+                      setSettings(s => ({
+                        ...s,
+                        publishSchedule: {
+                          ...DEFAULT_PUBLISH_SCHEDULE,
+                          ...s.publishSchedule,
+                          shorts: {
+                            ...(s.publishSchedule?.shorts ?? DEFAULT_PUBLISH_SCHEDULE.shorts!),
+                            hour: h ?? 10,
+                            minute: m ?? 0,
+                          },
+                        },
+                      }));
+                    }}
+                    className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 text-[10px] uppercase block">Shorts — días (CSV 0=Dom)</label>
+                  <input
+                    type="text"
+                    value={(settings.publishSchedule?.shorts?.daysOfWeek ?? [2, 4, 6]).join(',')}
+                    onChange={e => {
+                      const days = e.target.value
+                        .split(',')
+                        .map(v => Number(v.trim()))
+                        .filter(n => !Number.isNaN(n) && n >= 0 && n <= 6);
+                      setSettings(s => ({
+                        ...s,
+                        publishSchedule: {
+                          ...DEFAULT_PUBLISH_SCHEDULE,
+                          ...s.publishSchedule,
+                          shorts: {
+                            ...(s.publishSchedule?.shorts ?? DEFAULT_PUBLISH_SCHEDULE.shorts!),
+                            daysOfWeek: days.length ? days : [2, 4, 6],
+                          },
+                        },
+                      }));
+                    }}
+                    className="w-full bg-[#0B0F14] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono"
+                    placeholder="2,4,6"
                   />
                 </div>
               </div>

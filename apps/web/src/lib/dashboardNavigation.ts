@@ -14,6 +14,7 @@ export type WorkspaceTab =
   | 'escenas'
   | 'subtitulos'
   | 'video'
+  | 'shorts'
   | 'thumbnail'
   | 'seo'
   | 'publicacion'

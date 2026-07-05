@@ -10,6 +10,23 @@ export interface Scene {
   transition: string;
 }
 
+export interface EpisodeShort {
+  id: string;
+  title: string;
+  description: string;
+  tags?: string[];
+  hashtags?: string[];
+  scriptText: string;
+  startTime?: number;
+  videoPath?: string;
+  youtubeUrl?: string;
+}
+
+export interface SeoChapter {
+  time: string;
+  title: string;
+}
+
 export type ProjectStatus =
   | 'Ideas'
   | 'Investigación'
@@ -37,6 +54,10 @@ export interface VideoProject {
   seoTitles: string[];
   seoDescription: string;
   seoTags: string[];
+  seoChapters?: SeoChapter[];
+  pinnedComment?: string;
+  shorts?: EpisodeShort[];
+  shortsUrl?: string;
   scheduledAt?: string;
   duration: string;
 }
