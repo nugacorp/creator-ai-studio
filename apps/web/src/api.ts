@@ -107,6 +107,37 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** Fetch a protected media path and return a blob URL for use in img/video elements. */
+export async function loadAuthenticatedMediaUrl(assetPath: string): Promise<string> {
+  if (assetPath.startsWith('data:') || assetPath.startsWith('blob:') || assetPath.startsWith('http')) {
+    return assetPath;
+  }
+
+  const apiPath = assetPath.startsWith('/api') ? assetPath.slice(4) : assetPath;
+  let headers = await buildAuthHeaders();
+  let response = await fetch(`${API_BASE_URL}${apiPath}`, { headers });
+
+  if (response.status === 401 && isSupabaseAuthEnabled()) {
+    const client = getSupabaseClient();
+    if (client) {
+      const { data } = await client.auth.refreshSession();
+      const token = data.session?.access_token ?? null;
+      if (token) {
+        apiAccessToken = token;
+        headers = await buildAuthHeaders();
+        response = await fetch(`${API_BASE_URL}${apiPath}`, { headers });
+      }
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(`Media load failed (${response.status})`);
+  }
+
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
+}
+
 export async function fetchEpisodes(): Promise<EpisodeSummary[]> {
   return apiFetch<EpisodeSummary[]>('/episodes');
 }
@@ -154,11 +185,15 @@ export async function generateStoryboardFromScript(
 export async function generateSceneImages(
   episodeId: string,
   sceneIds?: string[],
+  options?: { force?: boolean },
 ): Promise<{ scenes: import('@creator-ai-studio/shared').Scene[]; generated: number }> {
   return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/scenes/generate-images`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(sceneIds?.length ? { sceneIds } : {}),
+    body: JSON.stringify({
+      ...(sceneIds?.length ? { sceneIds } : {}),
+      ...(options?.force ? { force: true } : {}),
+    }),
   });
 }
 

@@ -28,8 +28,17 @@ import {
   Plus
 } from 'lucide-react';
 import { VideoProject, Scene } from '../types';
-import { aiGenerateImage, aiRewrite, aiSeo, aiTts, fetchElevenLabsVoices, generateSceneImages, generateStoryboardFromScript } from '../api';
-import type { ElevenLabsVoice } from '../api';
+import SceneImage from './SceneImage';
+import {
+  aiGenerateImage,
+  aiRewrite,
+  aiSeo,
+  aiTts,
+  fetchElevenLabsVoices,
+  generateSceneImages,
+  generateStoryboardFromScript,
+  type ElevenLabsVoice,
+} from '../api';
 
 interface WorkspaceViewProps {
   project: VideoProject;
@@ -260,7 +269,7 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
     setGeneratingSceneId(sceneId);
     setProcessingMessage('IA está modelando y generando la toma visual...');
     try {
-      const data = await generateSceneImages(project.id, [sceneId]);
+      const data = await generateSceneImages(project.id, [sceneId], { force: true });
       persistScenes(data.scenes);
       triggerFeedback('success', '✓ Imagen generada para la escena');
     } catch (err) {
@@ -649,19 +658,11 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                   >
                     {/* Visual Preview */}
                     <div className="relative h-40 bg-[#15191E] group">
-                      {scene.imageUrl ? (
-                        <img
-                          src={scene.imageUrl}
-                          alt={`Escena ${index + 1}`}
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-500 bg-gradient-to-br from-[#15191E] to-[#0B0F14] px-4 text-center">
-                          <ImageIcon className="w-8 h-8 opacity-40" />
-                          <span className="text-[10px]">Sin imagen — genera con IA</span>
-                        </div>
-                      )}
+                      <SceneImage
+                        src={scene.imageUrl}
+                        alt={`Escena ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
                       <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-bold font-mono text-white">
                         ESCENA {index + 1}
                       </div>
@@ -764,11 +765,10 @@ export default function WorkspaceView({ project, onUpdateProject, initialTab }: 
                 <div className="absolute inset-0 flex items-center justify-center bg-zinc-950">
                   <div className="relative w-full h-full">
                     {/* Background slide */}
-                    <img
+                    <SceneImage
                       src={scenes[0]?.imageUrl || thumbnailUrl}
                       alt="Preview frame"
                       className="w-full h-full object-cover opacity-85"
-                      referrerPolicy="no-referrer"
                     />
                     
                     {/* Animated visual overlays representing subtitles and music waveforms */}

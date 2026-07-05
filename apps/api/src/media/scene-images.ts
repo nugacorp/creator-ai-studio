@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Scene } from '@creator-ai-studio/shared';
@@ -16,7 +17,7 @@ export async function generateSceneImagesForEpisode(
   episodeDir: string,
   scenes: Scene[],
   episodeTitle: string,
-  options?: { sceneIds?: string[] },
+  options?: { sceneIds?: string[]; force?: boolean },
 ): Promise<GenerateSceneImagesResult> {
   const assetsDir = path.join(episodeDir, '04-assets');
   await mkdir(assetsDir, { recursive: true });
@@ -31,7 +32,9 @@ export async function generateSceneImagesForEpisode(
       updated.push(scene);
       continue;
     }
-    if (scene.imageUrl?.trim()) {
+    const dest = path.join(assetsDir, `slide-${String(i).padStart(3, '0')}.png`);
+    const hasStoredImage = scene.imageUrl?.trim() && existsSync(dest);
+    if (hasStoredImage && !options?.force) {
       updated.push(scene);
       continue;
     }
@@ -41,7 +44,6 @@ export async function generateSceneImagesForEpisode(
       p.generateImage(prompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
     );
 
-    const dest = path.join(assetsDir, `slide-${String(i).padStart(3, '0')}.png`);
     const saved = await downloadImage(imageUrl, dest);
     if (!saved) {
       updated.push({ ...scene, imageUrl });
