@@ -153,11 +153,7 @@ fi
 if [ -n "${SUPABASE_URL:-}" ] && [ -z "${VITE_SUPABASE_ANON_KEY}" ]; then
   echo "WARN: SUPABASE_URL is set but VITE_SUPABASE_ANON_KEY/SUPABASE_ANON_KEY is missing; web login will be disabled" >&2
 fi
-<<<<<<< HEAD
 docker build -f "$SRC_DIR/deploy/Dockerfile.web" \
-=======
-docker build -f "$SRC_DIR/Dockerfile.web" \
->>>>>>> origin/main
   "${WEB_BUILD_ARGS[@]}" \
   -t "z7b1ieqp66a7e43cywaz816w_web:${COMMIT}" \
   "$SRC_DIR"

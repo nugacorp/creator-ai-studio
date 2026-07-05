@@ -47,7 +47,6 @@ const episodeDetail = {
 function mockApi(opts: { detailFails?: boolean } = {}) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
-<<<<<<< HEAD
     if (url.includes('/agent-runs')) {
       return jsonResponse({ runs: [] });
     }
@@ -62,18 +61,13 @@ function mockApi(opts: { detailFails?: boolean } = {}) {
         files: [],
       });
     }
-=======
->>>>>>> origin/main
     if (url.includes(`/episodes/${episode.id}`)) {
       if (opts.detailFails) return jsonResponse({ error: 'boom' }, 500);
       return jsonResponse(episodeDetail);
     }
-<<<<<<< HEAD
     if (url.includes('/auth/status')) {
       return jsonResponse({ authRequired: false, apiKeyAuth: false, supabaseAuth: false });
     }
-=======
->>>>>>> origin/main
     if (url.includes('/episodes')) return jsonResponse([episode]);
     return jsonResponse([]);
   });
@@ -103,11 +97,7 @@ describe('Project card / Edit Workspace navigation', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Guardar Cambios/i })).toBeInTheDocument(),
     );
-<<<<<<< HEAD
     expect(screen.getByText(/Pipeline del proyecto/i)).toBeInTheDocument();
-=======
-    expect(screen.getByText(/Etapas de Producción/i)).toBeInTheDocument();
->>>>>>> origin/main
   });
 
   it('opens the workspace from the "Editar Workspace" button', async () => {
@@ -173,13 +163,10 @@ describe('Project card / Edit Workspace navigation', () => {
     };
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
-<<<<<<< HEAD
       if (url.includes('/agent-runs')) return jsonResponse({ runs: [] });
       if (url.includes('/storage/stats')) {
         return jsonResponse({ episodes: 1, totalBytes: 0, diskFreeBytes: 1_000_000 });
       }
-=======
->>>>>>> origin/main
       if (url.includes(`/episodes/${second.id}`)) {
         return jsonResponse({ ...episodeDetail, ...second, content: { ...episodeDetail.content } });
       }

@@ -351,11 +351,7 @@ export function resolvePipelineMode(job: ProductionJob): PipelineMode {
 
 /** Step keys per pipeline mode. Exported for tests. */
 export function buildPipelineStepKeys(mode: PipelineMode): string[] {
-<<<<<<< HEAD
   const draft = ['script', 'storyboard', 'scene_images', 'seo', 'tts', 'thumbnail', 'render', 'shorts', 'publish_package'];
-=======
-  const draft = ['script', 'seo', 'tts', 'thumbnail', 'render', 'shorts', 'publish_package'];
->>>>>>> origin/main
   if (mode === 'production-draft') return draft;
   if (mode === 'ready-for-review') return [...draft, 'review'];
   return [...draft, 'publish', 'confirm'];
@@ -373,11 +369,8 @@ async function runPipelineJob(job: ProductionJob): Promise<Record<string, unknow
 
   const stepFns: Record<string, () => Promise<{ youtubeUrl?: string; videoId?: string } | void>> = {
     script: () => runScriptJob(job),
-<<<<<<< HEAD
     storyboard: () => runStoryboardJob(job),
     scene_images: () => runSceneImagesJob(job),
-=======
->>>>>>> origin/main
     seo: () => runSeoJob(job),
     tts: () => runTtsJob(job),
     thumbnail: () => runThumbnailJob(job),
@@ -417,7 +410,6 @@ async function runPipelineJob(job: ProductionJob): Promise<Record<string, unknow
   }
 
   return { ok: true, mode, youtubeUrl, videoId };
-<<<<<<< HEAD
 }
 
 async function runAgentJob(job: ProductionJob): Promise<Record<string, unknown>> {
@@ -435,8 +427,6 @@ async function runAgentJob(job: ProductionJob): Promise<Record<string, unknown>>
   });
   await assertOk(res, `agent ${agentId}`);
   return (await res.json()) as Record<string, unknown>;
-=======
->>>>>>> origin/main
 }
 
 export async function processJob(job: ProductionJob): Promise<void> {
@@ -452,15 +442,12 @@ export async function processJob(job: ProductionJob): Promise<void> {
       case 'script':
         await runScriptJob(job);
         break;
-<<<<<<< HEAD
       case 'storyboard':
         await runStoryboardJob(job);
         break;
       case 'scene_images':
         await runSceneImagesJob(job);
         break;
-=======
->>>>>>> origin/main
       case 'seo':
         await runSeoJob(job);
         break;

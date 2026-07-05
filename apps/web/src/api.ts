@@ -264,11 +264,8 @@ export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
 
 export interface AnalyticsData {
   isDemo?: boolean;
-<<<<<<< HEAD
   connected?: boolean;
   hasData?: boolean;
-=======
->>>>>>> origin/main
   kpis: { views: number; subscribers: number; watchTimeHours: number; engagement: string };
   chartData: number[];
   channelDistribution?: Array<{ name: string; views: number; percentage: number }>;

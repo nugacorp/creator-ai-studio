@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-<<<<<<< HEAD
 import { ArrowLeft, Trash2 } from 'lucide-react';
-=======
-import { ArrowLeft } from 'lucide-react';
->>>>>>> origin/main
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import HomeView from './components/HomeView';
@@ -29,11 +25,6 @@ import { useAuth } from './context/AuthContext';
 import { isSupabaseAuthEnabled } from './lib/supabase';
 
 import {
-<<<<<<< HEAD
-=======
-  INITIAL_CHANNELS,
-  INITIAL_NOTIFICATIONS,
->>>>>>> origin/main
   INITIAL_SERIES,
 } from './data';
 import { Channel, VideoProject, Notification, TeamMember } from './types';
@@ -44,10 +35,7 @@ import {
 } from '@creator-ai-studio/shared';
 import {
   createEpisode,
-<<<<<<< HEAD
   deleteEpisode,
-=======
->>>>>>> origin/main
   fetchAuthStatus,
   fetchChannels,
   fetchEpisodeDetail,
@@ -98,7 +86,6 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     const params = new URLSearchParams(window.location.search);
     return params.get('view') ?? initialView;
   });
-<<<<<<< HEAD
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [projects, setProjects] = useState<VideoProject[]>([]);
@@ -112,16 +99,6 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [deleteWorkspaceTarget, setDeleteWorkspaceTarget] = useState<VideoProject | null>(null);
   const [deletingEpisode, setDeletingEpisode] = useState(false);
-=======
-  const [channels, setChannels] = useState<Channel[]>(INITIAL_CHANNELS);
-  const [selectedChannel, setSelectedChannel] = useState<Channel>(INITIAL_CHANNELS[0]);
-  const [projects, setProjects] = useState<VideoProject[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
-  const [activeProjectId, setActiveProjectId] = useState<string>('');
-  const [workspaceRefreshToken, setWorkspaceRefreshToken] = useState(0);
-  const [team, setTeam] = useState<TeamMember[]>(TEAM_MEMBERS);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
->>>>>>> origin/main
   const mainRef = useRef<HTMLElement>(null);
 
   const activeProject = projects.find(p => p.id === activeProjectId);
@@ -183,7 +160,6 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     setWorkspaceRefreshToken(t => t + 1);
   }, [loadProjects]);
 
-<<<<<<< HEAD
   const reloadEpisode = useCallback(async (episodeId: string) => {
     const detail = await fetchEpisodeDetail(episodeId);
     setProjects(prev =>
@@ -191,38 +167,6 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     );
     setWorkspaceRefreshToken(t => t + 1);
   }, []);
-=======
-  useEffect(() => {
-    if (!canAccessApi) return;
-    void loadProjects();
-  }, [loadProjects, canAccessApi]);
-
-  // Make the switch into a workspace unmistakable: scroll the content area back
-  // to the top whenever the selected episode's workspace opens.
-  useEffect(() => {
-    if (currentView === 'workspace') {
-      mainRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
-    }
-  }, [currentView, activeProjectId]);
-
-  useEffect(() => {
-    if (!canAccessApi) return;
-    void fetchChannels()
-      .then(data =>
-        setChannels(
-          data.map(c => ({
-            id: c.id,
-            name: c.name,
-            status: c.status as Channel['status'],
-            subscribers: c.subscribers,
-            avatar: c.avatar,
-            type: c.type as Channel['type'],
-          })),
-        ),
-      )
-      .catch(() => undefined);
-  }, [canAccessApi]);
->>>>>>> origin/main
 
   useEffect(() => {
     if (!canAccessApi) return;
@@ -273,7 +217,6 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     setCurrentView('workspace');
   };
 
-<<<<<<< HEAD
   const handleNavigateToSection = (section: DashboardSection) => {
     if (shouldOpenCalendar(section)) {
       setProjectsBoardFilter(null);
@@ -309,8 +252,6 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     setCurrentView(view);
   };
 
-=======
->>>>>>> origin/main
   const handleBackToProjects = () => {
     setCurrentView('projects');
   };
@@ -480,11 +421,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             (activeProject ? (
               // key={id} remounts the workspace per episode so its editable state
               // always reflects the selected episode (not the previously opened one).
-<<<<<<< HEAD
               <div key={`${activeProject.id}-${workspaceRefreshToken}-${workspaceInitialTab ?? 'default'}`} className="space-y-6">
-=======
-              <div key={`${activeProject.id}-${workspaceRefreshToken}`} className="space-y-6">
->>>>>>> origin/main
                 <div className="flex flex-wrap items-center justify-between gap-3 bg-[#15191E] border border-white/5 rounded-2xl px-4 py-3">
                   <button
                     type="button"
@@ -494,11 +431,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                     <ArrowLeft className="w-4 h-4" />
                     Volver a Proyectos
                   </button>
-<<<<<<< HEAD
                   <div className="flex items-center gap-2 min-w-0 flex-1 justify-center">
-=======
-                  <div className="flex items-center gap-2 min-w-0">
->>>>>>> origin/main
                     <span className="text-[11px] text-slate-500 font-mono uppercase tracking-wide shrink-0">
                       Workspace
                     </span>
@@ -509,7 +442,6 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                       {activeProject.status}
                     </span>
                   </div>
-<<<<<<< HEAD
                   <button
                     type="button"
                     onClick={() => setDeleteWorkspaceTarget(activeProject)}
@@ -518,15 +450,12 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                     <Trash2 className="w-3.5 h-3.5" />
                     Eliminar
                   </button>
-=======
->>>>>>> origin/main
                 </div>
                 <PipelinePanel
                   episodeId={activeProject.id}
                   episodeTitle={activeProject.title}
                   onPipelineComplete={() => void handlePipelineComplete()}
                 />
-<<<<<<< HEAD
                 <ProjectPipelinePanel
                   episodeId={activeProject.id}
                   projectStatus={activeProject.status}
@@ -538,10 +467,6 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                   initialTab={workspaceInitialTab ?? undefined}
                   forcedTab={workspaceForcedTab}
                 />
-=======
-                <ProductionStagesPanel episodeId={activeProject.id} />
-                <WorkspaceView project={activeProject} onUpdateProject={handleUpdateProject} />
->>>>>>> origin/main
               </div>
             ) : (
               <div className="bg-[#15191E] border border-white/5 rounded-2xl p-8 text-center space-y-4">

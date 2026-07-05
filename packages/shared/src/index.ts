@@ -260,7 +260,6 @@ export const JOB_TYPES = [
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
 
-<<<<<<< HEAD
 /** Official specialized agent identifiers. Hermes is the VPS orchestrator. */
 export const AGENT_IDS = [
   'hermes',
@@ -331,8 +330,6 @@ export function isAgentId(value: unknown): value is AgentId {
   return typeof value === 'string' && (AGENT_IDS as readonly string[]).includes(value);
 }
 
-=======
->>>>>>> origin/main
 /**
  * Pipeline execution modes.
  * - `production-draft`: run every content stage but never touch YouTube.

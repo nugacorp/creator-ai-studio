@@ -30,22 +30,14 @@ export default function AnalyticsView() {
   const [activeChannelTab, setActiveChannelTab] = useState<ChannelTab>('Todos');
   const [analytics, setAnalytics] = useState({
     isDemo: false,
-<<<<<<< HEAD
     connected: false,
     hasData: false,
-=======
->>>>>>> origin/main
     views: 0,
     subscribers: 0,
     watchTimeHours: 0,
     engagement: '0%',
-<<<<<<< HEAD
     chartData: [] as number[],
     channelDistribution: [] as Array<{ name: string; views: number; percentage: number }>,
-=======
-    chartData: [0] as number[],
-    channelDistribution: [{ name: 'YouTube', views: 0, percentage: 100 }],
->>>>>>> origin/main
   });
   const [loadError, setLoadError] = useState(false);
 
@@ -55,11 +47,8 @@ export default function AnalyticsView() {
         setLoadError(false);
         setAnalytics({
           isDemo: data.isDemo ?? false,
-<<<<<<< HEAD
           connected: data.connected ?? false,
           hasData: data.hasData ?? (data.kpis.views > 0 || data.chartData.length > 0),
-=======
->>>>>>> origin/main
           views: data.kpis.views,
           subscribers: data.kpis.subscribers,
           watchTimeHours: data.kpis.watchTimeHours,
@@ -126,7 +115,6 @@ export default function AnalyticsView() {
     <div className="space-y-6 animate-in fade-in duration-200">
       {analytics.isDemo && (
         <p className="text-xs rounded-xl border border-amber-500/30 bg-amber-950/20 px-4 py-3 text-amber-200">
-<<<<<<< HEAD
           Modo demo local — estos números no son reales. En staging/producción conecta YouTube OAuth en
           Configuración.
         </p>
@@ -149,11 +137,6 @@ export default function AnalyticsView() {
         </p>
       )}
 
-=======
-          Datos de demostración — conecta YouTube OAuth en Configuración para métricas reales.
-        </p>
-      )}
->>>>>>> origin/main
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#15191E] p-4.5 rounded-2xl border border-[rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-indigo-500/10 rounded-2xl text-indigo-400">
