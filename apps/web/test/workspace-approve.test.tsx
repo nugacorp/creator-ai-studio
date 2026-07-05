@@ -83,7 +83,7 @@ describe('Workspace approve flow', () => {
       expect(screen.getByRole('button', { name: /^Subtítulos/i })).toBeInTheDocument(),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^Guion/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /^Guion/i }).at(-1)!);
     expect(screen.getByRole('button', { name: /Aprobar sección/i })).toBeInTheDocument();
   });
 
