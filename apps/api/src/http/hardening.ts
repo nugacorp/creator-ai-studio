@@ -20,8 +20,10 @@ const WINDOW_MS = 60_000;
 /** Paths that trigger AI providers, ffmpeg or rclone — much stricter budget. */
 const EXPENSIVE_PATTERNS = [
   /^\/(?:api\/)?(?:ai|gemini)\//,
-  /^\/(?:api\/)?episodes\/[^/]+\/(?:render|shorts|thumbnail|pipeline|archive|restore|storyboard\/from-script|scenes\/generate-images)$/,
+  /^\/(?:api\/)?episodes\/[^/]+\/(?:render|shorts|thumbnail|pipeline|run-safe-pipeline|archive|restore|storyboard\/from-script|scenes\/generate-images)$/,
   /^\/(?:api\/)?integrations\//,
+  // Agent execution runs LLM calls directly (sync) or enqueues heavy work.
+  /^\/(?:api\/)?episodes\/[^/]+\/agents\/[^/]+\/run$/,
 ];
 
 const GENERAL_LIMIT = Number(process.env.RATE_LIMIT_GENERAL_PER_MIN ?? 600);

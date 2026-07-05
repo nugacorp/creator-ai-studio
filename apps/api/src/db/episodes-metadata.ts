@@ -69,7 +69,10 @@ export async function listEpisodesFromSupabase(userId?: string): Promise<Episode
     });
     if (!res.ok) return null;
     const rows = (await res.json()) as SupabaseEpisodeRow[];
-    return rows.map(rowToSummary);
+    // Defense in depth: the service_role key bypasses RLS, so never rely solely
+    // on the query-param filter. Drop any row owned by a different user.
+    const safe = userId ? rows.filter(r => !r.user_id || r.user_id === userId) : rows;
+    return safe.map(rowToSummary);
   } catch {
     return null;
   }

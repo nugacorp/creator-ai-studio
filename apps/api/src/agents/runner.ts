@@ -13,6 +13,7 @@ import type {
 } from '@creator-ai-studio/shared';
 import { HUMAN_APPROVAL_AGENT_IDS, isJobType } from '@creator-ai-studio/shared';
 import { withProvider } from '../ai/router.js';
+import { areMocksAllowed } from '../config/mocks.js';
 import { resolveSceneImagePrompt } from '../media/scene-image-refine.js';
 import { parseScenesFromScript } from '../media/script-to-scenes.js';
 import { createJob } from '../jobs/store.js';
@@ -69,14 +70,18 @@ const HERMES_PIPELINE_ORDER: AgentId[] = [
 ];
 
 function shouldRequireHumanApproval(agentId: AgentId, input?: Record<string, unknown>): boolean {
+  const gated = (HUMAN_APPROVAL_AGENT_IDS as readonly string[]).includes(agentId);
   if (input?.skipApproval === true) return false;
   if (input?.forceHumanApproval === true) {
-    return (HUMAN_APPROVAL_AGENT_IDS as readonly string[]).includes(agentId);
+    return gated;
   }
-  if (process.env.AI_ALLOW_DEMO_FALLBACK === 'true' || process.env.ALLOW_MOCKS === 'true') {
+  // Approval gates may only be relaxed by the central mock policy (dev/test, or
+  // ALLOW_MOCKS=true) — never in production/staging. AI_ALLOW_DEMO_FALLBACK is a
+  // provider-routing flag and must NOT weaken publish safety; decouple it.
+  if (areMocksAllowed()) {
     return false;
   }
-  return (HUMAN_APPROVAL_AGENT_IDS as readonly string[]).includes(agentId);
+  return gated;
 }
 
 function resolveRunStatus(
