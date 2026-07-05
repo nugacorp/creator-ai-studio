@@ -1,21 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
-import type { EpisodeSummary } from '@creator-ai-studio/shared';
+import { AGENT_IDS, type EpisodeDetail, type EpisodeSummary } from '@creator-ai-studio/shared';
 import { buildApp } from '../src/app.js';
 import { EpisodeStorage } from '../src/storage/index.js';
 
 describe('agent system', () => {
   let storageDir: string;
   let app: FastifyInstance;
+  let storage: EpisodeStorage;
 
   beforeEach(async () => {
     storageDir = await mkdtemp(path.join(tmpdir(), 'cas-agents-'));
     process.env.AI_ALLOW_DEMO_FALLBACK = 'true';
     process.env.ALLOW_MOCKS = 'true';
-    app = buildApp({ storage: new EpisodeStorage(storageDir) });
+    storage = new EpisodeStorage(storageDir);
+    app = buildApp({ storage });
     await app.ready();
   });
 
@@ -42,7 +44,7 @@ describe('agent system', () => {
     expect(body.orchestrator).toBe('hermes');
     expect(body.agents.some(a => a.id === 'hermes')).toBe(true);
     expect(body.agents.some(a => a.id === 'researcher')).toBe(true);
-    expect(body.agents.length).toBeGreaterThanOrEqual(10);
+    expect(body.agents.length).toBe(AGENT_IDS.length);
   });
 
   it('POST /episodes/:id/agents/hermes/run enqueues agent job', async () => {
@@ -63,7 +65,7 @@ describe('agent system', () => {
     const response = await app.inject({
       method: 'POST',
       url: `/api/episodes/${episode.id}/agents/hermes/run`,
-      payload: { async: false },
+      payload: { async: false, autoEnqueuePlan: false },
     });
     expect(response.statusCode).toBe(200);
     const runsRes = await app.inject({
@@ -72,5 +74,93 @@ describe('agent system', () => {
     });
     const runs = runsRes.json() as { runs: { agentId: string }[] };
     expect(runs.runs.some(r => r.agentId === 'hermes')).toBe(true);
+  });
+
+  describe('CAS-HERMES-VAL (automated)', () => {
+    it('Hermes without autoEnqueuePlan does not enqueue pipeline jobs', async () => {
+      const episode = await createEpisode('CAS-HERMES-VAL no enqueue');
+      const hermes = await app.inject({
+        method: 'POST',
+        url: `/api/episodes/${episode.id}/agents/hermes/run`,
+        payload: { async: false, autoEnqueuePlan: false },
+      });
+      expect(hermes.statusCode).toBe(200);
+
+      const jobsRes = await app.inject({
+        method: 'GET',
+        url: `/api/episodes/${episode.id}/jobs`,
+      });
+      const jobs = jobsRes.json() as { type: string }[];
+      const forbidden = jobs.filter(j => ['tts', 'render', 'publish', 'pipeline'].includes(j.type));
+      expect(forbidden).toHaveLength(0);
+    });
+
+    it('researcher and scriptwriter produce artifacts and complete stages', async () => {
+      const episode = await createEpisode('CAS-HERMES-VAL artifacts');
+
+      const researcher = await app.inject({
+        method: 'POST',
+        url: `/api/episodes/${episode.id}/agents/researcher/run`,
+        payload: { async: false },
+      });
+      expect(researcher.statusCode).toBe(200);
+      const researcherBody = researcher.json() as { run: { status: string } };
+      expect(researcherBody.run.status).toBe('completed');
+
+      const dir = await storage.getEpisodeDirectory(episode.id);
+      expect(dir).toBeTruthy();
+      const notesPath = path.join(dir!, '01-research', 'notes.md');
+      await access(notesPath);
+      const notes = await readFile(notesPath, 'utf8');
+      expect(notes.length).toBeGreaterThan(10);
+
+      const scriptwriter = await app.inject({
+        method: 'POST',
+        url: `/api/episodes/${episode.id}/agents/scriptwriter/run`,
+        payload: { async: false },
+      });
+      expect(scriptwriter.statusCode).toBe(200);
+
+      const scriptPath = path.join(dir!, '02-script', 'script.md');
+      await access(scriptPath);
+      const scriptFile = await readFile(scriptPath, 'utf8');
+      expect(scriptFile.length).toBeGreaterThan(50);
+
+      const detailRes = await app.inject({
+        method: 'GET',
+        url: `/api/episodes/${episode.id}`,
+      });
+      const detail = detailRes.json() as EpisodeDetail;
+      expect(detail.content.script.length).toBeGreaterThan(50);
+
+      const researchStage = detail.stages.find(s => s.stage === 'research');
+      const scriptStage = detail.stages.find(s => s.stage === 'script');
+      expect(researchStage?.status).toBe('completed');
+      expect(scriptStage?.status).toBe('completed');
+    });
+
+    it('agent failure returns sanitized error without secrets', async () => {
+      delete process.env.AI_ALLOW_DEMO_FALLBACK;
+      delete process.env.ALLOW_MOCKS;
+      process.env.AI_FALLBACK_ENABLED = 'false';
+      process.env.AI_PROVIDER_DEFAULT = 'openai';
+      delete process.env.OPENAI_API_KEY;
+
+      const episode = await createEpisode('CAS-HERMES-VAL ia fail');
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/episodes/${episode.id}/agents/researcher/run`,
+        payload: { async: false },
+      });
+      expect(res.statusCode).toBe(502);
+      const raw = res.payload;
+      expect(raw).not.toMatch(/sk-[a-zA-Z0-9]{10,}/);
+      expect(raw).not.toMatch(/sk-ant-/);
+
+      delete process.env.AI_FALLBACK_ENABLED;
+      delete process.env.AI_PROVIDER_DEFAULT;
+      process.env.AI_ALLOW_DEMO_FALLBACK = 'true';
+      process.env.ALLOW_MOCKS = 'true';
+    });
   });
 });
