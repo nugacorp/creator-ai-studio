@@ -11,9 +11,13 @@ import {
   Volume2,
   Download,
   ExternalLink,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
 } from 'lucide-react';
-import type { AgentDefinition, AgentRunRecord, EpisodeDetail } from '@creator-ai-studio/shared';
+import type { AgentDefinition, AgentQualityGate, AgentRunRecord, EpisodeDetail } from '@creator-ai-studio/shared';
 import {
+  approveAgentRun,
   downloadEpisodeFile,
   fetchAgentRuns,
   fetchAgents,
@@ -30,6 +34,8 @@ const AGENT_COLORS: Record<string, string> = {
   scriptwriter: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
   doctrine_reviewer: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
   editorial_reviewer: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+  storyboard_designer: 'text-teal-400 bg-teal-500/10 border-teal-500/20',
+  scene_asset_designer: 'text-lime-400 bg-lime-500/10 border-lime-500/20',
   narrator: 'text-violet-400 bg-violet-500/10 border-violet-500/20',
   audio_engineer: 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20',
   video_editor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
@@ -38,7 +44,7 @@ const AGENT_COLORS: Record<string, string> = {
   analytics_agent: 'text-lime-400 bg-lime-500/10 border-lime-500/20',
 };
 
-type AgentCardStatus = 'working' | 'idle' | 'completed' | 'failed';
+type AgentCardStatus = 'working' | 'idle' | 'completed' | 'failed' | 'awaiting_approval';
 
 interface AgentCard {
   id: string;
@@ -49,6 +55,9 @@ interface AgentCard {
   progress: number;
   avatarColor: string;
   logs: string[];
+  qualityGate?: AgentQualityGate;
+  runId?: string;
+  requiresHumanApproval?: boolean;
 }
 
 interface AgentsViewProps {
@@ -61,6 +70,7 @@ interface AgentsViewProps {
 function runToStatus(run: AgentRunRecord | undefined): AgentCardStatus {
   if (!run) return 'idle';
   if (run.status === 'running') return 'working';
+  if (run.status === 'awaiting_approval') return 'awaiting_approval';
   if (run.status === 'completed') return 'completed';
   if (run.status === 'failed' || run.status === 'blocked') return 'failed';
   return 'idle';
@@ -72,6 +82,9 @@ function formatAgentTask(def: AgentDefinition, run: AgentRunRecord | undefined):
   const lastLog = run.logs?.at(-1);
   if (run.status === 'completed') {
     return lastLog?.includes('Completado') ? lastLog : `Completado — ${def.name}`;
+  }
+  if (run.status === 'awaiting_approval') {
+    return `Aprobación humana requerida — ${def.name}`;
   }
   if (run.status === 'failed' || run.status === 'blocked') {
     const err = typeof run.output?.error === 'string' ? run.output.error : lastLog;
@@ -93,7 +106,13 @@ function mergeAgentsWithRuns(defs: AgentDefinition[], runs: AgentRunRecord[]): A
     const run = latestByAgent.get(def.id);
     const status = runToStatus(run);
     const progress =
-      status === 'completed' ? 100 : status === 'working' ? 50 : status === 'failed' ? 0 : 0;
+      status === 'completed'
+        ? 100
+        : status === 'working'
+          ? 50
+          : status === 'awaiting_approval'
+            ? 85
+            : 0;
     return {
       id: def.id,
       name: def.name,
@@ -103,6 +122,9 @@ function mergeAgentsWithRuns(defs: AgentDefinition[], runs: AgentRunRecord[]): A
       progress,
       avatarColor: AGENT_COLORS[def.id] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/20',
       logs: run?.logs ?? [`[${def.name}] Sin ejecuciones registradas en este episodio.`],
+      qualityGate: run?.qualityGate,
+      runId: run?.id,
+      requiresHumanApproval: run?.handoff?.requiresHumanApproval,
     };
   });
 }
@@ -120,6 +142,7 @@ export default function AgentsView({
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [running, setRunning] = useState<string | null>(null);
+  const [approving, setApproving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [episode, setEpisode] = useState<EpisodeDetail | null>(null);
   const [assets, setAssets] = useState<EpisodeAssetsResponse | null>(null);
@@ -226,6 +249,20 @@ export default function AgentsView({
   }, [episodeId, agents, refresh]);
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId) ?? agents[0];
+
+  const handleApproveRun = async (runId: string) => {
+    if (!episodeId) return;
+    setApproving(runId);
+    setError(null);
+    try {
+      await approveAgentRun(episodeId, runId);
+      await refresh({ silent: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo aprobar el agente');
+    } finally {
+      setApproving(null);
+    }
+  };
 
   const handleRunAgent = async (agentId: string, autoEnqueuePlan = false) => {
     if (!episodeId) {
@@ -427,6 +464,7 @@ export default function AgentsView({
             {agents.map(ag => {
               const isWorking = ag.status === 'working';
               const isCompleted = ag.status === 'completed';
+              const isAwaiting = ag.status === 'awaiting_approval';
               const isSelected = selectedAgentId === ag.id;
 
               return (
@@ -454,6 +492,8 @@ export default function AgentsView({
                               ? 'bg-emerald-400 animate-ping'
                               : isCompleted
                                 ? 'bg-emerald-500'
+                                : isAwaiting
+                                  ? 'bg-amber-400 animate-pulse'
                                 : ag.status === 'failed'
                                   ? 'bg-rose-400'
                                   : 'bg-[#8B949E]'
@@ -464,12 +504,44 @@ export default function AgentsView({
                     </div>
                   </div>
 
-                  <div className="flex-1 max-w-xs text-left">
+                  <div className="flex-1 max-w-xs text-left space-y-1">
                     <span className="text-[9px] font-mono text-[#8B949E] uppercase block">Estado:</span>
                     <span className="text-[10px] text-[#E6EDF2] font-semibold line-clamp-2">{ag.currentTask}</span>
+                    {ag.qualityGate && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {ag.qualityGate.checks.map(check => (
+                          <span
+                            key={check.key}
+                            title={check.detail ?? check.label}
+                            className={`inline-flex items-center gap-0.5 text-[8px] px-1.5 py-0.5 rounded border ${
+                              check.ok
+                                ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'
+                                : 'border-rose-500/30 text-rose-400 bg-rose-500/10'
+                            }`}
+                          >
+                            {check.ok ? <CheckCircle2 className="w-2.5 h-2.5" /> : <XCircle className="w-2.5 h-2.5" />}
+                            {check.label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  <button
+                  <div className="flex items-center gap-1.5">
+                    {isAwaiting && ag.runId && (
+                      <button
+                        type="button"
+                        disabled={approving !== null}
+                        onClick={e => {
+                          e.stopPropagation();
+                          void handleApproveRun(ag.runId!);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-amber-600/80 hover:bg-amber-500 text-[9px] font-bold text-white cursor-pointer disabled:opacity-50"
+                      >
+                        {approving === ag.runId ? '…' : 'Aprobar'}
+                      </button>
+                    )}
+                    <button
                     type="button"
                     disabled={!episodeId || running !== null}
                     onClick={e => {
@@ -485,6 +557,7 @@ export default function AgentsView({
                       <Play className="w-3.5 h-3.5 text-emerald-400" />
                     )}
                   </button>
+                  </div>
                 </div>
               );
             })}
@@ -503,6 +576,25 @@ export default function AgentsView({
             </div>
 
             <div className="flex-1 bg-[#0B0F14] rounded-2xl p-4 overflow-y-auto space-y-2.5 font-mono text-[10px] leading-relaxed text-[#8B949E] border border-[rgba(255,255,255,0.05)]/60">
+              {selectedAgent?.qualityGate && (
+                <div className="mb-3 p-2 rounded-lg border border-white/5 bg-[#15191E] space-y-1">
+                  <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase text-slate-400">
+                    <AlertCircle className="w-3 h-3" />
+                    Puerta de calidad — {selectedAgent.qualityGate.passed ? 'aprobada' : 'fallida'}
+                  </div>
+                  {selectedAgent.qualityGate.checks.map(check => (
+                    <div key={check.key} className="flex items-center gap-1.5 text-[9px]">
+                      {check.ok ? (
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                      )}
+                      <span>{check.label}</span>
+                      {check.detail ? <span className="text-slate-500">({check.detail})</span> : null}
+                    </div>
+                  ))}
+                </div>
+              )}
               {!selectedAgent || selectedAgent.logs.length === 0 ? (
                 <div className="text-center italic py-16 text-[#8B949E]/60">Sin registros</div>
               ) : (

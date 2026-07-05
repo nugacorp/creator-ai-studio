@@ -162,5 +162,112 @@ describe('agent system', () => {
       process.env.AI_ALLOW_DEMO_FALLBACK = 'true';
       process.env.ALLOW_MOCKS = 'true';
     });
+
+    it('lists 13 agents including storyboard and scene assets (v1.1)', async () => {
+      const response = await app.inject({ method: 'GET', url: '/api/agents' });
+      const body = response.json() as { agents: { id: string }[] };
+      expect(body.agents.length).toBe(13);
+      expect(body.agents.some(a => a.id === 'storyboard_designer')).toBe(true);
+      expect(body.agents.some(a => a.id === 'scene_asset_designer')).toBe(true);
+    });
+  });
+
+  describe('production pipeline E2E (mocked AI)', () => {
+    async function runSyncAgent(episodeId: string, agentId: string) {
+      return app.inject({
+        method: 'POST',
+        url: `/api/episodes/${episodeId}/agents/${agentId}/run`,
+        payload: { async: false, input: { skipApproval: true } },
+      });
+    }
+
+    async function listJobs(episodeId: string) {
+      const jobsRes = await app.inject({
+        method: 'GET',
+        url: `/api/episodes/${episodeId}/jobs`,
+      });
+      return jobsRes.json() as { id: string; type: string }[];
+    }
+
+    it('doctrine → narrator enqueues tts → video_editor enqueues render → seo enqueues publish_package', async () => {
+      const episode = await createEpisode('Pipeline E2E chain');
+
+      for (const agentId of ['researcher', 'scriptwriter'] as const) {
+        const res = await runSyncAgent(episode.id, agentId);
+        expect(res.statusCode).toBe(200);
+      }
+
+      for (const agentId of ['doctrine_reviewer', 'editorial_reviewer', 'storyboard_designer', 'scene_asset_designer'] as const) {
+        const res = await runSyncAgent(episode.id, agentId);
+        expect(res.statusCode).toBe(200);
+        const body = res.json() as { run: { status: string } };
+        expect(['completed', 'blocked']).toContain(body.run.status);
+      }
+
+      const detailRes = await app.inject({ method: 'GET', url: `/api/episodes/${episode.id}` });
+      const detail = detailRes.json() as EpisodeDetail;
+      expect(detail.content.scenes.length).toBeGreaterThan(0);
+
+      const dir = await storage.getEpisodeDirectory(episode.id);
+      await access(path.join(dir!, '03-storyboard', 'storyboard.md'));
+      await access(path.join(dir!, '04-assets', 'scene-assets.json'));
+
+      const narrator = await runSyncAgent(episode.id, 'narrator');
+      expect(narrator.statusCode).toBe(200);
+      let jobs = await listJobs(episode.id);
+      expect(jobs.some(j => j.type === 'tts')).toBe(true);
+
+      const video = await runSyncAgent(episode.id, 'video_editor');
+      expect(video.statusCode).toBe(200);
+      jobs = await listJobs(episode.id);
+      expect(jobs.some(j => j.type === 'render')).toBe(true);
+
+      const seo = await runSyncAgent(episode.id, 'seo_optimizer');
+      expect(seo.statusCode).toBe(200);
+      jobs = await listJobs(episode.id);
+      expect(jobs.some(j => j.type === 'publish_package')).toBe(true);
+
+      const forbidden = jobs.filter(j => j.type === 'publish');
+      expect(forbidden).toHaveLength(0);
+    });
+
+    it('Hermes autoEnqueuePlan enqueues agent jobs for pending pipeline steps', async () => {
+      const episode = await createEpisode('Hermes auto pipeline');
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/episodes/${episode.id}/agents/hermes/run`,
+        payload: { async: false, autoEnqueuePlan: true, input: { skipApproval: true } },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { enqueuedJobs?: string[] };
+      expect((body.enqueuedJobs?.length ?? 0)).toBeGreaterThan(0);
+
+      const jobs = await listJobs(episode.id);
+      const agentJobs = jobs.filter(j => j.type === 'agent');
+      expect(agentJobs.length).toBeGreaterThan(0);
+    });
+
+    it('POST agent-runs approve completes awaiting_approval run', async () => {
+      const episode = await createEpisode('Approval gate');
+      await runSyncAgent(episode.id, 'researcher');
+      await runSyncAgent(episode.id, 'scriptwriter');
+
+      const doctrine = await app.inject({
+        method: 'POST',
+        url: `/api/episodes/${episode.id}/agents/doctrine_reviewer/run`,
+        payload: { async: false, input: { forceHumanApproval: true } },
+      });
+      expect(doctrine.statusCode).toBe(200);
+      const doctrineBody = doctrine.json() as { run: { id: string; status: string } };
+      expect(doctrineBody.run.status).toBe('awaiting_approval');
+
+      const approve = await app.inject({
+        method: 'POST',
+        url: `/api/episodes/${episode.id}/agent-runs/${doctrineBody.run.id}/approve`,
+      });
+      expect(approve.statusCode).toBe(200);
+      const approved = approve.json() as { run: { status: string } };
+      expect(approved.run.status).toBe('completed');
+    });
   });
 });

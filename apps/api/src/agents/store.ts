@@ -64,6 +64,39 @@ export async function updateAgentRun(
   return runs[idx];
 }
 
+export async function approveAgentRun(
+  storage: EpisodeStorage,
+  episodeId: string,
+  runId: string,
+): Promise<AgentRunRecord | undefined> {
+  const dir = await storage.getEpisodeDirectory(episodeId);
+  if (!dir) return undefined;
+  const runs = await readRuns(dir);
+  const idx = runs.findIndex(r => r.id === runId);
+  if (idx < 0) return undefined;
+  const run = runs[idx];
+  if (run.status !== 'awaiting_approval') return undefined;
+
+  runs[idx] = {
+    ...run,
+    status: 'completed',
+    handoff: run.handoff ? { ...run.handoff, requiresHumanApproval: false } : run.handoff,
+    logs: [...run.logs, `[Aprobación humana] Run ${runId} aprobado ${new Date().toISOString()}`],
+  };
+  await writeRuns(dir, runs);
+
+  const stage = run.agentId === 'doctrine_reviewer'
+    ? 'doctrine_review'
+    : run.agentId === 'editorial_reviewer'
+      ? 'editorial_review'
+      : undefined;
+  if (stage) {
+    await storage.setStageStatus(episodeId, stage, 'completed');
+  }
+
+  return runs[idx];
+}
+
 export async function getAgentRun(
   storage: EpisodeStorage,
   episodeId: string,

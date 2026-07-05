@@ -92,7 +92,8 @@ export type EpisodeStageStatus = (typeof EPISODE_STAGE_STATUSES)[number];
 export const STAGE_EXPECTED_FILES: Partial<Record<EpisodeStage, string[]>> = {
   research: ['01-research/notes.md'],
   script: ['02-script/script.md'],
-  storyboard: ['03-storyboard/storyboard.md'],
+  storyboard: ['03-storyboard/storyboard.md', '03-storyboard/scenes.json'],
+  assets: ['04-assets/scene-assets.json'],
   audio: ['05-audio/voiceover.mp3'],
   video: ['06-video/episode.mp4'],
   thumbnail: ['07-thumbnail/thumbnail.png'],
@@ -260,6 +261,8 @@ export const AGENT_IDS = [
   'scriptwriter',
   'doctrine_reviewer',
   'editorial_reviewer',
+  'storyboard_designer',
+  'scene_asset_designer',
   'narrator',
   'audio_engineer',
   'video_editor',
@@ -267,6 +270,9 @@ export const AGENT_IDS = [
   'seo_optimizer',
   'analytics_agent',
 ] as const;
+
+/** Agents that may pause the pipeline until a human approves the handoff. */
+export const HUMAN_APPROVAL_AGENT_IDS = ['doctrine_reviewer', 'editorial_reviewer'] as const;
 export type AgentId = (typeof AGENT_IDS)[number];
 
 export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'blocked' | 'awaiting_approval';

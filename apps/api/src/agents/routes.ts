@@ -5,7 +5,7 @@ import { getEpisodeForUser } from '../storage/access.js';
 import { createJob } from '../jobs/store.js';
 import { enqueueJob } from '../jobs/queue.js';
 import { listAgentDefinitions, getAgentDefinition } from './registry.js';
-import { listAgentRuns, getAgentRun } from './store.js';
+import { listAgentRuns, getAgentRun, approveAgentRun } from './store.js';
 import { runAgent } from './runner.js';
 
 function route(prefix: string, path: string): string {
@@ -51,6 +51,21 @@ export function registerAgentRoutes(
       return { error: 'agent run not found' };
     }
     return run;
+  });
+
+  app.post(route(prefix, '/episodes/:id/agent-runs/:runId/approve'), async (request, reply) => {
+    const { id, runId } = request.params as { id: string; runId: string };
+    const episode = await getEpisodeForUser(storage, id, request.userId);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const approved = await approveAgentRun(storage, id, runId);
+    if (!approved) {
+      reply.code(404);
+      return { error: 'agent run not found or not awaiting approval' };
+    }
+    return { run: approved, message: 'Aprobación humana registrada' };
   });
 
   app.post(route(prefix, '/episodes/:id/agents/:agentId/run'), async (request, reply) => {

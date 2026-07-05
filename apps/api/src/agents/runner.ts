@@ -6,10 +6,12 @@ import type {
   AgentId,
   AgentQualityGate,
   AgentRunRecord,
+  AgentRunStatus,
   EpisodeStage,
   JobType,
+  Scene,
 } from '@creator-ai-studio/shared';
-import { isJobType } from '@creator-ai-studio/shared';
+import { HUMAN_APPROVAL_AGENT_IDS, isJobType } from '@creator-ai-studio/shared';
 import { withProvider } from '../ai/router.js';
 import { createJob } from '../jobs/store.js';
 import { enqueueJob } from '../jobs/queue.js';
@@ -39,6 +41,8 @@ const STAGE_FOR_AGENT: Partial<Record<AgentId, EpisodeStage>> = {
   scriptwriter: 'script',
   doctrine_reviewer: 'doctrine_review',
   editorial_reviewer: 'editorial_review',
+  storyboard_designer: 'storyboard',
+  scene_asset_designer: 'assets',
   narrator: 'audio',
   audio_engineer: 'audio',
   video_editor: 'video',
@@ -52,13 +56,42 @@ const HERMES_PIPELINE_ORDER: AgentId[] = [
   'scriptwriter',
   'doctrine_reviewer',
   'editorial_reviewer',
+  'storyboard_designer',
+  'scene_asset_designer',
   'narrator',
   'audio_engineer',
-  'seo_optimizer',
   'thumbnail_designer',
   'video_editor',
+  'seo_optimizer',
   'analytics_agent',
 ];
+
+function shouldRequireHumanApproval(agentId: AgentId, input?: Record<string, unknown>): boolean {
+  if (input?.skipApproval === true) return false;
+  if (input?.forceHumanApproval === true) {
+    return (HUMAN_APPROVAL_AGENT_IDS as readonly string[]).includes(agentId);
+  }
+  if (process.env.AI_ALLOW_DEMO_FALLBACK === 'true' || process.env.ALLOW_MOCKS === 'true') {
+    return false;
+  }
+  return (HUMAN_APPROVAL_AGENT_IDS as readonly string[]).includes(agentId);
+}
+
+function resolveRunStatus(
+  result: AgentExecutionResult,
+  agentId: AgentId,
+  input?: Record<string, unknown>,
+): AgentRunStatus {
+  if (result.blocked) return 'blocked';
+  if (
+    result.handoff?.requiresHumanApproval &&
+    result.qualityGate?.passed &&
+    shouldRequireHumanApproval(agentId, input)
+  ) {
+    return 'awaiting_approval';
+  }
+  return 'completed';
+}
 
 function parseJsonBlock(text: string): Record<string, unknown> | null {
   const match = text.match(/\{[\s\S]*\}/);
@@ -124,8 +157,10 @@ export async function runAgent(
     const completedAt = new Date().toISOString();
     logs.push(`[${def.name}] Completado ${completedAt}`);
 
+    const runStatus = resolveRunStatus(result, options.agentId, options.input);
+
     const finalRun = await updateAgentRun(storage, options.episodeId, runId, {
-      status: result.blocked ? 'blocked' : 'completed',
+      status: runStatus,
       completedAt,
       output: result.output,
       logs,
@@ -133,9 +168,9 @@ export async function runAgent(
       handoff: result.handoff,
     });
 
-    if (stage && !result.blocked) {
+    if (stage && runStatus === 'completed') {
       await markStage(storage, options.episodeId, stage, 'completed');
-    } else if (stage && result.blocked) {
+    } else if (stage && (runStatus === 'blocked' || runStatus === 'awaiting_approval')) {
       await markStage(storage, options.episodeId, stage, 'blocked');
     }
 
@@ -144,7 +179,7 @@ export async function runAgent(
       enqueuedJobs = await enqueueHermesPlan(options.episodeId, result.output.plan as HermesPlanStep[]);
     }
 
-    if (!result.blocked) {
+    if (runStatus === 'completed') {
       const techJobId = await enqueueTechnicalFollowUp(options.episodeId, result.output);
       if (techJobId) {
         enqueuedJobs = [...(enqueuedJobs ?? []), techJobId];
@@ -205,9 +240,13 @@ async function executeAgent(
     case 'scriptwriter':
       return runScriptwriter(storage, options.episodeId, title, outline, script, system, logs);
     case 'doctrine_reviewer':
-      return runDoctrineReviewer(script, system, logs);
+      return runDoctrineReviewer(script, system, logs, options.input);
     case 'editorial_reviewer':
-      return runEditorialReviewer(script, system, logs);
+      return runEditorialReviewer(script, system, logs, options.input);
+    case 'storyboard_designer':
+      return runStoryboardDesigner(storage, options.episodeId, dir, title, script, system, logs);
+    case 'scene_asset_designer':
+      return runSceneAssetDesigner(storage, options.episodeId, dir, episode.content.scenes, system, logs);
     case 'narrator':
       return runNarrator(script, system, logs);
     case 'audio_engineer':
@@ -233,6 +272,8 @@ async function runHermes(
   const pending: HermesPlanStep[] = [];
   const hasOutline = (episode.content.outline?.length ?? 0) > 0;
   const hasScript = episode.content.script.trim().length > 50;
+  const hasScenes = episode.content.scenes.length > 0;
+  const scenesWithImages = episode.content.scenes.filter(s => s.imageUrl?.trim()).length;
 
   for (const agentId of HERMES_PIPELINE_ORDER) {
     let needed = false;
@@ -249,12 +290,21 @@ async function runHermes(
     } else if (agentId === 'editorial_reviewer' && hasScript) {
       needed = true;
       reason = 'Revisión editorial';
+    } else if (agentId === 'storyboard_designer' && hasScript && !hasScenes) {
+      needed = true;
+      reason = 'Crear storyboard de escenas';
+    } else if (agentId === 'scene_asset_designer' && hasScenes && scenesWithImages < episode.content.scenes.length) {
+      needed = true;
+      reason = 'Generar assets visuales por escena';
     } else if (agentId === 'narrator' && hasScript && !episode.content.audioUrl) {
       needed = true;
       reason = 'Generar dirección de voz / TTS';
+    } else if (agentId === 'audio_engineer' && hasScript) {
+      needed = true;
+      reason = 'Validar narración y audio';
     } else if (agentId === 'seo_optimizer' && hasScript) {
       needed = true;
-      reason = 'Optimizar metadatos SEO';
+      reason = 'Optimizar metadatos SEO y paquete de publicación';
     } else if (agentId === 'thumbnail_designer' && !episode.content.thumbnailUrl) {
       needed = true;
       reason = 'Diseñar miniatura';
@@ -276,6 +326,8 @@ async function runHermes(
 Estado: ${episode.status}
 Outline: ${hasOutline ? 'sí' : 'no'}
 Guion: ${hasScript ? `${episode.content.script.length} chars` : 'vacío'}
+Escenas: ${hasScenes ? episode.content.scenes.length : 0}
+Assets: ${scenesWithImages}/${episode.content.scenes.length}
 Audio: ${episode.content.audioUrl ? 'sí' : 'no'}
 Miniatura: ${episode.content.thumbnailUrl ? 'sí' : 'no'}
 
@@ -418,6 +470,7 @@ async function runDoctrineReviewer(
   script: string,
   system: string,
   _logs: string[],
+  input?: Record<string, unknown>,
 ): Promise<AgentExecutionResult> {
   const text = await withProvider('chat', p =>
     p.chat([
@@ -429,11 +482,20 @@ async function runDoctrineReviewer(
   const passed = parsed?.passed !== false;
   _logs.push(`[Revisor doctrinal] passed=${passed}`);
 
+  const needsApproval = passed && shouldRequireHumanApproval('doctrine_reviewer', input);
+
   return {
     output: parsed ?? { raw: text },
     blocked: !passed,
     handoff: passed
-      ? { nextAgentId: 'editorial_reviewer', nextStage: 'editorial_review', notes: 'Doctrina aprobada' }
+      ? {
+          nextAgentId: 'editorial_reviewer',
+          nextStage: 'editorial_review',
+          notes: needsApproval
+            ? 'Doctrina aprobada — requiere aprobación humana antes de continuar'
+            : 'Doctrina aprobada',
+          requiresHumanApproval: needsApproval,
+        }
       : { notes: 'Corregir errores doctrinales antes de continuar', requiresHumanApproval: true },
     qualityGate: {
       passed,
@@ -446,6 +508,7 @@ async function runEditorialReviewer(
   script: string,
   system: string,
   _logs: string[],
+  input?: Record<string, unknown>,
 ): Promise<AgentExecutionResult> {
   const text = await withProvider('chat', p =>
     p.chat([
@@ -455,14 +518,147 @@ async function runEditorialReviewer(
   );
   const parsed = parseJsonBlock(text);
   const passed = parsed?.passed !== false;
+  const needsApproval = passed && shouldRequireHumanApproval('editorial_reviewer', input);
 
   return {
     output: parsed ?? { raw: text },
     blocked: !passed,
-    handoff: { nextAgentId: 'narrator', nextStage: 'audio', notes: 'Editorial revisado' },
+    handoff: {
+      nextAgentId: 'storyboard_designer',
+      nextStage: 'storyboard',
+      notes: needsApproval
+        ? 'Editorial revisado — requiere aprobación humana antes de storyboard'
+        : 'Editorial revisado',
+      requiresHumanApproval: needsApproval,
+    },
     qualityGate: {
       passed,
       checks: [{ key: 'editorial', label: 'Revisión editorial', ok: passed }],
+    },
+  };
+}
+
+async function runStoryboardDesigner(
+  storage: EpisodeStorage,
+  episodeId: string,
+  dir: string,
+  title: string,
+  script: string,
+  system: string,
+  logs: string[],
+): Promise<AgentExecutionResult> {
+  const text = await withProvider('chat', p =>
+    p.chat([
+      { role: 'system', content: system },
+      { role: 'user', content: `Título: ${title}\nGuion:\n${script.slice(0, 5000)}` },
+    ]),
+  );
+  const parsed = parseJsonBlock(text);
+  const rawScenes = (parsed?.scenes as Array<Record<string, unknown>> | undefined) ?? [];
+  const scenes: Scene[] =
+    rawScenes.length > 0
+      ? rawScenes.map((s, i) => ({
+          id: String(s.id ?? `scene-${i + 1}`),
+          text: String(s.text ?? ''),
+          imageUrl: '',
+          voiceoverPrompt: String(s.voiceoverPrompt ?? s.text ?? ''),
+          musicTrack: 'ambient-soft',
+          duration: Number(s.duration ?? 8),
+          transition: String(s.transition ?? 'fade'),
+        }))
+      : fallbackScenesFromScript(script);
+
+  await mkdir(path.join(dir, '03-storyboard'), { recursive: true });
+  const storyboardMd = scenes.map((s, i) => `## Escena ${i + 1} (${s.duration}s)\n${s.text}\n`).join('\n');
+  await writeFile(path.join(dir, '03-storyboard', 'storyboard.md'), `# Storyboard — ${title}\n\n${storyboardMd}`, 'utf8');
+  await writeFile(path.join(dir, '03-storyboard', 'scenes.json'), `${JSON.stringify(scenes, null, 2)}\n`, 'utf8');
+  await storage.updateEpisode(episodeId, { content: { scenes } });
+  logs.push(`[Storyboard] ${scenes.length} escenas guardadas`);
+
+  return {
+    output: { sceneCount: scenes.length, summary: parsed?.summary ?? 'Storyboard generado' },
+    handoff: { nextAgentId: 'scene_asset_designer', nextStage: 'assets', notes: 'Storyboard listo para assets' },
+    qualityGate: {
+      passed: scenes.length > 0,
+      checks: [{ key: 'scenes', label: 'Escenas definidas', ok: scenes.length > 0 }],
+    },
+  };
+}
+
+function fallbackScenesFromScript(script: string): Scene[] {
+  const paragraphs = script.split(/\n\n+/).filter(p => p.trim().length > 20);
+  const chunks = paragraphs.length > 0 ? paragraphs : [script.slice(0, 500)];
+  return chunks.slice(0, 10).map((text, i) => ({
+    id: `scene-${i + 1}`,
+    text: text.trim(),
+    imageUrl: '',
+    voiceoverPrompt: text.trim().slice(0, 200),
+    musicTrack: 'ambient-soft',
+    duration: 10,
+    transition: 'fade',
+  }));
+}
+
+async function runSceneAssetDesigner(
+  storage: EpisodeStorage,
+  episodeId: string,
+  dir: string,
+  scenes: Scene[],
+  system: string,
+  logs: string[],
+): Promise<AgentExecutionResult> {
+  if (scenes.length === 0) {
+    return {
+      output: { error: 'no_scenes' },
+      blocked: true,
+      handoff: { nextAgentId: 'storyboard_designer', notes: 'Ejecutar storyboard_designer primero' },
+      qualityGate: {
+        passed: false,
+        checks: [{ key: 'scenes', label: 'Escenas presentes', ok: false, detail: 'Sin escenas' }],
+      },
+    };
+  }
+
+  const text = await withProvider('chat', p =>
+    p.chat([
+      { role: 'system', content: system },
+      {
+        role: 'user',
+        content: `Escenas:\n${JSON.stringify(scenes.map(s => ({ id: s.id, text: s.text.slice(0, 120) })))}`,
+      },
+    ]),
+  );
+  const parsed = parseJsonBlock(text);
+  const assets = (parsed?.assets as Array<{ sceneId?: string; imagePrompt?: string }> | undefined) ?? [];
+
+  const updatedScenes: Scene[] = [];
+  for (const scene of scenes) {
+    const asset = assets.find(a => a.sceneId === scene.id);
+    const imagePrompt =
+      asset?.imagePrompt ??
+      `Escena bíblica cinematográfica: ${scene.text.slice(0, 120)}, estilo reverente, sin texto en imagen`;
+    const imageUrl = await withProvider('image', p =>
+      p.generateImage(imagePrompt, { aspectRatio: '16:9', style: 'cinematic biblical' }),
+    );
+    updatedScenes.push({ ...scene, imageUrl });
+    logs.push(`[Assets] Imagen generada para ${scene.id}`);
+  }
+
+  await mkdir(path.join(dir, '04-assets'), { recursive: true });
+  await writeFile(
+    path.join(dir, '04-assets', 'scene-assets.json'),
+    `${JSON.stringify(updatedScenes.map(s => ({ id: s.id, imageUrl: s.imageUrl })), null, 2)}\n`,
+    'utf8',
+  );
+  await storage.updateEpisode(episodeId, { content: { scenes: updatedScenes } });
+
+  const allHaveImages = updatedScenes.every(s => Boolean(s.imageUrl));
+  return {
+    output: { sceneCount: updatedScenes.length, assetsGenerated: updatedScenes.length },
+    handoff: { nextAgentId: 'narrator', nextStage: 'audio', notes: 'Assets listos para narración' },
+    qualityGate: {
+      passed: allHaveImages,
+      checks: [{ key: 'assets', label: 'Imágenes por escena', ok: allHaveImages }],
     },
   };
 }
@@ -596,8 +792,8 @@ async function runSeoOptimizer(
   logs.push('[SEO] Metadatos guardados');
 
   return {
-    output: result as unknown as Record<string, unknown>,
-    handoff: { nextStage: 'seo', notes: 'SEO optimizado' },
+    output: { ...(result as unknown as Record<string, unknown>), enqueueJob: 'publish_package' },
+    handoff: { nextStage: 'seo', notes: 'SEO optimizado — preparar paquete de publicación' },
     qualityGate: {
       passed: result.titles.length > 0 && result.tags.length > 0,
       checks: [

@@ -1,4 +1,5 @@
 import type {
+  AgentRunRecord,
   AppSettings,
   CreateEpisodeInput,
   CreateJobInput,
@@ -495,6 +496,15 @@ export async function runEpisodeAgent(
       async: true,
       autoEnqueuePlan: options?.autoEnqueuePlan,
     }),
+  });
+}
+
+export async function approveAgentRun(
+  episodeId: string,
+  runId: string,
+): Promise<{ run: AgentRunRecord; message: string }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/agent-runs/${encodeURIComponent(runId)}/approve`, {
+    method: 'POST',
   });
 }
 
