@@ -53,9 +53,13 @@ if env_file.exists():
 updated = 0
 for key in keys:
     value = os.environ.get(key, "").strip()
-    if value:
-        existing[key] = value
-        updated += 1
+    if not value:
+        continue
+    if key == "RCLONE_REMOTE" and ("access_token" in value or value.lstrip().startswith("{")):
+        print("WARNING: skipping invalid RCLONE_REMOTE (OAuth JSON belongs in RCLONE_OAUTH_TOKEN_JSON)", file=__import__("sys").stderr)
+        continue
+    existing[key] = value
+    updated += 1
 
 # Derive VITE_* from SUPABASE_* when only the latter are provided.
 if existing.get("SUPABASE_URL") and not existing.get("VITE_SUPABASE_URL"):

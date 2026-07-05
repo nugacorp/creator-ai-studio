@@ -97,6 +97,11 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RCLONE_REMOTE: ${{ secrets.RCLONE_REMOTE }}
         run: |
+          RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive:Creator-AI-Studio/episodes}"
+          if printf '%s' "${RCLONE_REMOTE}" | grep -qE 'access_token|"token_type"'; then
+            echo "::error::RCLONE_REMOTE must be a rclone remote path (gdrive:...), not OAuth JSON. Use RCLONE_OAUTH_TOKEN_JSON for OAuth."
+            exit 1
+          fi
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" bash -s <<EOF
           SUPABASE_URL=${SUPABASE_URL@Q} \
