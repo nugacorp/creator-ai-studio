@@ -2,15 +2,22 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, ArrowLeft, ArrowRight, Video, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { VideoProject, ProjectStatus } from '../types';
 import Sparkline from './Sparkline';
+import {
+  filterProjectsBySection,
+  highlightColumnForSection,
+  DASHBOARD_SECTION_LABELS,
+  type DashboardSection,
+} from '../lib/dashboardNavigation';
 
 interface ProjectsViewProps {
   projects: VideoProject[];
   setProjects: React.Dispatch<React.SetStateAction<VideoProject[]>>;
   onOpenWorkspace: (projectId: string) => void;
   seriesList: string[];
-  // Wired to the backend: creates a real episode via POST /episodes.
   onCreateEpisode: (title: string) => Promise<void>;
   onMoveProjectStatus?: (id: string, status: ProjectStatus) => Promise<void>;
+  boardFilter?: DashboardSection | null;
+  onClearBoardFilter?: () => void;
 }
 
 const PIPELINE_COLUMNS: ProjectStatus[] = [
@@ -31,6 +38,8 @@ export default function ProjectsView({
   seriesList,
   onCreateEpisode,
   onMoveProjectStatus,
+  boardFilter = null,
+  onClearBoardFilter,
 }: ProjectsViewProps) {
   const [selectedSeries, setSelectedSeries] = useState<string>('Todos');
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,14 +51,18 @@ export default function ProjectsView({
   const [newStatus, setNewStatus] = useState<ProjectStatus>('Ideas');
   const [newDuration, setNewDuration] = useState('08:00');
   const boardRef = useRef<HTMLDivElement>(null);
+  const columnRefs = useRef<Partial<Record<ProjectStatus, HTMLDivElement | null>>>({});
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const highlightColumn = boardFilter ? highlightColumnForSection(boardFilter) : null;
 
   // Filtered projects
   const filteredProjects = projects.filter(proj => {
     const matchesSeries = selectedSeries === 'Todos' || proj.series === selectedSeries;
     const matchesSearch = proj.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSeries && matchesSearch;
+    const matchesBoard = boardFilter ? filterProjectsBySection([proj], boardFilter).length > 0 : true;
+    return matchesSeries && matchesSearch && matchesBoard;
   });
 
   const updateBoardScrollState = useCallback(() => {
@@ -74,6 +87,13 @@ export default function ProjectsView({
       observer.disconnect();
     };
   }, [updateBoardScrollState, filteredProjects.length]);
+
+  useEffect(() => {
+    if (!highlightColumn) return;
+    const column = columnRefs.current[highlightColumn];
+    if (!column) return;
+    column.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [highlightColumn, boardFilter, filteredProjects.length]);
 
   const scrollBoard = (direction: 'left' | 'right') => {
     boardRef.current?.scrollBy({
@@ -122,6 +142,26 @@ export default function ProjectsView({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {boardFilter && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-indigo-950/30 border border-indigo-500/20 rounded-2xl px-4 py-3">
+          <div className="text-xs text-indigo-200">
+            <span className="font-mono uppercase tracking-wide text-indigo-400/80">Filtro activo</span>
+            <span className="mx-2 text-slate-500">·</span>
+            <strong className="text-white">{DASHBOARD_SECTION_LABELS[boardFilter]}</strong>
+            <span className="text-slate-400 ml-2">({filteredProjects.length} episodio(s))</span>
+          </div>
+          {onClearBoardFilter && (
+            <button
+              type="button"
+              onClick={onClearBoardFilter}
+              className="text-xs font-semibold text-indigo-300 hover:text-white px-3 py-1.5 rounded-lg border border-indigo-500/30 hover:bg-indigo-500/10 transition-colors cursor-pointer"
+            >
+              Ver todos
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Top action bar */}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center bg-[#15191E] p-4 rounded-2xl border border-white/5">
         {/* Series Filter Tabs */}
@@ -208,10 +248,17 @@ export default function ProjectsView({
           <div className="flex gap-4 min-w-max h-[calc(100vh-300px)]">
           {PIPELINE_COLUMNS.map(columnStatus => {
             const columnProjects = filteredProjects.filter(p => p.status === columnStatus);
+            const isHighlighted = highlightColumn === columnStatus;
             return (
               <div
                 key={columnStatus}
-                className="w-72 bg-[#15191E] rounded-2xl border border-white/5 flex flex-col h-full overflow-hidden shrink-0"
+                ref={el => {
+                  columnRefs.current[columnStatus] = el;
+                }}
+                data-column={columnStatus}
+                className={`w-72 bg-[#15191E] rounded-2xl border flex flex-col h-full overflow-hidden shrink-0 transition-colors ${
+                  isHighlighted ? 'border-indigo-500/50 ring-1 ring-indigo-500/20' : 'border-white/5'
+                }`}
               >
                 {/* Column Header */}
                 <div className="p-3 bg-white/5 border-b border-white/5 flex items-center justify-between select-none shrink-0">

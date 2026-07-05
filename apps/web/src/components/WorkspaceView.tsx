@@ -34,10 +34,13 @@ import type { ElevenLabsVoice } from '../api';
 interface WorkspaceViewProps {
   project: VideoProject;
   onUpdateProject: (updated: VideoProject) => void;
+  initialTab?: 'guion' | 'narracion' | 'escenas' | 'video' | 'thumbnail' | 'seo' | 'publicacion' | 'analytics';
 }
 
-export default function WorkspaceView({ project, onUpdateProject }: WorkspaceViewProps) {
-  const [activeTab, setActiveTab] = useState<'guion' | 'narracion' | 'escenas' | 'video' | 'thumbnail' | 'seo' | 'publicacion' | 'analytics'>('guion');
+export default function WorkspaceView({ project, onUpdateProject, initialTab }: WorkspaceViewProps) {
+  const [activeTab, setActiveTab] = useState<
+    'guion' | 'narracion' | 'escenas' | 'video' | 'thumbnail' | 'seo' | 'publicacion' | 'analytics'
+  >(initialTab ?? 'guion');
   
   // General status
   const [isProcessing, setIsProcessing] = useState(false);
@@ -69,6 +72,7 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
     );
     setSeoDescription(project.seoDescription);
     if (project.audioUrl) setAudioBase64(project.audioUrl);
+    if (initialTab) setActiveTab(initialTab);
   }, [
     project.id,
     project.script,
@@ -77,6 +81,7 @@ export default function WorkspaceView({ project, onUpdateProject }: WorkspaceVie
     project.thumbnailUrl,
     project.audioUrl,
     project.seoDescription,
+    initialTab,
   ]);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(project.scenes[0]?.id || null);
 

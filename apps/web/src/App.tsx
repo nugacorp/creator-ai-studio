@@ -42,6 +42,13 @@ import {
   updateEpisodeProjectStatus,
   type AuthStatus,
 } from './api';
+import {
+  filterProjectsBySection,
+  shouldOpenCalendar,
+  workspaceTabForProject,
+  type DashboardSection,
+  type WorkspaceTab,
+} from './lib/dashboardNavigation';
 
 function episodeToProject(episode: EpisodeSummary, content?: EpisodeDetail['content']): VideoProject {
   const c = content;
@@ -83,6 +90,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('');
   const [workspaceRefreshToken, setWorkspaceRefreshToken] = useState(0);
+  const [projectsBoardFilter, setProjectsBoardFilter] = useState<DashboardSection | null>(null);
+  const [workspaceInitialTab, setWorkspaceInitialTab] = useState<WorkspaceTab | null>(null);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
@@ -191,13 +200,50 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   }, [canAccessApi]);
 
   const handleContinueWorking = (projectId: string) => {
+    setWorkspaceInitialTab(null);
     setActiveProjectId(projectId);
     setCurrentView('workspace');
   };
 
   const handleOpenWorkspace = (projectId: string) => {
+    setWorkspaceInitialTab(null);
     setActiveProjectId(projectId);
     setCurrentView('workspace');
+  };
+
+  const handleNavigateToSection = (section: DashboardSection) => {
+    if (shouldOpenCalendar(section)) {
+      setProjectsBoardFilter(null);
+      setWorkspaceInitialTab(null);
+      setCurrentView('calendar');
+      return;
+    }
+
+    const matched = filterProjectsBySection(projects, section);
+    const directOpenSections: DashboardSection[] = ['con-guion', 'en-produccion', 'miniaturas-listas'];
+
+    if (matched.length === 1 && directOpenSections.includes(section)) {
+      const project = matched[0];
+      setActiveProjectId(project.id);
+      setWorkspaceInitialTab(workspaceTabForProject(project, section));
+      setProjectsBoardFilter(null);
+      setCurrentView('workspace');
+      return;
+    }
+
+    setProjectsBoardFilter(section);
+    setWorkspaceInitialTab(null);
+    setCurrentView('projects');
+  };
+
+  const handleSetCurrentView = (view: string) => {
+    if (view !== 'projects') {
+      setProjectsBoardFilter(null);
+    }
+    if (view !== 'workspace') {
+      setWorkspaceInitialTab(null);
+    }
+    setCurrentView(view);
   };
 
   const handleBackToProjects = () => {
@@ -307,7 +353,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     <div className="flex bg-[#0B0F14] text-[#E6EDF2] min-h-screen font-sans antialiased selection:bg-indigo-600/30 selection:text-indigo-300">
       <Sidebar
         currentView={currentView}
-        setCurrentView={setCurrentView}
+        setCurrentView={handleSetCurrentView}
         mobileOpen={mobileSidebarOpen}
         setMobileOpen={setMobileSidebarOpen}
       />
@@ -327,6 +373,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
           {currentView === 'home' && (
             <HomeView
               onContinueWorking={handleContinueWorking}
+              onNavigateToSection={handleNavigateToSection}
               projects={projects}
               setProjects={setProjects}
               onAddNotification={handleAddNotification}
@@ -343,6 +390,8 @@ export function App({ initialView = 'home' }: AppProps = {}) {
               seriesList={INITIAL_SERIES}
               onCreateEpisode={handleCreateEpisode}
               onMoveProjectStatus={handleMoveProjectStatus}
+              boardFilter={projectsBoardFilter}
+              onClearBoardFilter={() => setProjectsBoardFilter(null)}
             />
           )}
 
@@ -350,7 +399,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             (activeProject ? (
               // key={id} remounts the workspace per episode so its editable state
               // always reflects the selected episode (not the previously opened one).
-              <div key={`${activeProject.id}-${workspaceRefreshToken}`} className="space-y-6">
+              <div key={`${activeProject.id}-${workspaceRefreshToken}-${workspaceInitialTab ?? 'default'}`} className="space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-3 bg-[#15191E] border border-white/5 rounded-2xl px-4 py-3">
                   <button
                     type="button"
@@ -378,7 +427,11 @@ export function App({ initialView = 'home' }: AppProps = {}) {
                   onPipelineComplete={() => void handlePipelineComplete()}
                 />
                 <ProductionStagesPanel episodeId={activeProject.id} />
-                <WorkspaceView project={activeProject} onUpdateProject={handleUpdateProject} />
+                <WorkspaceView
+                  project={activeProject}
+                  onUpdateProject={handleUpdateProject}
+                  initialTab={workspaceInitialTab ?? undefined}
+                />
               </div>
             ) : (
               <div className="bg-[#15191E] border border-white/5 rounded-2xl p-8 text-center space-y-4">

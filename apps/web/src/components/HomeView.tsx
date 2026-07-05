@@ -1,13 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, CheckCircle2, Clock, Volume2, Image as ImageIcon, Calendar, ArrowRight, Activity, Sparkles, Plus, Zap, X, FileText, Sliders, RefreshCw } from 'lucide-react';
+import { Play, Clock, Volume2, Image as ImageIcon, Calendar, ArrowRight, Activity, Sparkles, Plus, Zap, X, FileText, Sliders, RefreshCw } from 'lucide-react';
 import { VideoProject, ProjectStatus } from '../types';
 import { aiGenerateImage, aiGenerateScript } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { getTimeGreeting, resolveDisplayName } from '../lib/greeting';
+import type { DashboardSection } from '../lib/dashboardNavigation';
 
 interface HomeViewProps {
   onContinueWorking: (projectId: string) => void;
+  onNavigateToSection: (section: DashboardSection) => void;
   projects: VideoProject[];
   setProjects: React.Dispatch<React.SetStateAction<VideoProject[]>>;
   onAddNotification: (message: string, type: 'success' | 'info' | 'warning' | 'error') => void;
@@ -15,7 +17,15 @@ interface HomeViewProps {
   onAddNewScript?: (title: string, script: string, outline: string[]) => void;
 }
 
-export default function HomeView({ onContinueWorking, projects, setProjects, onAddNotification, onCreateEpisode, onAddNewScript }: HomeViewProps) {
+export default function HomeView({
+  onContinueWorking,
+  onNavigateToSection,
+  projects,
+  setProjects,
+  onAddNotification,
+  onCreateEpisode,
+  onAddNewScript,
+}: HomeViewProps) {
   const { user, profile } = useAuth();
   const greetingName = resolveDisplayName({
     displayName: profile?.display_name,
@@ -234,16 +244,52 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
     const withScript = projects.filter(p => p.script && p.script.length > 20).length;
 
     return [
-      { label: 'Episodios activos', count: String(inProgress || projects.length), icon: Play, color: 'text-sky-400 bg-sky-500/10' },
-      { label: 'Con guion', count: String(withScript), icon: Sparkles, color: 'text-indigo-400 bg-indigo-500/10' },
-      { label: 'En producción', count: String(inProgress), icon: Volume2, color: 'text-amber-400 bg-amber-500/10' },
-      { label: 'Miniaturas listas', count: String(withThumbnail), icon: ImageIcon, color: 'text-emerald-400 bg-emerald-500/10' },
-      { label: published > 0 ? 'Publicados' : 'Programados', count: String(published > 0 ? published : scheduled), icon: Calendar, color: 'text-indigo-400 bg-indigo-500/10' },
+      {
+        section: 'episodios-activos' as DashboardSection,
+        label: 'Episodios activos',
+        hint: 'Ver pipeline de proyectos',
+        count: String(inProgress || projects.length),
+        icon: Play,
+        color: 'text-sky-400 bg-sky-500/10',
+      },
+      {
+        section: 'con-guion' as DashboardSection,
+        label: 'Con guion',
+        hint: 'Abrir guiones en workspace',
+        count: String(withScript),
+        icon: Sparkles,
+        color: 'text-indigo-400 bg-indigo-500/10',
+      },
+      {
+        section: 'en-produccion' as DashboardSection,
+        label: 'En producción',
+        hint: 'Narración, edición y render',
+        count: String(inProgress),
+        icon: Volume2,
+        color: 'text-amber-400 bg-amber-500/10',
+      },
+      {
+        section: 'miniaturas-listas' as DashboardSection,
+        label: 'Miniaturas listas',
+        hint: 'Ver miniaturas del pipeline',
+        count: String(withThumbnail),
+        icon: ImageIcon,
+        color: 'text-emerald-400 bg-emerald-500/10',
+      },
+      {
+        section: (published > 0 ? 'publicados' : 'programados') as DashboardSection,
+        label: published > 0 ? 'Publicados' : 'Programados',
+        hint: published > 0 ? 'Episodios ya publicados' : 'Calendario de publicaciones',
+        count: String(published > 0 ? published : scheduled),
+        icon: Calendar,
+        color: 'text-indigo-400 bg-indigo-500/10',
+      },
     ];
   }, [projects]);
 
   const recentActivity = useMemo(() => {
     return projects.slice(0, 5).map(p => ({
+      id: p.id,
       text: p.status,
       desc: p.title,
       time: 'Reciente',
@@ -270,26 +316,36 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
         </div>
       </div>
 
-      {/* Stats Counter List */}
+      {/* Stats Counter List — each card navigates to the relevant section */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {stats.map((stat, idx) => {
+        {stats.map(stat => {
           const Icon = stat.icon;
           return (
-            <div
-              key={idx}
-              className="bg-[#15191E] border border-white/5 rounded-2xl p-4.5 space-y-3 shadow-md hover:border-indigo-500/30 transition-all group"
+            <button
+              key={stat.section}
+              type="button"
+              id={`dashboard-stat-${stat.section}`}
+              onClick={() => onNavigateToSection(stat.section)}
+              title={stat.hint}
+              aria-label={`${stat.label}: ${stat.count}. ${stat.hint}`}
+              className="text-left bg-[#15191E] border border-white/5 rounded-2xl p-4.5 space-y-3 shadow-md hover:border-indigo-500/40 hover:bg-[#181d24] hover:shadow-indigo-500/10 transition-all group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
             >
               <div className="flex items-center justify-between">
                 <div className={`p-2 rounded-lg ${stat.color} group-hover:scale-105 transition-transform duration-150`}>
                   <Icon className="w-4 h-4" />
                 </div>
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" />
               </div>
               <div>
                 <div className="text-2xl font-bold font-display text-white">{stat.count}</div>
-                <div className="text-xs text-slate-400 leading-normal font-medium mt-0.5">{stat.label}</div>
+                <div className="text-xs text-slate-400 leading-normal font-medium mt-0.5 group-hover:text-slate-300">
+                  {stat.label}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {stat.hint}
+                </div>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -371,21 +427,27 @@ export default function HomeView({ onContinueWorking, projects, setProjects, onA
 
             <div className="space-y-4 mt-4 overflow-y-auto max-h-[280px] pr-1">
               {recentActivity.map((act, idx) => (
-                <div key={idx} className="flex gap-3 text-xs leading-relaxed group">
+                <button
+                  key={act.id}
+                  type="button"
+                  onClick={() => onContinueWorking(act.id)}
+                  className="w-full flex gap-3 text-xs leading-relaxed group text-left cursor-pointer rounded-xl p-1 -m-1 hover:bg-white/[0.03] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+                  aria-label={`Abrir ${act.desc}`}
+                >
                   <div className="flex flex-col items-center">
                     <div className="w-5 h-5 rounded-full bg-emerald-950/30 border border-emerald-900/40 text-emerald-400 font-bold flex items-center justify-center text-[10px] shrink-0 group-hover:bg-emerald-900/30 transition-colors">
-                      ✓
+                      {act.done ? '✓' : '→'}
                     </div>
                     {idx < recentActivity.length - 1 && (
                       <div className="w-[1px] bg-white/5 flex-1 my-1" />
                     )}
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="font-bold text-white group-hover:text-indigo-400 transition-colors">{act.text}</div>
-                    <div className="text-slate-400 mt-0.5 leading-relaxed">{act.desc}</div>
+                    <div className="text-slate-400 mt-0.5 leading-relaxed truncate">{act.desc}</div>
                     <span className="text-[10px] text-indigo-400/80 mt-0.5 block font-mono">{act.time}</span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
