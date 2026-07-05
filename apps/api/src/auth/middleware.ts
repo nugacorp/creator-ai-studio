@@ -67,20 +67,21 @@ export function registerAuthHook(app: FastifyInstance): void {
     const token =
       bearerToken ?? (typeof headerKey === 'string' ? headerKey : undefined);
 
-    if (apiKeyAuth && apiKeyValue && token && safeEquals(token, apiKeyValue)) {
-      return;
-    }
+    const looksLikeJwt = Boolean(bearerToken?.includes('.'));
 
-    if (supabaseAuth && bearerToken) {
+    // Prefer Supabase JWT when the Bearer value looks like a JWT (not the static API key).
+    if (supabaseAuth && bearerToken && looksLikeJwt) {
       const verified = await verifySupabaseAccessToken(bearerToken);
-      if (verified) {
+      if (verified?.userId) {
         request.userId = verified.userId;
         return;
       }
-      if (!apiKeyAuth) {
-        reply.code(401);
-        return reply.send({ error: 'invalid_token' });
-      }
+      reply.code(401);
+      return reply.send({ error: 'invalid_token' });
+    }
+
+    if (apiKeyAuth && apiKeyValue && token && safeEquals(token, apiKeyValue)) {
+      return;
     }
 
     if (apiKeyAuth || supabaseAuth) {

@@ -16,6 +16,7 @@ KEYS=(
   SUPABASE_JWT_SECRET
   SUPABASE_SERVICE_ROLE_KEY
   CAS_API_KEY
+  CAS_SECRETS_KEY
 )
 
 python3 <<'PY'
@@ -31,6 +32,7 @@ keys = [
     "SUPABASE_JWT_SECRET",
     "SUPABASE_SERVICE_ROLE_KEY",
     "CAS_API_KEY",
+    "CAS_SECRETS_KEY",
 ]
 
 existing: dict[str, str] = {}

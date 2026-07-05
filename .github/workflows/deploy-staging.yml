@@ -64,6 +64,7 @@ jobs:
           SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CAS_API_KEY: ${{ secrets.CAS_API_KEY }}
+          CAS_SECRETS_KEY: ${{ secrets.CAS_SECRETS_KEY }}
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" \
@@ -72,6 +73,7 @@ jobs:
              SUPABASE_JWT_SECRET='${SUPABASE_JWT_SECRET}' \
              SUPABASE_SERVICE_ROLE_KEY='${SUPABASE_SERVICE_ROLE_KEY}' \
              CAS_API_KEY='${CAS_API_KEY}' \
+             CAS_SECRETS_KEY='${CAS_SECRETS_KEY}' \
              bash /root/creator-ai-studio/scripts/vps-sync-supabase-env.sh"
 
       - name: Redeploy staging stack
