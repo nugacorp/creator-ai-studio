@@ -40,33 +40,52 @@ function apiHeaders(): Record<string, string> {
 }
 
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const method = init?.method ?? 'GET';
+  let body = init?.body;
+  // Fastify rejects POST/PATCH with Content-Type: application/json and an empty body.
+  if ((method === 'POST' || method === 'PATCH' || method === 'PUT') && body === undefined) {
+    body = '{}';
+  }
   return fetch(`${API_BASE}${path}`, {
     ...init,
+    method,
+    body,
     headers: { ...apiHeaders(), ...(init?.headers as Record<string, string> | undefined) },
   });
 }
 
 async function fetchPendingJobs(): Promise<ProductionJob[]> {
-  const response = await apiFetch('/jobs/pending');
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    console.error(`Failed to fetch pending jobs (${response.status}): ${text.slice(0, 200)}`);
+  try {
+    const response = await apiFetch('/jobs/pending');
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      console.error(`Failed to fetch pending jobs (${response.status}): ${text.slice(0, 200)}`);
+      return [];
+    }
+    return (await response.json()) as ProductionJob[];
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Failed to fetch pending jobs (network): ${message}`);
     return [];
   }
-  return (await response.json()) as ProductionJob[];
 }
 
 async function patchJob(
   id: string,
   patch: { status?: string; progress: number; result?: Record<string, unknown>; error?: string },
 ): Promise<void> {
-  const res = await apiFetch(`/jobs/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(patch),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    console.error(`Failed to patch job ${id} (${res.status}): ${text.slice(0, 200)}`);
+  try {
+    const res = await apiFetch(`/jobs/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.error(`Failed to patch job ${id} (${res.status}): ${text.slice(0, 200)}`);
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Failed to patch job ${id} (network): ${message}`);
   }
 }
 
@@ -96,7 +115,7 @@ async function assertOk(res: Response, step: string): Promise<void> {
   let message = `${step} failed (${res.status})`;
   try {
     const body = (await res.json()) as { error?: string; message?: string };
-    message = body.error ?? body.message ?? message;
+    message = body.message ?? body.error ?? message;
   } catch {
     // ignore parse errors
   }
@@ -355,6 +374,34 @@ export async function processJob(job: ProductionJob): Promise<void> {
 
 let polling = false;
 
+/** Wait until the API health endpoint responds (Docker/local startup race). */
+export async function waitForApiReady(
+  maxAttempts = Number(process.env.WORKER_API_READY_MAX_ATTEMPTS ?? 60),
+  delayMs = Number(process.env.WORKER_API_READY_DELAY_MS ?? 2000),
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await apiFetch('/health');
+      if (res.ok) {
+        if (attempt > 1) {
+          console.log(`API ready after ${attempt} attempt(s)`);
+        }
+        return true;
+      }
+    } catch {
+      // retry until maxAttempts
+    }
+    if (attempt < maxAttempts) {
+      console.warn(
+        `API not ready at ${API_BASE} (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs}ms…`,
+      );
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+  }
+  console.error(`API not reachable at ${API_BASE} after ${maxAttempts} attempts`);
+  return false;
+}
+
 export async function pollLoop(): Promise<void> {
   // Overlap guard: if a long render is still running when the next interval
   // fires, skip instead of processing the same queue concurrently.
@@ -386,12 +433,14 @@ async function startBullMQWorker(): Promise<void> {
   console.log('BullMQ worker listening on cas-production');
 }
 
-export function main(): void {
+export async function main(): Promise<void> {
   console.log(getReadyMessage());
   console.log(`API ${API_BASE}`);
   if (!process.env.CAS_API_KEY) {
     console.warn('CAS_API_KEY not set — worker may receive 401 from API when Supabase auth is enabled');
   }
+
+  await waitForApiReady();
 
   if (REDIS_URL) {
     // BullMQ is the single consumer when Redis is available; the claim
@@ -411,5 +460,5 @@ export function main(): void {
 
 const isDirectRun = process.argv[1] === fileURLToPath(import.meta.url);
 if (isDirectRun) {
-  main();
+  void main();
 }

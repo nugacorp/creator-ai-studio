@@ -1,8 +1,40 @@
 import type { TtsProvider } from '@creator-ai-studio/shared';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { areMocksAllowed } from '../config/mocks.js';
 import { getSettings } from '../settings/store.js';
 import { synthesizeSpeech } from './elevenlabs.js';
 import { synthesizeWithPiper } from './piper.js';
 import { withProvider } from '../ai/router.js';
+
+const execFileAsync = promisify(execFile);
+
+/** Placeholder narration so render/ffmpeg can run in local demo mode. */
+async function writeDemoSilentAudio(saveDir: string, seconds = 8): Promise<string> {
+  const pathMod = await import('node:path');
+  const { mkdir } = await import('node:fs/promises');
+  await mkdir(saveDir, { recursive: true });
+  const filePath = pathMod.join(saveDir, 'narration.mp3');
+  await execFileAsync(
+    'ffmpeg',
+    [
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'anullsrc=r=24000:cl=mono',
+      '-t',
+      String(seconds),
+      '-c:a',
+      'libmp3lame',
+      '-q:a',
+      '9',
+      filePath,
+    ],
+    { timeout: 30_000 },
+  );
+  return filePath;
+}
 
 export interface TtsRequest {
   text: string;
@@ -24,6 +56,15 @@ export async function synthesizeEpisodeSpeech(req: TtsRequest): Promise<TtsRespo
 
   if (provider === 'elevenlabs') {
     const result = await synthesizeSpeech(req.text, req.voiceId, { saveDir: req.saveDir });
+    if (result.isDemo && req.saveDir && areMocksAllowed()) {
+      const savedPath = await writeDemoSilentAudio(req.saveDir);
+      return {
+        audioUrl: '/api/episodes/audio/narration.mp3',
+        isDemo: true,
+        provider: 'elevenlabs',
+        savedPath,
+      };
+    }
     return { ...result, provider: 'elevenlabs', audioUrl: result.audioUrl || '' };
   }
 
