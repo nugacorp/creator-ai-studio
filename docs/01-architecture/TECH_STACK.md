@@ -170,7 +170,7 @@ DOCUMENTATION_STANDARD.md
 
 ## Related Documents
 
-README.md, DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json
+README.md, docs/00-governance/DOCUMENT_REGISTRY.md, docs/00-governance/PROJECT_REGISTRY.json
 
 ## Change History
 

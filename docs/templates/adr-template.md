@@ -1,10 +1,10 @@
 ## Document ID
 
-MODULE_TEMPLATE
+ADR_TEMPLATE
 
 ## Title
 
-Module Template
+ADR Template
 
 ## Version
 
@@ -28,11 +28,11 @@ Hermes
 
 ## Purpose
 
-Provide the minimum structure for future module documentation.
+Provide the minimum structure for future Architecture Decision Records.
 
 ## Scope
 
-This is an empty reusable template. It does not define a product module.
+This is an empty reusable template. It does not contain a functional ADR decision.
 
 ## Dependencies
 
@@ -40,7 +40,7 @@ DOCUMENTATION_STANDARD.md
 
 ## Related Documents
 
-DOCUMENT_REGISTRY.md
+../00-governance/docs/00-governance/DOCUMENT_REGISTRY.md
 
 ## Change History
 

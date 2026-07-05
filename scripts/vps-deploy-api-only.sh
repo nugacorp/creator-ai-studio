@@ -5,7 +5,7 @@ SRC=/root/creator-ai-studio
 cp /tmp/cas-oauth-fix/google-auth.ts "$SRC/apps/api/src/secrets/"
 cp /tmp/cas-oauth-fix/test-connection.ts "$SRC/apps/api/src/secrets/"
 cp /tmp/cas-oauth-fix/gemini.ts "$SRC/apps/api/src/ai/"
-docker build -f "$SRC/Dockerfile.api" -t "z7b1ieqp66a7e43cywaz816w_api:$TAG" "$SRC"
+docker build -f "$SRC/deploy/Dockerfile.api" -t "z7b1ieqp66a7e43cywaz816w_api:$TAG" "$SRC"
 export DEPLOY_TAG="$TAG"
 python3 - "$TAG" <<'PY'
 import re, sys

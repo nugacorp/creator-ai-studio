@@ -3,6 +3,7 @@ set -euo pipefail
 
 COMMIT="${1:-plan-implement}"
 SRC_DIR="/root/creator-ai-studio"
+COMPOSE_FILE="${COMPOSE_FILE:-deploy/docker-compose.staging.yml}"
 APP_DIR="/data/coolify/applications/z7b1ieqp66a7e43cywaz816w"
 APP_ID="z7b1ieqp66a7e43cywaz816w"
 DOMAIN="creator-ai-studio.217.76.56.66.sslip.io"
@@ -132,8 +133,10 @@ if [ -n "$API_CONTAINER" ]; then
   ' || true
 fi
 
+echo "=== Redeploy (${COMMIT}) — repo compose: ${COMPOSE_FILE} ==="
+
 echo "=== Building API image (${COMMIT}) ==="
-docker build -f "$SRC_DIR/Dockerfile.api" -t "z7b1ieqp66a7e43cywaz816w_api:${COMMIT}" "$SRC_DIR"
+docker build -f "$SRC_DIR/deploy/Dockerfile.api" -t "z7b1ieqp66a7e43cywaz816w_api:${COMMIT}" "$SRC_DIR"
 
 echo "=== Building Web image (${COMMIT}) ==="
 # .env.supabase.local often defines SUPABASE_URL / SUPABASE_ANON_KEY for the API;
@@ -150,13 +153,13 @@ fi
 if [ -n "${SUPABASE_URL:-}" ] && [ -z "${VITE_SUPABASE_ANON_KEY}" ]; then
   echo "WARN: SUPABASE_URL is set but VITE_SUPABASE_ANON_KEY/SUPABASE_ANON_KEY is missing; web login will be disabled" >&2
 fi
-docker build -f "$SRC_DIR/Dockerfile.web" \
+docker build -f "$SRC_DIR/deploy/Dockerfile.web" \
   "${WEB_BUILD_ARGS[@]}" \
   -t "z7b1ieqp66a7e43cywaz816w_web:${COMMIT}" \
   "$SRC_DIR"
 
 echo "=== Building Worker image (${COMMIT}) ==="
-docker build -f "$SRC_DIR/Dockerfile.worker" -t "z7b1ieqp66a7e43cywaz816w_worker:${COMMIT}" "$SRC_DIR"
+docker build -f "$SRC_DIR/deploy/Dockerfile.worker" -t "z7b1ieqp66a7e43cywaz816w_worker:${COMMIT}" "$SRC_DIR"
 
 COMPOSE="$APP_DIR/docker-compose.yaml"
 cp "$COMPOSE" "${COMPOSE}.bak-redeploy-${COMMIT}"

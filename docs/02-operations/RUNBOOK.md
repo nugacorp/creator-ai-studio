@@ -52,7 +52,7 @@ Operational procedures for deploying, monitoring, and recovering Creator AI Stud
 ## Enable Worker
 
 ```bash
-Worker and Redis are included by default in `docker-compose.staging.yml`. On an existing Coolify deployment, run:
+Worker and Redis are included by default in `deploy/docker-compose.staging.yml`. On an existing Coolify deployment, run:
 
 ```bash
 bash scripts/enable-worker-staging.sh

@@ -1,10 +1,10 @@
 ## Document ID
 
-MEETING_TEMPLATE
+ROADMAP_TEMPLATE
 
 ## Title
 
-Meeting Template
+Roadmap Template
 
 ## Version
 
@@ -28,11 +28,11 @@ Hermes
 
 ## Purpose
 
-Provide the minimum structure for future meeting records.
+Provide the minimum structure for future roadmap documents.
 
 ## Scope
 
-This is an empty reusable template. It does not record a real meeting.
+This is an empty reusable template. It does not define priorities.
 
 ## Dependencies
 
@@ -40,7 +40,7 @@ DOCUMENTATION_STANDARD.md
 
 ## Related Documents
 
-DOCUMENT_REGISTRY.md
+../00-governance/docs/00-governance/DOCUMENT_REGISTRY.md
 
 ## Change History
 

@@ -37,26 +37,26 @@ Document registry:
 | Document | Category | Status | Owner | Path |
 |---|---|---|---|---|
 | README | Foundation | Draft | Hermes | README.md |
-| MASTER_INDEX | Foundation | Draft | Hermes | MASTER_INDEX.md |
-| PROJECT_STATE | State | Draft | Hermes | PROJECT_STATE.md |
-| CHANGELOG | Change Control | Draft | Hermes | CHANGELOG.md |
-| ROADMAP | Planning | Draft | Hermes | ROADMAP.md |
-| DOCUMENT_REGISTRY | Registry | Draft | Hermes | DOCUMENT_REGISTRY.md |
-| PROJECT_REGISTRY | Metadata | Draft | Hermes | PROJECT_REGISTRY.json |
+| MASTER_INDEX | Foundation | Draft | Hermes | docs/00-governance/MASTER_INDEX.md |
+| PROJECT_STATE | State | Draft | Hermes | docs/00-governance/PROJECT_STATE.md |
+| CHANGELOG | Change Control | Draft | Hermes | docs/00-governance/CHANGELOG.md |
+| ROADMAP | Planning | Draft | Hermes | docs/00-governance/ROADMAP.md |
+| DOCUMENT_REGISTRY | Registry | Draft | Hermes | docs/00-governance/DOCUMENT_REGISTRY.md |
+| PROJECT_REGISTRY | Metadata | Draft | Hermes | docs/00-governance/PROJECT_REGISTRY.json |
 | TECH_STACK | Architecture | Draft | Claude Code | docs/01-architecture/TECH_STACK.md |
 | DEPLOYMENT_STAGING | Architecture | Draft | Hermes | docs/01-architecture/DEPLOYMENT_STAGING.md |
 | DOCUMENTATION_STANDARD | Standards | Draft | Hermes | .system/standards/DOCUMENTATION_STANDARD.md |
 | DOCUMENT_STANDARD | Standards | Draft | Hermes | .system/standards/DOCUMENT_STANDARD.md |
-| ADR_TEMPLATE | Template | Draft | Hermes | templates/adr-template.md |
-| AGENT_TEMPLATE | Template | Draft | Hermes | templates/agent-template.md |
-| CHANGE_LOG_TEMPLATE | Template | Draft | Hermes | templates/change-log-template.md |
-| DECISION_TEMPLATE | Template | Draft | Hermes | templates/decision-template.md |
-| DOCUMENT_TEMPLATE | Template | Draft | Hermes | templates/document-template.md |
-| MEETING_TEMPLATE | Template | Draft | Hermes | templates/meeting-template.md |
-| MODULE_TEMPLATE | Template | Draft | Hermes | templates/module-template.md |
-| ROADMAP_TEMPLATE | Template | Draft | Hermes | templates/roadmap-template.md |
-| WORK_ORDER_TEMPLATE | Template | Draft | Hermes | templates/work-order-template.md |
-| WORKFLOW_TEMPLATE | Template | Draft | Hermes | templates/workflow-template.md |
+| ADR_TEMPLATE | Template | Draft | Hermes | docs/templates/adr-template.md |
+| AGENT_TEMPLATE | Template | Draft | Hermes | docs/templates/agent-template.md |
+| CHANGE_LOG_TEMPLATE | Template | Draft | Hermes | docs/templates/change-log-template.md |
+| DECISION_TEMPLATE | Template | Draft | Hermes | docs/templates/decision-template.md |
+| DOCUMENT_TEMPLATE | Template | Draft | Hermes | docs/templates/document-template.md |
+| MEETING_TEMPLATE | Template | Draft | Hermes | docs/templates/meeting-template.md |
+| MODULE_TEMPLATE | Template | Draft | Hermes | docs/templates/module-template.md |
+| ROADMAP_TEMPLATE | Template | Draft | Hermes | docs/templates/roadmap-template.md |
+| WORK_ORDER_TEMPLATE | Template | Draft | Hermes | docs/templates/work-order-template.md |
+| WORKFLOW_TEMPLATE | Template | Draft | Hermes | docs/templates/workflow-template.md |
 
 ## Dependencies
 

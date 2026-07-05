@@ -56,11 +56,11 @@ Recommended Coolify strategy for staging:
 1. Create a Coolify project/environment dedicated to Creator AI Studio staging.
 2. Connect the repository `git@github.com:nugacorp/creator-ai-studio.git`.
 3. Select branch `staging`.
-4. Deploy with `docker-compose.staging.yml` from the repository root.
+4. Deploy with `deploy/docker-compose.staging.yml` from the repository root.
 5. Expose only the web service publicly on port `8080`.
 6. Keep the API service internal to the Compose network; nginx in the web service proxies `/api` to `http://api:3000/api`.
 7. Mount a persistent volume for the API at `/data/episodes` (secrets and settings persist under that path).
-8. Worker and Redis start by default with `docker-compose.staging.yml`. The VPS redeploy script (`scripts/vps-redeploy.sh`) resolves the service list with `docker compose config --services` and starts every service present — `api`, `web`, `redis`, `worker` — so redeploys bring the full stack up automatically (see [docs/02-operations/RUNBOOK.md](../02-operations/RUNBOOK.md) → Redeploy → Service startup).
+8. Worker and Redis start by default with `deploy/docker-compose.staging.yml`. The VPS redeploy script (`scripts/vps-redeploy.sh`) resolves the service list with `docker compose config --services` and starts every service present — `api`, `web`, `redis`, `worker` — so redeploys bring the full stack up automatically (see [docs/02-operations/RUNBOOK.md](../02-operations/RUNBOOK.md) → Redeploy → Service startup).
 
 ### Staging URL
 
@@ -109,7 +109,7 @@ The API resolves episode storage from `LOCAL_STORAGE_PATH`; in staging this must
 API Docker image:
 
 ```bash
-docker build -f Dockerfile.api -t creator-ai-studio-api:staging .
+docker build -f deploy/Dockerfile.api -t creator-ai-studio-api:staging .
 docker run --rm \
   -e API_HOST=0.0.0.0 \
   -e API_PORT=3000 \
@@ -121,7 +121,7 @@ docker run --rm \
 Web Docker image:
 
 ```bash
-docker build -f Dockerfile.web \
+docker build -f deploy/Dockerfile.web \
   --build-arg VITE_API_BASE_URL=/api \
   -t creator-ai-studio-web:staging .
 docker run --rm -p 8080:8080 creator-ai-studio-web:staging
@@ -130,7 +130,7 @@ docker run --rm -p 8080:8080 creator-ai-studio-web:staging
 Optional worker Docker image:
 
 ```bash
-docker build -f Dockerfile.worker -t creator-ai-studio-worker:staging .
+docker build -f deploy/Dockerfile.worker -t creator-ai-studio-worker:staging .
 docker run --rm \
   -e LOCAL_STORAGE_PATH=/data/episodes \
   -v creator-ai-studio-staging-episodes:/data/episodes \
@@ -140,13 +140,13 @@ docker run --rm \
 Compose staging deployment:
 
 ```bash
-docker compose -f docker-compose.staging.yml up --build
+docker compose -f deploy/docker-compose.staging.yml up --build
 ```
 
 Optional worker profile:
 
 ```bash
-docker compose -f docker-compose.staging.yml --profile worker up --build
+docker compose -f deploy/docker-compose.staging.yml --profile worker up --build
 ```
 
 ### Puertos
@@ -162,7 +162,7 @@ docker compose -f docker-compose.staging.yml --profile worker up --build
 In Coolify, use these settings for the staging resource:
 
 - Deployment type: Docker Compose.
-- Compose file: `docker-compose.staging.yml`.
+- Compose file: `deploy/docker-compose.staging.yml`.
 - Branch: `staging`.
 - Build context: repository root.
 - Web service public port: `8080`.
@@ -222,11 +222,11 @@ Expected response for an empty staging volume:
 
 ## Dependencies
 
-TECH_STACK.md, Dockerfile.api, Dockerfile.web, docker-compose.staging.yml
+TECH_STACK.md, deploy/Dockerfile.api, deploy/Dockerfile.web, deploy/docker-compose.staging.yml
 
 ## Related Documents
 
-DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json, docs/01-architecture/TECH_STACK.md
+docs/00-governance/DOCUMENT_REGISTRY.md, docs/00-governance/PROJECT_REGISTRY.json, docs/01-architecture/TECH_STACK.md
 
 ## Change History
 

@@ -69,7 +69,7 @@ HERMES CHARTER v1.0
 
 ## Related Documents
 
-DOCUMENT_REGISTRY.md, templates/document-template.md, DOCUMENTATION_STANDARD.md
+docs/00-governance/DOCUMENT_REGISTRY.md, docs/templates/document-template.md, DOCUMENTATION_STANDARD.md
 
 ## Change History
 

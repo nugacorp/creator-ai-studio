@@ -1,10 +1,10 @@
 ## Document ID
 
-WORK_ORDER_TEMPLATE
+WORKFLOW_TEMPLATE
 
 ## Title
 
-Work Order Template
+Workflow Template
 
 ## Version
 
@@ -28,11 +28,11 @@ Hermes
 
 ## Purpose
 
-Provide the minimum structure for future Work Orders.
+Provide the minimum structure for future workflow documentation.
 
 ## Scope
 
-This is an empty reusable template. It does not authorize work.
+This is an empty reusable template. It does not define a functional workflow.
 
 ## Dependencies
 
@@ -40,7 +40,7 @@ DOCUMENTATION_STANDARD.md
 
 ## Related Documents
 
-DOCUMENT_REGISTRY.md
+../00-governance/docs/00-governance/DOCUMENT_REGISTRY.md
 
 ## Change History
 

@@ -1,10 +1,10 @@
 ## Document ID
 
-WORKFLOW_TEMPLATE
+MEETING_TEMPLATE
 
 ## Title
 
-Workflow Template
+Meeting Template
 
 ## Version
 
@@ -28,11 +28,11 @@ Hermes
 
 ## Purpose
 
-Provide the minimum structure for future workflow documentation.
+Provide the minimum structure for future meeting records.
 
 ## Scope
 
-This is an empty reusable template. It does not define a functional workflow.
+This is an empty reusable template. It does not record a real meeting.
 
 ## Dependencies
 
@@ -40,7 +40,7 @@ DOCUMENTATION_STANDARD.md
 
 ## Related Documents
 
-DOCUMENT_REGISTRY.md
+../00-governance/docs/00-governance/DOCUMENT_REGISTRY.md
 
 ## Change History
 

@@ -34,28 +34,29 @@ Provide the official index of controlled documents and repository areas.
 
 Official documents:
 
-- [README](README.md)
+- [README](../../README.md)
 - [PROJECT_STATE](PROJECT_STATE.md)
 - [CHANGELOG](CHANGELOG.md)
 - [ROADMAP](ROADMAP.md)
 - [DOCUMENT_REGISTRY](DOCUMENT_REGISTRY.md)
 - [PROJECT_REGISTRY](PROJECT_REGISTRY.json)
-- [DOCUMENTATION_STANDARD](.system/standards/DOCUMENTATION_STANDARD.md)
-- [DOCUMENT_STANDARD](.system/standards/DOCUMENT_STANDARD.md)
-- [TECH_STACK](docs/01-architecture/TECH_STACK.md)
-- [DEPLOYMENT_STAGING](docs/01-architecture/DEPLOYMENT_STAGING.md)
+- [CONTEXTO_PROYECTO](CONTEXTO_PROYECTO.md)
+- [DOCUMENTATION_STANDARD](../../.system/standards/DOCUMENTATION_STANDARD.md)
+- [DOCUMENT_STANDARD](../../.system/standards/DOCUMENT_STANDARD.md)
+- [TECH_STACK](../01-architecture/TECH_STACK.md)
+- [DEPLOYMENT_STAGING](../01-architecture/DEPLOYMENT_STAGING.md)
 
 Official areas:
 
-- [.system](.system/)
-- [docs](docs/)
-- [templates](templates/)
-- [agents](agents/)
-- [workflows](workflows/)
-- [knowledge](knowledge/)
-- [scripts](scripts/)
-- [channels](channels/)
-- [deploy](deploy/)
+- [.system](../../.system/)
+- [docs](../)
+- [templates](../templates/)
+- [scripts](../../scripts/)
+- [deploy](../../deploy/)
+- [apps](../../apps/)
+- [workers](../../workers/)
+- [packages](../../packages/)
+- [supabase](../../supabase/)
 
 ## Dependencies
 

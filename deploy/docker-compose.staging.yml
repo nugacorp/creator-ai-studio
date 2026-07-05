@@ -1,32 +1,31 @@
-# Production stack — separate volume and secrets from staging (FASE 11).
-# Deploy via .github/workflows/deploy-production.yml on push to `main`.
-
 services:
   api:
     build:
-      context: .
-      dockerfile: Dockerfile.api
+      context: ..
+      dockerfile: deploy/Dockerfile.api
     environment:
       NODE_ENV: production
       API_HOST: 0.0.0.0
       API_PORT: 3000
       LOCAL_STORAGE_PATH: /data/episodes
-      CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:?Set production public URL}
-      CAS_SECRETS_KEY: ${CAS_SECRETS_KEY:?Set CAS_SECRETS_KEY}
-      CAS_API_KEY: ${CAS_API_KEY:?Set CAS_API_KEY for worker auth}
-      REDIS_URL: redis://redis:6379
+      CAS_PUBLIC_URL: ${CAS_PUBLIC_URL:-https://creator-ai-studio.217.76.56.66.sslip.io}
+      CAS_SECRETS_KEY: ${CAS_SECRETS_KEY:?Set CAS_SECRETS_KEY in Coolify (32+ chars) to enable UI API key storage}
+      CAS_API_KEY: ${CAS_API_KEY:-}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       RCLONE_REMOTE: ${RCLONE_REMOTE:-}
       RCLONE_CONFIG: ${RCLONE_CONFIG:-/config/rclone/rclone.conf}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      PIPER_BIN: ${PIPER_BIN:-}
+      PIPER_MODEL: ${PIPER_MODEL:-}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
-      EPISODE_METADATA_SOURCE: ${EPISODE_METADATA_SOURCE:-supabase}
-      ALLOW_MOCKS: "false"
-      AI_ALLOW_DEMO_FALLBACK: "false"
-      AI_FALLBACK_ENABLED: ${AI_FALLBACK_ENABLED:-true}
+      # FASE 8: staging valida flujos reales — mocks bloqueados por defecto.
+      ALLOW_MOCKS: ${ALLOW_MOCKS:-false}
+      AI_ALLOW_DEMO_FALLBACK: ${AI_ALLOW_DEMO_FALLBACK:-false}
     volumes:
-      - creator-ai-studio-production-episodes:/data/episodes
-      - ${RCLONE_CONFIG_VOLUME:-creator-ai-studio-production-rclone}:/config/rclone:ro
+      - creator-ai-studio-staging-episodes:/data/episodes
+      - ${RCLONE_CONFIG_VOLUME:-creator-ai-studio-rclone-config}:/config/rclone:ro
     expose:
       - "3000"
     healthcheck:
@@ -45,8 +44,8 @@ services:
 
   web:
     build:
-      context: .
-      dockerfile: Dockerfile.web
+      context: ..
+      dockerfile: deploy/Dockerfile.web
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
@@ -63,16 +62,17 @@ services:
 
   worker:
     build:
-      context: .
-      dockerfile: Dockerfile.worker
+      context: ..
+      dockerfile: deploy/Dockerfile.worker
     environment:
       NODE_ENV: production
+      LOCAL_STORAGE_PATH: /data/episodes
       API_BASE_URL: http://api:3000/api
       WORKER_POLL_INTERVAL_MS: 5000
       REDIS_URL: redis://redis:6379
-      CAS_API_KEY: ${CAS_API_KEY:?Set CAS_API_KEY}
+      CAS_API_KEY: ${CAS_API_KEY:-}
     volumes:
-      - creator-ai-studio-production-episodes:/data/episodes
+      - creator-ai-studio-staging-episodes:/data/episodes
     depends_on:
       api:
         condition: service_healthy
@@ -87,5 +87,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  creator-ai-studio-production-episodes:
-  creator-ai-studio-production-rclone:
+  creator-ai-studio-staging-episodes:
+  creator-ai-studio-rclone-config:

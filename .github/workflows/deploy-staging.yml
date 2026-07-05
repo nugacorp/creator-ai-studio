@@ -81,7 +81,8 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER || 'root' }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           DEPLOY_TAG: e2e-pipeline-${{ github.sha }}
+          COMPOSE_FILE: deploy/docker-compose.staging.yml
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" \
-            "bash /root/creator-ai-studio/scripts/vps-redeploy.sh ${DEPLOY_TAG}"
+            "COMPOSE_FILE=deploy/docker-compose.staging.yml bash /root/creator-ai-studio/scripts/vps-redeploy.sh ${DEPLOY_TAG}"

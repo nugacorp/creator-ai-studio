@@ -49,8 +49,8 @@ jobs:
           VPS_USER: ${{ secrets.VPS_USER || 'root' }}
           VPS_HOST: ${{ secrets.VPS_HOST_PROD || secrets.VPS_HOST }}
           DEPLOY_TAG: production-${{ github.sha }}
-          COMPOSE_FILE: docker-compose.production.yml
+          COMPOSE_FILE: deploy/docker-compose.production.yml
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             "${VPS_USER}@${VPS_HOST}" \
-            "COMPOSE_FILE=docker-compose.production.yml bash /root/creator-ai-studio/scripts/vps-redeploy.sh ${DEPLOY_TAG}"
+            "COMPOSE_FILE=deploy/docker-compose.production.yml bash /root/creator-ai-studio/scripts/vps-redeploy.sh ${DEPLOY_TAG}"

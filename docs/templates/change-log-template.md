@@ -1,10 +1,10 @@
 ## Document ID
 
-DOCUMENT_TEMPLATE
+CHANGE_LOG_TEMPLATE
 
 ## Title
 
-Document Template
+Change Log Template
 
 ## Version
 
@@ -28,11 +28,11 @@ Hermes
 
 ## Purpose
 
-Provide the minimum structure for future controlled documents.
+Provide the minimum structure for future change log documentation.
 
 ## Scope
 
-This is an empty reusable template for controlled documentation.
+This is an empty reusable template. It does not record project changes by itself.
 
 ## Dependencies
 
@@ -40,7 +40,7 @@ DOCUMENTATION_STANDARD.md
 
 ## Related Documents
 
-DOCUMENT_REGISTRY.md
+../00-governance/docs/00-governance/DOCUMENT_REGISTRY.md
 
 ## Change History
 

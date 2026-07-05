@@ -20,7 +20,7 @@
 El proyecto sigue un "sistema operativo de proyecto" (CAS OS) con documentación formal:
 - **Claude Code / IA**: desarrolla en ramas `feature/*` y prepara cambios.
 - **Hermes** (rol humano/operador): valida, ejecuta y despliega en el VPS.
-- Se trabaja por "Work Orders" (ej. `CAS-WO-0003`, `CAS-HERMES-DEPLOY-0023`) registradas en `CHANGELOG.md`.
+- Se trabaja por "Work Orders" (ej. `CAS-WO-0003`, `CAS-HERMES-DEPLOY-0023`) registradas en `docs/00-governance/CHANGELOG.md`.
 
 ---
 
@@ -63,8 +63,8 @@ Monorepo **npm workspaces** (Node.js ≥ 20, TypeScript, ESM).
 | Tests | **Vitest** (unit) + **Playwright** (e2e web) | por workspace |
 | Cola de jobs | Redis (BullMQ opcional; fallback a polling) | infra |
 | Base de datos (opcional) | **Supabase** (Postgres + Auth) | `supabase/` |
-| Contenedores | Docker (`Dockerfile.api`, `Dockerfile.web`, `Dockerfile.worker`) | raíz |
-| Orquestación | Docker Compose (`docker-compose.staging.yml`) | raíz |
+| Contenedores | Docker (`deploy/Dockerfile.api`, `deploy/Dockerfile.web`, `deploy/Dockerfile.worker`) | `deploy/` |
+| Orquestación | Docker Compose (`deploy/docker-compose.staging.yml`) | `deploy/` |
 | Despliegue | **Coolify** (PaaS self-hosted) sobre VPS, con Traefik + Let's Encrypt | VPS |
 | CI | GitHub Actions (typecheck + test + build) | `.github/workflows` |
 
@@ -111,13 +111,13 @@ creator-ai-studio/
 ├── packages/
 │   └── shared/              # Tipos + reglas de dominio compartidos
 ├── supabase/                # config + migraciones SQL + seed
-├── deploy/                  # nginx.web.conf, HTTPS_COOLIFY.md, staging.env.example
+├── deploy/                  # Dockerfiles, compose, nginx, env examples
 ├── scripts/                 # scripts de despliegue/operación en VPS (bash + PowerShell)
-├── docs/                    # documentación formal (arquitectura, operaciones)
-├── docker-compose.staging.yml
-├── Dockerfile.api / Dockerfile.web / Dockerfile.worker
-└── (docs de gobierno) README.md, PROJECT_STATE.md, ROADMAP.md, CHANGELOG.md,
-    MASTER_INDEX.md, DOCUMENT_REGISTRY.md, PROJECT_REGISTRY.json
+├── docs/                    # documentación formal (arquitectura, operaciones, gobierno)
+│   ├── 00-governance/       # CHANGELOG, ROADMAP, PROJECT_STATE, registries
+│   └── templates/           # plantillas de documentación
+├── package.json             # npm workspaces root
+└── README.md
 ```
 
 ---
@@ -267,7 +267,7 @@ Hay tests: `apps/web/test/*` (Vitest) y `apps/web/e2e/basic.spec.ts` (Playwright
 ## 11. Despliegue (staging)
 
 - **Plataforma:** Coolify sobre VPS `217.76.56.66`, con Traefik enrutando `Host(creator-ai-studio.217.76.56.66.sslip.io)` al contenedor web (puerto 8080).
-- **Compose:** [docker-compose.staging.yml](docker-compose.staging.yml) define 4 servicios:
+- **Compose:** [deploy/docker-compose.staging.yml](../../deploy/docker-compose.staging.yml) define 4 servicios:
   - `api` (Fastify, puerto 3000 **solo interno**, healthcheck, volumen `/data/episodes`).
   - `web` (nginx + assets Vite, puerto 8080, **único público**, hace proxy de `/api`).
   - `worker` (procesa jobs, depende de api healthy + redis).
@@ -406,11 +406,11 @@ Sin claves de IA configuradas, la app corre en **modo demo** (respuestas simulad
 ## 16. Convenciones y documentación de gobierno
 
 El repo incluye un "sistema operativo de proyecto" (CAS OS) con documentación formal y plantillas:
-- **Entrypoints:** `README.md`, `MASTER_INDEX.md`, `PROJECT_STATE.md`, `ROADMAP.md`, `CHANGELOG.md`, `DOCUMENT_REGISTRY.md`, `PROJECT_REGISTRY.json`.
+- **Entrypoints:** `README.md`, `docs/00-governance/MASTER_INDEX.md`, `docs/00-governance/PROJECT_STATE.md`, `docs/00-governance/ROADMAP.md`, `docs/00-governance/CHANGELOG.md`, `docs/00-governance/DOCUMENT_REGISTRY.md`, `docs/00-governance/PROJECT_REGISTRY.json`.
 - **Estándares:** `.system/standards/DOCUMENTATION_STANDARD.md` y `DOCUMENT_STANDARD.md` (los documentos `.md` siguen un formato con Document ID, Title, Version, Status, Author, Change History).
-- **Plantillas:** `templates/*.md` (ADR, decisión, roadmap, work order, workflow, etc.).
+- **Plantillas:** `docs/templates/*.md` (ADR, decisión, roadmap, work order, workflow, etc.).
 - **Docs técnicos:** `docs/01-architecture/` (TECH_STACK, DEPLOYMENT_STAGING), `docs/02-operations/` (RUNBOOK, SUPABASE_AUTH, GOOGLE_OAUTH_PRODUCTION).
-- Los cambios importantes se registran en `CHANGELOG.md` referenciando una Work Order.
+- Los cambios importantes se registran en `docs/00-governance/CHANGELOG.md` referenciando una Work Order.
 
 ---
 

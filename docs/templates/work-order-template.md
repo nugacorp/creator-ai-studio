@@ -1,10 +1,10 @@
 ## Document ID
 
-DECISION_TEMPLATE
+WORK_ORDER_TEMPLATE
 
 ## Title
 
-Decision Template
+Work Order Template
 
 ## Version
 
@@ -28,11 +28,11 @@ Hermes
 
 ## Purpose
 
-Provide the minimum structure for future decision documentation.
+Provide the minimum structure for future Work Orders.
 
 ## Scope
 
-This is an empty reusable template. It does not define a project decision.
+This is an empty reusable template. It does not authorize work.
 
 ## Dependencies
 
@@ -40,7 +40,7 @@ DOCUMENTATION_STANDARD.md
 
 ## Related Documents
 
-DOCUMENT_REGISTRY.md
+../00-governance/docs/00-governance/DOCUMENT_REGISTRY.md
 
 ## Change History
 

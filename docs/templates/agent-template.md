@@ -1,10 +1,10 @@
 ## Document ID
 
-ROADMAP_TEMPLATE
+AGENT_TEMPLATE
 
 ## Title
 
-Roadmap Template
+Agent Template
 
 ## Version
 
@@ -28,11 +28,11 @@ Hermes
 
 ## Purpose
 
-Provide the minimum structure for future roadmap documents.
+Provide the minimum structure for future agent documentation.
 
 ## Scope
 
-This is an empty reusable template. It does not define priorities.
+This is an empty reusable template. It does not define a functional agent.
 
 ## Dependencies
 
@@ -40,7 +40,7 @@ DOCUMENTATION_STANDARD.md
 
 ## Related Documents
 
-DOCUMENT_REGISTRY.md
+../00-governance/docs/00-governance/DOCUMENT_REGISTRY.md
 
 ## Change History
 
