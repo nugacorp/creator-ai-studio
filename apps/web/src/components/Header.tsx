@@ -155,6 +155,12 @@ export default function Header({
                   Una cuenta Google puede tener varios canales. Elige en cuál trabajar — toda la app
                   (proyectos, ideas, calendario, analytics) se filtra por este canal.
                 </p>
+                {channels.length === 1 && youtubeConnected && (
+                  <p className="text-[10px] text-amber-400/90 leading-relaxed">
+                    Solo hay 1 canal en esta cuenta Google. Si administras más canales con otra
+                    cuenta, reconecta YouTube en Configuración → Integraciones.
+                  </p>
+                )}
               </div>
               <div className="space-y-1 mt-1 max-h-80 overflow-y-auto">
                 {channels.map(chan => (

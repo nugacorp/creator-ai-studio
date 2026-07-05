@@ -7,6 +7,7 @@ interface MultichannelViewProps {
   youtubeConnected: boolean;
   loading: boolean;
   selectedChannelId: string | null;
+  youtubeAccountEmail?: string | null;
   onSelectChannel: (channel: Channel) => void;
   onGoToSettings: () => void;
 }
@@ -22,6 +23,7 @@ export default function MultichannelView({
   youtubeConnected,
   loading,
   selectedChannelId,
+  youtubeAccountEmail,
   onSelectChannel,
   onGoToSettings,
 }: MultichannelViewProps) {
@@ -76,6 +78,7 @@ export default function MultichannelView({
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-slate-400">
               {channels.length} canal{channels.length !== 1 ? 'es' : ''} de YouTube en tu cuenta
+              {youtubeAccountEmail ? ` (${youtubeAccountEmail})` : ''}
             </p>
             <p className="text-[10px] text-indigo-400 font-mono uppercase tracking-wide">
               Canal activo: {channels.find(c => c.id === selectedChannelId)?.name ?? 'ninguno'}
@@ -85,6 +88,21 @@ export default function MultichannelView({
             Haz clic en una tarjeta para cambiar el canal activo — la cabecera y toda la app se
             actualizarán con la información de ese canal.
           </p>
+
+          {channels.length === 1 && (
+            <div className="bg-indigo-950/20 border border-indigo-500/20 rounded-xl p-4 space-y-2">
+              <p className="text-xs text-indigo-200 font-medium">
+                ¿Esperabas ver más canales?
+              </p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Creator AI Studio lista todos los canales de YouTube que la API de Google asocia a la
+                cuenta conectada. No hace falta iniciar sesión por canal: un solo OAuth de Google
+                cubre todos los canales de esa cuenta. Si tus otros canales están bajo otra cuenta
+                Google (por ejemplo un Gmail distinto al de la marca), reconéctalos en Configuración
+                → Integraciones con la cuenta que los administra.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {channels.map(channel => {

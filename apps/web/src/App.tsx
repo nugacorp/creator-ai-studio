@@ -655,6 +655,7 @@ export function App({ initialView = 'home' }: AppProps = {}) {
               youtubeConnected={youtubeConnected}
               loading={channelsLoading}
               selectedChannelId={selectedChannel?.id ?? null}
+              youtubeAccountEmail={youtubeAccountEmail}
               onSelectChannel={channel => {
                 handleSelectChannel(channel);
                 handleAddNotification(`Canal activo: ${channel.name}`, 'info');

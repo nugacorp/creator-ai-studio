@@ -89,6 +89,23 @@ describe('YouTube channels integration', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ email: 'creator@example.com' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: 'UC_test',
+              snippet: { title: 'Canal Test', thumbnails: { default: { url: 'https://x/y.jpg' } } },
+              statistics: { subscriberCount: '1000', viewCount: '5000' },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: async () => 'forbidden',
       });
     vi.stubGlobal('fetch', fetchMock);
 

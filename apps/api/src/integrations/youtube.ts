@@ -127,11 +127,31 @@ export interface YouTubeChannelsResult {
   error?: string;
 }
 
-async function fetchChannelsFromYouTube(accessToken: string): Promise<Response> {
-  return fetch(
-    'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true&maxResults=50',
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+async function fetchChannelsFromYouTube(
+  accessToken: string,
+  filter: 'mine' | 'managedByMe',
+): Promise<Response> {
+  const params = new URLSearchParams({
+    part: 'snippet,statistics',
+    maxResults: '50',
+    [filter]: 'true',
+  });
+  return fetch(`https://www.googleapis.com/youtube/v3/channels?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+async function fetchAllAccessibleChannels(accessToken: string): Promise<YouTubeChannelInfo[]> {
+  const byId = new Map<string, YouTubeChannelInfo>();
+  for (const filter of ['mine', 'managedByMe'] as const) {
+    const response = await fetchChannelsFromYouTube(accessToken, filter);
+    if (!response.ok) continue;
+    const data = (await response.json()) as Parameters<typeof parseYouTubeChannelsResponse>[0];
+    for (const channel of parseYouTubeChannelsResponse(data)) {
+      byId.set(channel.id, channel);
+    }
+  }
+  return [...byId.values()];
 }
 
 function parseYouTubeChannelsResponse(data: {
@@ -175,7 +195,7 @@ export async function fetchYouTubeChannels(): Promise<YouTubeChannelsResult> {
     };
   }
 
-  let response = await fetchChannelsFromYouTube(accessToken);
+  let response = await fetchChannelsFromYouTube(accessToken, 'mine');
 
   if (response.status === 401) {
     invalidateSecretCache();
@@ -190,7 +210,7 @@ export async function fetchYouTubeChannels(): Promise<YouTubeChannelsResult> {
       };
     }
     accessToken = refreshed;
-    response = await fetchChannelsFromYouTube(accessToken);
+    response = await fetchChannelsFromYouTube(accessToken, 'mine');
   }
 
   const accountEmail = await fetchGoogleAccountEmail(accessToken);
@@ -213,8 +233,7 @@ export async function fetchYouTubeChannels(): Promise<YouTubeChannelsResult> {
     };
   }
 
-  const data = (await response.json()) as Parameters<typeof parseYouTubeChannelsResponse>[0];
-  const channels = parseYouTubeChannelsResponse(data);
+  const channels = await fetchAllAccessibleChannels(accessToken);
 
   if (channels.length === 0) {
     return {
