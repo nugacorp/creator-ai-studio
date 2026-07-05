@@ -26,6 +26,7 @@ coverage/
 .env
 .env.local
 .env.*.local
+local-dev/
 
 # Logs
 *.log
