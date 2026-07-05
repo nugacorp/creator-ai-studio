@@ -180,6 +180,12 @@ export interface EpisodeContent {
   publishConfirmed?: boolean;
   scheduledAt?: string;
   duration: string;
+  /** Kanban column override when backend status alone cannot distinguish Ideas vs Investigación. */
+  kanbanColumn?: ProjectStatus;
+  /** Seed brief from approved ideation — consumed by researcher agent. */
+  researchBrief?: string;
+  /** Original one-line idea from the ideation workspace. */
+  rawIdea?: string;
 }
 
 /** Default empty content for a new episode. */
@@ -680,3 +686,11 @@ export {
   suggestNextPublishSlot,
   type PublishScheduleKind,
 } from './schedule.js';
+
+export type {
+  CreateIdeaInput,
+  EpisodeIdea,
+  EpisodeIdeaStatus,
+  IdeaProposal,
+  IdeaProposalStatus,
+} from './ideas.js';

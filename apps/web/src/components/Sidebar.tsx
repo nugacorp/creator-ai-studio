@@ -12,7 +12,8 @@ import {
   Cpu,
   Factory,
   Layers,
-  X
+  X,
+  Lightbulb,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,6 +26,7 @@ interface SidebarProps {
 export default function Sidebar({ currentView, setCurrentView, mobileOpen = false, setMobileOpen }: SidebarProps) {
   const menuItems = [
     { id: 'home', label: 'Home', icon: Home },
+    { id: 'ideas', label: 'Ideas', icon: Lightbulb },
     { id: 'projects', label: 'Proyectos', icon: FolderKanban },
     { id: 'workspace', label: 'Contenido', icon: FileVideo },
     { id: 'copilot', label: 'IA Copilot', icon: Bot },

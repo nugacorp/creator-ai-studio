@@ -16,6 +16,17 @@ export const createEpisodeBody = {
   additionalProperties: false,
 } as const;
 
+export const createIdeaBody = {
+  type: 'object',
+  required: ['rawIdea'],
+  properties: {
+    rawIdea: { type: 'string', minLength: 1, maxLength: 500 },
+    audience: { type: 'string', maxLength: 200 },
+    passage: { type: 'string', maxLength: 300 },
+  },
+  additionalProperties: false,
+} as const;
+
 export const updateEpisodeBody = {
   type: 'object',
   properties: {

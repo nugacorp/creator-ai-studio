@@ -198,6 +198,50 @@ export async function deleteEpisode(id: string): Promise<{ ok: boolean; id: stri
   });
 }
 
+export async function fetchIdeas(): Promise<import('@creator-ai-studio/shared').EpisodeIdea[]> {
+  const body = await apiFetch<{ ideas: import('@creator-ai-studio/shared').EpisodeIdea[] }>('/ideas');
+  return body.ideas;
+}
+
+export async function createIdea(input: import('@creator-ai-studio/shared').CreateIdeaInput) {
+  return apiFetch<import('@creator-ai-studio/shared').EpisodeIdea>('/ideas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function brainstormIdea(id: string) {
+  return apiFetch<{
+    idea: import('@creator-ai-studio/shared').EpisodeIdea;
+    proposals: import('@creator-ai-studio/shared').IdeaProposal[];
+  }>(`/ideas/${encodeURIComponent(id)}/brainstorm`, { method: 'POST' });
+}
+
+export async function approveIdeaProposal(ideaId: string, proposalId: string) {
+  return apiFetch<{
+    idea: import('@creator-ai-studio/shared').EpisodeIdea;
+    episodeId: string;
+    jobId?: string;
+    message: string;
+  }>(`/ideas/${encodeURIComponent(ideaId)}/proposals/${encodeURIComponent(proposalId)}/approve`, {
+    method: 'PATCH',
+  });
+}
+
+export async function discardIdeaProposal(ideaId: string, proposalId: string) {
+  return apiFetch<{ idea: import('@creator-ai-studio/shared').EpisodeIdea; message: string }>(
+    `/ideas/${encodeURIComponent(ideaId)}/proposals/${encodeURIComponent(proposalId)}/discard`,
+    { method: 'PATCH' },
+  );
+}
+
+export async function deleteIdea(id: string) {
+  return apiFetch<{ ok: boolean; id: string }>(`/ideas/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function generateStoryboardFromScript(
   episodeId: string,
 ): Promise<{ scenes: import('@creator-ai-studio/shared').Scene[] }> {

@@ -28,6 +28,7 @@ import { registerOAuthRoutes } from './oauth/routes.js';
 import { registerAIRoutes } from './ai/routes.js';
 import { registerJobRoutes } from './jobs/routes.js';
 import { registerAgentRoutes } from './agents/routes.js';
+import { registerIdeaRoutes } from './ideas/routes.js';
 import { registerTeamRoutes } from './team/routes.js';
 import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
@@ -86,6 +87,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerAIRoutes(app, prefix);
     registerJobRoutes(app, prefix);
     registerAgentRoutes(app, prefix, storage);
+    registerIdeaRoutes(app, prefix, storage);
     registerTeamRoutes(app, prefix);
     registerSecretRoutes(app, prefix);
     registerOAuthRoutes(app, prefix);
@@ -320,7 +322,10 @@ function registerRoutes(
     }
 
     const episodeStatus = PROJECT_TO_EPISODE_STATUS[body.projectStatus];
-    const detail = await storage.updateEpisode(id, { status: episodeStatus });
+    const detail = await storage.updateEpisode(id, {
+      status: episodeStatus,
+      content: { kanbanColumn: body.projectStatus },
+    });
     if (detail === null) {
       reply.code(404);
       return { error: 'episode not found' };

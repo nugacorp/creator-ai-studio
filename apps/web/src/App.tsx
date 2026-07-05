@@ -16,6 +16,7 @@ import PipelinePanel from './components/PipelinePanel';
 import ProductionView from './components/ProductionView';
 import MultichannelView from './components/MultichannelView';
 import TeamsView from './components/TeamsView';
+import IdeasView from './components/IdeasView';
 import SettingsView from './components/SettingsView';
 import DeleteEpisodeModal from './components/DeleteEpisodeModal';
 import DemoModeBanner from './components/DemoModeBanner';
@@ -28,7 +29,7 @@ import {
   INITIAL_SERIES,
 } from './data';
 import { Channel, VideoProject, Notification } from './types';
-import type { EpisodeDetail, EpisodeSummary } from '@creator-ai-studio/shared';
+import type { EpisodeDetail, EpisodeSummary, ProjectStatus } from '@creator-ai-studio/shared';
 import {
   EPISODE_STATUS_PROGRESS,
   EPISODE_TO_PROJECT_STATUS,
@@ -82,7 +83,10 @@ function episodeToProject(episode: EpisodeSummary, content?: EpisodeDetail['cont
     id: episode.id,
     title: episode.title,
     series: c?.series ?? 'Reflexiones',
-    status: EPISODE_TO_PROJECT_STATUS[episode.status] ?? 'Ideas',
+    status:
+      (c?.kanbanColumn as ProjectStatus | undefined) ??
+      EPISODE_TO_PROJECT_STATUS[episode.status] ??
+      'Ideas',
     progress: EPISODE_STATUS_PROGRESS[episode.status] ?? 10,
     duration: c?.duration ?? '00:00',
     outline: c?.outline ?? [],
@@ -469,6 +473,16 @@ export function App({ initialView = 'home' }: AppProps = {}) {
               onGoToProjects={() => setCurrentView('projects')}
               projects={projects}
               onCreateEpisode={handleCreateEpisode}
+            />
+          )}
+
+          {currentView === 'ideas' && (
+            <IdeasView
+              onOpenWorkspace={projectId => {
+                setActiveProjectId(projectId);
+                setCurrentView('workspace');
+              }}
+              onProjectsRefresh={() => void loadProjects()}
             />
           )}
 
