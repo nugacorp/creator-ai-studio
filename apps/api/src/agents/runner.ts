@@ -7,6 +7,7 @@ import type {
   AgentQualityGate,
   AgentRunRecord,
   AgentRunStatus,
+  EpisodeShort,
   EpisodeStage,
   JobType,
   Scene,
@@ -52,6 +53,7 @@ const STAGE_FOR_AGENT: Partial<Record<AgentId, EpisodeStage>> = {
   video_editor: 'video',
   thumbnail_designer: 'thumbnail',
   seo_optimizer: 'seo',
+  shorts_agent: 'shorts',
   analytics_agent: 'analytics',
 };
 
@@ -67,6 +69,7 @@ const HERMES_PIPELINE_ORDER: AgentId[] = [
   'thumbnail_designer',
   'video_editor',
   'seo_optimizer',
+  'shorts_agent',
   'analytics_agent',
 ];
 
@@ -274,7 +277,9 @@ async function executeAgent(
     case 'thumbnail_designer':
       return runThumbnailDesigner(storage, options.episodeId, title, script, system, logs);
     case 'seo_optimizer':
-      return runSeoOptimizer(storage, options.episodeId, title, script, system, logs);
+      return runSeoOptimizer(storage, options.episodeId, dir, title, script, system, logs);
+    case 'shorts_agent':
+      return runShortsAgent(storage, options.episodeId, dir, title, script, system, logs);
     case 'analytics_agent':
       return runAnalyticsAgent(system, logs);
     default:
@@ -325,6 +330,9 @@ async function runHermes(
     } else if (agentId === 'seo_optimizer' && hasScript) {
       needed = true;
       reason = 'Optimizar metadatos SEO y paquete de publicación';
+    } else if (agentId === 'shorts_agent' && hasScript && episode.content.videoUrl) {
+      needed = true;
+      reason = 'Identificar momentos virales y metadatos de Shorts';
     } else if (agentId === 'thumbnail_designer' && !episode.content.thumbnailUrl) {
       needed = true;
       reason = 'Diseñar miniatura';
@@ -846,30 +854,142 @@ async function runThumbnailDesigner(
 async function runSeoOptimizer(
   storage: EpisodeStorage,
   episodeId: string,
+  dir: string,
   title: string,
   script: string,
-  _system: string,
+  system: string,
   logs: string[],
 ): Promise<AgentExecutionResult> {
-  const result = await withProvider('seo', p => p.optimizeSEO(title, script));
+  const text = await withProvider('chat', p =>
+    p.chat([
+      { role: 'system', content: system },
+      {
+        role: 'user',
+        content: `Título: ${title}\nGuion:\n${script.slice(0, 5000)}\n\nGenera metadatos SEO completos incluyendo pinnedComment.`,
+      },
+    ]),
+  );
+  const parsed = parseJsonBlock(text);
+  const fallback = await withProvider('seo', p => p.optimizeSEO(title, script));
+
+  const titles = (parsed?.titles as string[] | undefined)?.filter(Boolean) ?? fallback.titles;
+  const description = String(parsed?.description ?? fallback.description);
+  const tags = (parsed?.tags as string[] | undefined)?.filter(Boolean) ?? fallback.tags;
+  const chapters = (parsed?.chapters as { time: string; title: string }[] | undefined) ?? fallback.chapters;
+  const pinnedComment = String(
+    parsed?.pinnedComment ?? fallback.pinnedComment ?? '',
+  ).trim();
+
+  await mkdir(path.join(dir, '08-seo'), { recursive: true });
+  const seoMetadata = {
+    titles,
+    description,
+    tags,
+    chapters: chapters ?? [],
+    hashtags: (parsed?.hashtags as string[] | undefined) ?? fallback.hashtags ?? [],
+    pinnedComment,
+    generatedAt: new Date().toISOString(),
+  };
+  await writeFile(
+    path.join(dir, '08-seo', 'metadata.json'),
+    `${JSON.stringify(seoMetadata, null, 2)}\n`,
+    'utf8',
+  );
+
   await storage.updateEpisode(episodeId, {
     content: {
-      seoTitles: result.titles,
-      seoDescription: result.description,
-      seoTags: result.tags,
+      seoTitles: titles,
+      seoDescription: description,
+      seoTags: tags,
+      seoChapters: chapters,
+      pinnedComment: pinnedComment || undefined,
     },
   });
-  logs.push('[SEO] Metadatos guardados');
+  logs.push('[SEO] Metadatos guardados en 08-seo/metadata.json');
 
   return {
-    output: { ...(result as unknown as Record<string, unknown>), enqueueJob: 'publish_package' },
-    handoff: { nextStage: 'seo', notes: 'SEO optimizado — preparar paquete de publicación' },
+    output: { ...seoMetadata, enqueueJob: 'publish_package' },
+    handoff: { nextAgentId: 'shorts_agent', nextStage: 'shorts', notes: 'SEO optimizado — generar Shorts' },
     qualityGate: {
-      passed: result.titles.length > 0 && result.tags.length > 0,
+      passed: titles.length > 0 && tags.length > 0,
       checks: [
-        { key: 'titles', label: 'Títulos SEO', ok: result.titles.length > 0 },
-        { key: 'tags', label: 'Tags', ok: result.tags.length > 0 },
+        { key: 'titles', label: 'Títulos SEO', ok: titles.length > 0 },
+        { key: 'tags', label: 'Tags', ok: tags.length > 0 },
+        {
+          key: 'pinnedComment',
+          label: 'Comentario fijado sugerido',
+          ok: pinnedComment.length > 0,
+        },
       ],
+    },
+  };
+}
+
+function fallbackShortMoments(script: string, title: string): EpisodeShort[] {
+  const chunks = script.split(/\n\n+/).filter(p => p.trim().length > 40);
+  const slice = chunks.length >= 3 ? chunks.slice(0, 3) : [script.slice(0, 400), script.slice(400, 800), script.slice(800, 1200)];
+  return slice
+    .filter(t => t.trim().length > 20)
+    .slice(0, 5)
+    .map((text, i) => ({
+      id: `short-${i + 1}`,
+      title: `${title} — Momento ${i + 1}`.slice(0, 70),
+      description: text.slice(0, 200).trim(),
+      scriptText: text.slice(0, 600).trim(),
+      tags: ['shorts', 'biblia', 'fe'],
+      hashtags: ['#Shorts', '#Fe', '#Biblia'],
+      startTime: i * 45,
+    }));
+}
+
+async function runShortsAgent(
+  storage: EpisodeStorage,
+  episodeId: string,
+  dir: string,
+  title: string,
+  script: string,
+  system: string,
+  logs: string[],
+): Promise<AgentExecutionResult> {
+  const text = await withProvider('chat', p =>
+    p.chat([
+      { role: 'system', content: system },
+      {
+        role: 'user',
+        content: `Título episodio: ${title}\nGuion:\n${script.slice(0, 6000)}\n\nIdentifica 3-5 momentos para Shorts verticales.`,
+      },
+    ]),
+  );
+  const parsed = parseJsonBlock(text);
+  const rawShorts = (parsed?.shorts as Array<Record<string, unknown>> | undefined) ?? [];
+  const shorts: EpisodeShort[] =
+    rawShorts.length > 0
+      ? rawShorts.slice(0, 5).map((s, i) => ({
+          id: String(s.id ?? `short-${i + 1}`),
+          title: String(s.title ?? `${title} — Short ${i + 1}`).slice(0, 100),
+          description: String(s.description ?? '').slice(0, 500),
+          scriptText: String(s.scriptText ?? s.script ?? '').slice(0, 800),
+          tags: Array.isArray(s.tags) ? (s.tags as string[]).map(String) : undefined,
+          hashtags: Array.isArray(s.hashtags) ? (s.hashtags as string[]).map(String) : undefined,
+          startTime: Number(s.startTime ?? i * 45),
+        }))
+      : fallbackShortMoments(script, title);
+
+  await mkdir(path.join(dir, '09-shorts'), { recursive: true });
+  await writeFile(
+    path.join(dir, '09-shorts', 'metadata.json'),
+    `${JSON.stringify({ shorts, summary: parsed?.summary ?? 'Shorts generados', generatedAt: new Date().toISOString() }, null, 2)}\n`,
+    'utf8',
+  );
+  await storage.updateEpisode(episodeId, { content: { shorts } });
+  logs.push(`[Shorts] ${shorts.length} momentos identificados — encolar render shorts`);
+
+  return {
+    output: { shortCount: shorts.length, shorts, summary: parsed?.summary, enqueueJob: 'shorts' },
+    handoff: { nextStage: 'shorts', notes: 'Momentos listos — renderizar recortes 9:16' },
+    qualityGate: {
+      passed: shorts.length >= 1,
+      checks: [{ key: 'shorts', label: 'Momentos Shorts', ok: shorts.length >= 1 }],
     },
   };
 }

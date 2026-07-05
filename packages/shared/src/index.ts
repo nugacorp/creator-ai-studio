@@ -100,6 +100,7 @@ export const STAGE_EXPECTED_FILES: Partial<Record<EpisodeStage, string[]>> = {
   subtitles: ['06-subtitles/subtitles.srt'],
   thumbnail: ['07-thumbnail/thumbnail.png'],
   seo: ['08-seo/metadata.json'],
+  shorts: ['09-shorts/metadata.json'],
 };
 
 /** State of a single production stage. */
@@ -129,6 +130,27 @@ export interface Scene {
   transition: string;
 }
 
+/** YouTube chapter marker for description / SEO metadata. */
+export interface SeoChapter {
+  time: string;
+  title: string;
+}
+
+/** One vertical short derived from a strong moment in the episode. */
+export interface EpisodeShort {
+  id: string;
+  title: string;
+  description: string;
+  tags?: string[];
+  hashtags?: string[];
+  scriptText: string;
+  /** Start offset in the long-form video (seconds). */
+  startTime?: number;
+  /** Rendered file relative to workspace, e.g. 09-shorts/short-1.mp4 */
+  videoPath?: string;
+  youtubeUrl?: string;
+}
+
 /** Rich content stored alongside episode metadata. */
 export interface EpisodeContent {
   series: string;
@@ -139,6 +161,10 @@ export interface EpisodeContent {
   seoTitles: string[];
   seoDescription: string;
   seoTags: string[];
+  /** Chapter markers for YouTube description (00:00 Title). */
+  seoChapters?: SeoChapter[];
+  /** Suggested pinned comment for YouTube (manual paste — API cannot auto-pin). */
+  pinnedComment?: string;
   thumbnailUrl?: string;
   audioUrl?: string;
   /** Authenticated URL for Lyria background music (05-audio/background-music.mp3). */
@@ -146,7 +172,10 @@ export interface EpisodeContent {
   /** SRT subtitle track generated from scenes or script timing. */
   subtitlesSrt?: string;
   videoUrl?: string;
+  /** @deprecated Prefer `shorts` array — kept for legacy single-short episodes. */
   shortsUrl?: string;
+  /** Multi-moment shorts produced by shorts_agent + render pipeline. */
+  shorts?: EpisodeShort[];
   youtubeVideoId?: string;
   publishConfirmed?: boolean;
   scheduledAt?: string;
@@ -280,6 +309,7 @@ export const AGENT_IDS = [
   'video_editor',
   'thumbnail_designer',
   'seo_optimizer',
+  'shorts_agent',
   'analytics_agent',
 ] as const;
 
@@ -394,6 +424,26 @@ export interface CreateJobInput {
 /** TTS engine used for narration (configured once in Settings). */
 export type TtsProvider = 'elevenlabs' | 'piper' | 'gemini';
 
+/** Single recurring publish slot (day-of-week + time). */
+export interface PublishScheduleSlot {
+  /** 0 = Sunday … 6 = Saturday */
+  dayOfWeek: number;
+  hour: number;
+  minute: number;
+  timezone?: string;
+}
+
+/** Recurring publish pattern for long-form and shorts. */
+export interface PublishSchedule {
+  longVideo: PublishScheduleSlot;
+  shorts?: {
+    daysOfWeek: number[];
+    hour: number;
+    minute: number;
+    timezone?: string;
+  };
+}
+
 /** Global application settings persisted by the API. */
 export interface AppSettings {
   ttsSampleRate: string;
@@ -411,6 +461,8 @@ export interface AppSettings {
   agentOverrides?: AgentOverridesMap;
   /** YouTube channel ID selected for multichannel operations. */
   activeChannelId?: string;
+  /** Recurring publish slots (Camino Bíblico: Mon long, Tue/Thu/Sat shorts). */
+  publishSchedule?: PublishSchedule;
 }
 
 /** YouTube channel returned by GET /integrations/youtube/channels. */
@@ -620,3 +672,9 @@ export function canTransitionStage(
 ): boolean {
   return ALLOWED_STAGE_TRANSITIONS[from].includes(to);
 }
+
+export {
+  DEFAULT_PUBLISH_SCHEDULE,
+  suggestNextPublishSlot,
+  type PublishScheduleKind,
+} from './schedule.js';

@@ -504,23 +504,40 @@ function registerRoutes(
       reply.code(404);
       return { error: 'episode not found' };
     }
-    const title = episode?.title ?? 'Untitled';
-    const description = episode?.content?.seoDescription ?? episode?.title ?? '';
+    const title = episode?.content?.seoTitles?.[0] ?? episode?.title ?? 'Untitled';
+    const { buildYouTubeDescription } = await import('./seo/description.js');
+    const description = buildYouTubeDescription(
+      episode?.content?.seoDescription ?? episode?.title ?? '',
+      episode?.content?.seoChapters,
+    );
     let videoPath = '';
+    let thumbnailPath = '';
     if (body.episodeId) {
       const dir = await storage.getEpisodeDirectory(body.episodeId);
       if (dir) {
         const pathMod = await import('node:path');
         const candidate = pathMod.join(dir, '06-video', 'episode.mp4');
+        const thumb = pathMod.join(dir, '07-thumbnail', 'thumbnail.png');
         const { existsSync } = await import('node:fs');
         if (existsSync(candidate)) videoPath = candidate;
+        if (existsSync(thumb)) thumbnailPath = thumb;
       }
     }
     try {
-      const { uploadToYouTube } = await import('./integrations/youtube.js');
+      const { uploadToYouTube, uploadYouTubeThumbnail } = await import('./integrations/youtube.js');
       const result = await uploadToYouTube(title, description, videoPath, {
         publishAt: body.publishAt,
       });
+      if (thumbnailPath && result.videoId && !result.videoId.startsWith('yt_')) {
+        try {
+          await uploadYouTubeThumbnail(result.videoId, thumbnailPath);
+        } catch (thumbErr) {
+          request.log.warn(
+            { err: thumbErr },
+            'Video subido pero miniatura no — sube manualmente o revisa scopes OAuth',
+          );
+        }
+      }
       if (body.episodeId && episode && result.videoId) {
         await storage.updateEpisode(body.episodeId, {
           status: 'review',
@@ -791,17 +808,47 @@ function registerRoutes(
 
   app.post(route(prefix, '/episodes/:id/shorts'), async (request, reply) => {
     const { id } = request.params as { id: string };
+    const episode = await getEpisodeForUser(storage, id, request.userId);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
     const dir = await storage.getEpisodeDirectory(id);
     if (!dir) {
       reply.code(400);
       return { error: 'episodio no disponible en disco local' };
     }
     const { renderShortVideo } = await import('./media/render.js');
-    const result = await renderShortVideo(dir);
-    if (result.ok) {
+    const moments = (episode.content.shorts ?? []).map(s => ({
+      id: s.id,
+      startTime: s.startTime,
+    }));
+    const result = await renderShortVideo(dir, moments.length > 0 ? moments : undefined);
+    if (result.ok && result.rendered) {
+      const updatedShorts = (episode.content.shorts ?? []).map((s, i) => ({
+        ...s,
+        videoPath: result.rendered?.[i]
+          ? `09-shorts/${result.rendered[i]!.filename}`
+          : s.videoPath,
+      }));
+      if (updatedShorts.length === 0 && result.rendered.length > 0) {
+        for (const r of result.rendered) {
+          updatedShorts.push({
+            id: r.id,
+            title: episode.title,
+            description: '',
+            scriptText: '',
+            videoPath: `09-shorts/${r.filename}`,
+          });
+        }
+      }
       await storage.updateEpisode(id, {
-        content: { shortsUrl: '/api/episodes/media/short' },
+        content: {
+          shorts: updatedShorts,
+          shortsUrl: '/api/episodes/media/short',
+        },
       });
+      await storage.setStageStatus(id, 'shorts', 'completed');
     }
     return result;
   });

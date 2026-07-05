@@ -45,6 +45,14 @@ export class DemoAIProvider implements AIProvider {
       ],
       description: `En este video exploramos ${title}: una reflexión cristiana basada en la Palabra de Dios. Suscríbete para más contenido de fe, esperanza y enseñanza bíblica.`,
       tags: ['reflexion', 'cristiana', 'biblia', 'fe', title.toLowerCase().split(' ')[0] ?? 'video'],
+      chapters: [
+        { time: '00:00', title: 'Introducción' },
+        { time: '01:30', title: 'Desarrollo' },
+        { time: '04:00', title: 'Aplicación práctica' },
+      ],
+      hashtags: ['#ReflexionCristiana', '#Biblia', '#Fe'],
+      pinnedComment:
+        '¿Qué versículo de este mensaje te impactó más? Compártelo abajo — leemos cada comentario 🙏',
     };
   }
 }

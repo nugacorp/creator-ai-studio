@@ -208,12 +208,13 @@ describe('agent system', () => {
       process.env.ALLOW_MOCKS = 'true';
     });
 
-    it('lists 13 agents including storyboard and scene assets (v1.1)', async () => {
+    it('lists 14 agents including storyboard, scene assets and shorts_agent (v1.2)', async () => {
       const response = await app.inject({ method: 'GET', url: '/api/agents' });
       const body = response.json() as { agents: { id: string }[] };
-      expect(body.agents.length).toBe(13);
+      expect(body.agents.length).toBe(14);
       expect(body.agents.some(a => a.id === 'storyboard_designer')).toBe(true);
       expect(body.agents.some(a => a.id === 'scene_asset_designer')).toBe(true);
+      expect(body.agents.some(a => a.id === 'shorts_agent')).toBe(true);
     });
   });
 

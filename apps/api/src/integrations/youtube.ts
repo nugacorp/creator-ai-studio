@@ -1,5 +1,5 @@
-import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { getSecret } from '../secrets/resolver.js';
 import { getValidGoogleAccessToken } from '../secrets/google-auth.js';
@@ -247,6 +247,39 @@ export async function uploadToYouTube(
     url: `https://www.youtube.com/watch?v=${videoId}`,
     status: options?.publishAt ? 'scheduled' : 'uploaded',
   };
+}
+
+/** Upload custom thumbnail after video upload (requires youtube.upload scope). */
+export async function uploadYouTubeThumbnail(
+  videoId: string,
+  thumbnailPath: string,
+): Promise<void> {
+  const accessToken = await resolveYouTubeAccessToken();
+  if (!accessToken) {
+    throw new Error('YouTube OAuth no conectado');
+  }
+
+  const fileInfo = await stat(thumbnailPath);
+  const stream = createReadStream(thumbnailPath);
+
+  const response = await fetch(
+    `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${encodeURIComponent(videoId)}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'image/png',
+        'Content-Length': String(fileInfo.size),
+      },
+      body: Readable.toWeb(stream) as unknown as NonNullable<RequestInit['body']>,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' },
+  );
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`YouTube thumbnail upload failed (${response.status}): ${errText.slice(0, 200)}`);
+  }
 }
 
 export interface YouTubeAnalyticsResult {

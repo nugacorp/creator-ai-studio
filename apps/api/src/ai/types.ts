@@ -24,6 +24,9 @@ export interface SEOResult {
   titles: string[];
   description: string;
   tags: string[];
+  chapters?: { time: string; title: string }[];
+  hashtags?: string[];
+  pinnedComment?: string;
 }
 
 export interface TTSResult {

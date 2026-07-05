@@ -220,7 +220,7 @@ export class GeminiAIProvider implements AIProvider {
     const raw = await geminiGenerate(
       this.auth,
       getGeminiTextModel(),
-      `Optimiza SEO para YouTube.\nTítulo: ${title}\nGuion: ${script.substring(0, 2000)}\n\nResponde SOLO con JSON válido: {"titles":["..."],"description":"...","tags":["..."]}`,
+      `Optimiza SEO para YouTube.\nTítulo: ${title}\nGuion: ${script.substring(0, 2000)}\n\nResponde SOLO con JSON válido: {"titles":["..."],"description":"...","tags":["..."],"chapters":[{"time":"00:00","title":"..."}],"hashtags":["#..."],"pinnedComment":"..."}`,
       'seo',
     );
 

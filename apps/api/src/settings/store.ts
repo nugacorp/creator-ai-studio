@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AppSettings } from '@creator-ai-studio/shared';
+import { DEFAULT_PUBLISH_SCHEDULE } from '@creator-ai-studio/shared';
 import { resolveStoragePath } from '../storage/index.js';
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -12,6 +13,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoArchiveOnPublish: false,
   maxActiveEpisodes: 1,
   diskWarningThresholdGb: 5,
+  publishSchedule: DEFAULT_PUBLISH_SCHEDULE,
 };
 
 function settingsPath(): string {

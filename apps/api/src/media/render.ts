@@ -343,11 +343,24 @@ export async function renderEpisodeVideo(
 export interface ShortsResult {
   ok: boolean;
   shortsPath?: string;
+  /** All rendered short files (multi-moment pipeline). */
+  rendered?: Array<{ id: string; path: string; filename: string }>;
   message: string;
 }
 
-/** Crop 9:16 short from main episode video. */
-export async function renderShortVideo(episodeDir: string): Promise<ShortsResult> {
+export interface ShortRenderMoment {
+  id: string;
+  startTime?: number;
+  durationSeconds?: number;
+}
+
+const SHORT_MAX_DURATION = 60;
+
+/** Crop 9:16 short(s) from main episode video — one file per moment or legacy single short. */
+export async function renderShortVideo(
+  episodeDir: string,
+  moments?: ShortRenderMoment[],
+): Promise<ShortsResult> {
   if (!(await checkFfmpeg())) {
     return { ok: false, message: 'ffmpeg no está instalado' };
   }
@@ -359,28 +372,40 @@ export async function renderShortVideo(episodeDir: string): Promise<ShortsResult
 
   const shortsDir = path.join(episodeDir, '09-shorts');
   await mkdir(shortsDir, { recursive: true });
-  const outputPath = path.join(shortsDir, 'short.mp4');
 
-  await execFileAsync(
-    'ffmpeg',
-    [
-      '-y',
-      '-i',
-      input,
-      '-vf',
+  const effectiveMoments: ShortRenderMoment[] =
+    moments && moments.length > 0
+      ? moments
+      : [{ id: 'short-1', startTime: 0, durationSeconds: SHORT_MAX_DURATION }];
+
+  const rendered: Array<{ id: string; path: string; filename: string }> = [];
+
+  for (let i = 0; i < effectiveMoments.length; i++) {
+    const moment = effectiveMoments[i]!;
+    const index = i + 1;
+    const filename = `short-${index}.mp4`;
+    const outputPath = path.join(shortsDir, filename);
+    const start = Math.max(0, moment.startTime ?? 0);
+    const duration = Math.min(SHORT_MAX_DURATION, moment.durationSeconds ?? SHORT_MAX_DURATION);
+
+    const args = ['-y', '-ss', String(start), '-i', input, '-t', String(duration), '-vf',
       'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920',
-      '-c:v',
-      'libx264',
-      '-c:a',
-      'aac',
-      '-t',
-      '60',
-      outputPath,
-    ],
-    { timeout: 300_000 },
-  );
+      '-c:v', 'libx264', '-c:a', 'aac', outputPath];
 
-  return { ok: true, shortsPath: outputPath, message: 'Short generado en 09-shorts/short.mp4' };
+    await execFileAsync('ffmpeg', args, { timeout: 300_000 });
+    rendered.push({ id: moment.id, path: outputPath, filename });
+  }
+
+  const legacyPath = rendered[0]?.path;
+  return {
+    ok: true,
+    shortsPath: legacyPath,
+    rendered,
+    message:
+      rendered.length === 1
+        ? 'Short generado en 09-shorts/short-1.mp4'
+        : `${rendered.length} shorts generados en 09-shorts/`,
+  };
 }
 
 /** Persist thumbnail image URL to 07-thumbnail/thumbnail.png */

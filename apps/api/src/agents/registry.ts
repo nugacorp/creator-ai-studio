@@ -134,6 +134,17 @@ export const AGENT_REGISTRY: AgentDefinition[] = [
     status: 'active',
   },
   {
+    id: 'shorts_agent',
+    name: 'Agente de Shorts',
+    role: 'Shorts Agent',
+    description:
+      'Identifica 3–5 momentos virales del episodio, genera guion corto, título, descripción y hashtags por short.',
+    episodeStage: 'shorts',
+    expertise: ['Shorts', 'CTR', 'retención', 'recortes verticales'],
+    allowedJobTypes: ['agent', 'shorts'],
+    status: 'active',
+  },
+  {
     id: 'analytics_agent',
     name: 'Analista',
     role: 'Analytics Agent',
