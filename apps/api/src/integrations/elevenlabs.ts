@@ -1,5 +1,10 @@
 import process from 'node:process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { getSecret } from '../secrets/resolver.js';
+import { chunkTextForTts, prepareScriptForTts } from '../media/script-for-tts.js';
+
+const execFileAsync = promisify(execFile);
 
 /** Default voice from ElevenLabs quickstart (George). */
 export const ELEVENLABS_DEFAULT_VOICE_ID = 'JBFqnCBsd6RMkjVDRZzb';
@@ -57,6 +62,62 @@ async function parseApiError(response: Response): Promise<string> {
   return `ElevenLabs respondió ${response.status}`;
 }
 
+async function synthesizeChunk(
+  apiKey: string,
+  voice: string,
+  modelId: string,
+  text: string,
+): Promise<Buffer> {
+  const url = new URL(`${ELEVENLABS_API_BASE}/v1/text-to-speech/${voice}`);
+  url.searchParams.set('output_format', 'mp3_44100_128');
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: elevenLabsHeaders(apiKey),
+    body: JSON.stringify({
+      text,
+      model_id: modelId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new ElevenLabsApiError(await parseApiError(response), response.status);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function concatMp3Buffers(buffers: Buffer[], saveDir?: string): Promise<Buffer> {
+  if (buffers.length === 1) return buffers[0]!;
+
+  const pathMod = await import('node:path');
+  const { mkdir, writeFile, readFile, rm } = await import('node:fs/promises');
+  const tmpDir = saveDir
+    ? pathMod.join(saveDir, '_tts_chunks')
+    : pathMod.join(process.cwd(), '.tmp-tts-chunks');
+  await mkdir(tmpDir, { recursive: true });
+
+  const listFile = pathMod.join(tmpDir, 'concat.txt');
+  const chunkPaths: string[] = [];
+  for (let i = 0; i < buffers.length; i++) {
+    const p = pathMod.join(tmpDir, `chunk-${i}.mp3`);
+    await writeFile(p, buffers[i]!);
+    chunkPaths.push(p);
+  }
+  const listContent = chunkPaths.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
+  await writeFile(listFile, listContent, 'utf8');
+
+  const outPath = pathMod.join(tmpDir, 'merged.mp3');
+  await execFileAsync(
+    'ffmpeg',
+    ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outPath],
+    { timeout: 120_000 },
+  );
+  const merged = await readFile(outPath);
+  await rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+  return merged;
+}
+
 export async function synthesizeSpeech(
   text: string,
   voiceId?: string,
@@ -76,23 +137,18 @@ export async function synthesizeSpeech(
     return { audioUrl: '', isDemo: true };
   }
 
-  const url = new URL(`${ELEVENLABS_API_BASE}/v1/text-to-speech/${voice}`);
-  url.searchParams.set('output_format', 'mp3_44100_128');
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: elevenLabsHeaders(apiKey),
-    body: JSON.stringify({
-      text: text.substring(0, 5000),
-      model_id: modelId,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new ElevenLabsApiError(await parseApiError(response), response.status);
+  const narration = prepareScriptForTts(text);
+  const spoken = narration || text.trim();
+  if (!spoken) {
+    throw new ElevenLabsApiError('El guion no tiene texto narrable para TTS', 400);
   }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
+  const chunks = chunkTextForTts(spoken);
+  const buffers: Buffer[] = [];
+  for (const chunk of chunks) {
+    buffers.push(await synthesizeChunk(apiKey, voice, modelId, chunk));
+  }
+  const buffer = await concatMp3Buffers(buffers, options?.saveDir);
 
   if (options?.saveDir) {
     const { mkdir, writeFile } = await import('node:fs/promises');

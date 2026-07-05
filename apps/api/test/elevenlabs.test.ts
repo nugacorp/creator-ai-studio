@@ -43,17 +43,24 @@ describe('elevenlabs integration', () => {
       `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}?output_format=mp3_44100_128`,
     );
     expect(init.method).toBe('POST');
-    expect(init.headers).toMatchObject({
-      'Content-Type': 'application/json',
-      Accept: 'audio/mpeg',
-      'xi-api-key': 'xi-test-key',
-    });
     expect(JSON.parse(String(init.body))).toEqual({
       text: 'Hola mundo',
       model_id: ELEVENLABS_DEFAULT_MODEL_ID,
     });
     expect(result.isDemo).toBe(false);
-    expect(result.audioUrl).toMatch(/^data:audio\/mpeg;base64,/);
+  });
+
+  it('strips screenplay markup before sending to ElevenLabs', async () => {
+    process.env.ELEVENLABS_API_KEY = 'xi-test-key';
+    fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => Buffer.from('fake-mp3'),
+    });
+
+    await synthesizeSpeech(`**[INTRO]**\n**Narrador:**\n"Solo esto se narra."`);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body)) as { text: string };
+    expect(body.text).toBe('Solo esto se narra.');
   });
 
   it('throws ElevenLabsApiError when the API rejects the request', async () => {

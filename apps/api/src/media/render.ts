@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { areMocksAllowed } from '../config/mocks.js';
+import { computeSlideDurationSeconds, probeMediaDurationSeconds } from './audio-probe.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -112,11 +113,15 @@ export async function renderEpisodeVideo(
     options.sceneImageUrls ?? [],
     options.thumbnailUrl,
   );
-  const slideDuration = options.secondsPerSlide ?? 5;
+
+  const audioDuration = await probeMediaDurationSeconds(audioPath);
+  const slideDuration =
+    options.secondsPerSlide ??
+    computeSlideDurationSeconds(audioDuration, slides.length);
 
   const listFile = path.join(episodeDir, '04-assets', 'ffmpeg-slides.txt');
   const listContent = slides
-    .map(s => `file '${s.replace(/'/g, "'\\''")}'\nduration ${slideDuration}`)
+    .map(s => `file '${s.replace(/'/g, "'\\''")}'\nduration ${slideDuration.toFixed(3)}`)
     .join('\n');
   const lastSlide = slides[slides.length - 1];
   await writeFile(listFile, `${listContent}\nfile '${lastSlide.replace(/'/g, "'\\''")}'\n`, 'utf8');
@@ -145,25 +150,35 @@ export async function renderEpisodeVideo(
     { timeout: 600_000 },
   );
 
-  await execFileAsync(
-    'ffmpeg',
-    [
-      '-y',
-      '-i',
-      silentVideo,
-      '-i',
-      audioPath,
-      '-c:v',
-      'copy',
-      '-c:a',
-      'aac',
-      '-shortest',
-      outputPath,
-    ],
-    { timeout: 600_000 },
-  );
+  const muxArgs = [
+    '-y',
+    '-i',
+    silentVideo,
+    '-i',
+    audioPath,
+    '-c:v',
+    'libx264',
+    '-pix_fmt',
+    'yuv420p',
+    '-c:a',
+    'aac',
+    '-map',
+    '0:v:0',
+    '-map',
+    '1:a:0',
+  ];
+  if (audioDuration > 0) {
+    muxArgs.push('-t', audioDuration.toFixed(3));
+  }
+  muxArgs.push(outputPath);
 
-  return { ok: true, videoPath: outputPath, message: 'Video renderizado en 06-video/episode.mp4' };
+  await execFileAsync('ffmpeg', muxArgs, { timeout: 600_000 });
+
+  return {
+    ok: true,
+    videoPath: outputPath,
+    message: `Video renderizado (${Math.round(audioDuration)}s de narración, ${slides.length} slide(s))`,
+  };
 }
 
 export interface ShortsResult {
