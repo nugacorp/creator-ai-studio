@@ -186,6 +186,26 @@ describe('api routes', () => {
     expect(detail.stages).toHaveLength(EPISODE_STAGES.length);
   });
 
+  it('GET /episodes/:id/assets lists downloadable files for the workspace', async () => {
+    const episode = await createEpisode('Episodio assets');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/episodes/${episode.id}/assets`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as {
+      workspacePath: string;
+      storageLocation: string;
+      files: { key: string; available: boolean }[];
+    };
+    expect(body.workspacePath).toBe(`${episode.id}-${episode.slug}`);
+    expect(body.storageLocation).toBe('local');
+    expect(body.files.some(f => f.key === 'video')).toBe(true);
+    expect(body.files.some(f => f.key === 'script' && f.available === false)).toBe(true);
+  });
+
   it('GET /episodes/:id returns 404 for a missing episode', async () => {
     const response = await app.inject({
       method: 'GET',

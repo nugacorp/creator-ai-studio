@@ -6,7 +6,7 @@ import ProfileEditor from './ProfileEditor';
 
 interface HeaderProps {
   channels: Channel[];
-  selectedChannel: Channel;
+  selectedChannel: Channel | null;
   setSelectedChannel: (channel: Channel) => void;
   notifications: Notification[];
   setNotifications: React.Dispatch<React.SetStateAction<Notification[]>>;
@@ -66,15 +66,22 @@ export default function Header({
         <div className="relative">
           <button
             id="channel-selector-btn"
-            onClick={() => setShowChannelsDropdown(!showChannelsDropdown)}
-            className="flex items-center gap-2 md:gap-3 px-3 py-1.5 rounded-xl bg-[#15191E] border border-white/10 hover:border-indigo-500/50 transition-all text-sm font-medium text-[#E6EDF2]"
+            onClick={() => channels.length > 0 && setShowChannelsDropdown(!showChannelsDropdown)}
+            disabled={channels.length === 0}
+            className="flex items-center gap-2 md:gap-3 px-3 py-1.5 rounded-xl bg-[#15191E] border border-white/10 hover:border-indigo-500/50 transition-all text-sm font-medium text-[#E6EDF2] disabled:opacity-60 disabled:cursor-default"
           >
-            <span className="text-lg md:text-xl shrink-0">{selectedChannel.avatar}</span>
-            <span className="truncate max-w-[100px] sm:max-w-[180px] md:max-w-none">{selectedChannel.name}</span>
-            <span className="hidden sm:inline text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 font-semibold border border-indigo-800/40">
-              {selectedChannel.type}
+            <span className="text-lg md:text-xl shrink-0">{selectedChannel?.avatar ?? '📺'}</span>
+            <span className="truncate max-w-[100px] sm:max-w-[180px] md:max-w-none">
+              {selectedChannel?.name ?? 'Sin canales'}
             </span>
-            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${showChannelsDropdown ? 'rotate-180' : ''}`} />
+            {selectedChannel && (
+              <span className="hidden sm:inline text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 font-semibold border border-indigo-800/40">
+                {selectedChannel.type}
+              </span>
+            )}
+            {channels.length > 0 && (
+              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${showChannelsDropdown ? 'rotate-180' : ''}`} />
+            )}
           </button>
 
         {showChannelsDropdown && (

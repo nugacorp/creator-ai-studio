@@ -408,6 +408,81 @@ export async function archiveEpisode(episodeId: string): Promise<{ ok: boolean; 
   return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/archive`, { method: 'POST' });
 }
 
+export interface EpisodeAssetFile {
+  key: string;
+  label: string;
+  available: boolean;
+  filename?: string;
+}
+
+export interface EpisodeAssetsResponse {
+  episodeId: string;
+  workspacePath: string;
+  storageLocation: 'local' | 'remote';
+  storageRoot?: string;
+  drivePath?: string | null;
+  message?: string;
+  files: EpisodeAssetFile[];
+}
+
+export async function fetchEpisodeAssets(episodeId: string): Promise<EpisodeAssetsResponse> {
+  return apiFetch<EpisodeAssetsResponse>(`/episodes/${encodeURIComponent(episodeId)}/assets`);
+}
+
+export async function downloadEpisodeFile(episodeId: string, assetKey: string): Promise<void> {
+  const headers = await buildAuthHeaders();
+  const response = await fetch(
+    `${API_BASE_URL}/episodes/${encodeURIComponent(episodeId)}/files/${encodeURIComponent(assetKey)}`,
+    { headers },
+  );
+  if (!response.ok) {
+    throw new Error(`download failed (${response.status})`);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match?.[1] ?? `${assetKey}-download`;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export interface AgentsListResponse {
+  agents: import('@creator-ai-studio/shared').AgentDefinition[];
+  orchestrator: string;
+}
+
+export interface AgentRunsResponse {
+  episodeId: string;
+  runs: import('@creator-ai-studio/shared').AgentRunRecord[];
+}
+
+export async function fetchAgents(): Promise<AgentsListResponse> {
+  return apiFetch<AgentsListResponse>('/agents');
+}
+
+export async function fetchAgentRuns(episodeId: string): Promise<AgentRunsResponse> {
+  return apiFetch<AgentRunsResponse>(`/episodes/${encodeURIComponent(episodeId)}/agent-runs`);
+}
+
+export async function runEpisodeAgent(
+  episodeId: string,
+  agentId: string,
+  options?: { autoEnqueuePlan?: boolean },
+): Promise<{ job: ProductionJob; message: string }> {
+  return apiFetch(`/episodes/${encodeURIComponent(episodeId)}/agents/${encodeURIComponent(agentId)}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      async: true,
+      autoEnqueuePlan: options?.autoEnqueuePlan,
+    }),
+  });
+}
+
 export type { StorageStats, TtsProvider, ElevenLabsVoice };
 
 export async function aiSeo(

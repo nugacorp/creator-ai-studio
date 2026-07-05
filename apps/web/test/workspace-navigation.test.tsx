@@ -47,9 +47,20 @@ const episodeDetail = {
 function mockApi(opts: { detailFails?: boolean } = {}) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
+    if (url.includes(`/episodes/${episode.id}/assets`)) {
+      return jsonResponse({
+        episodeId: episode.id,
+        workspacePath: episodeDetail.workspacePath,
+        storageLocation: 'local',
+        files: [],
+      });
+    }
     if (url.includes(`/episodes/${episode.id}`)) {
       if (opts.detailFails) return jsonResponse({ error: 'boom' }, 500);
       return jsonResponse(episodeDetail);
+    }
+    if (url.includes('/auth/status')) {
+      return jsonResponse({ authRequired: false, apiKeyAuth: false, supabaseAuth: false });
     }
     if (url.includes('/episodes')) return jsonResponse([episode]);
     return jsonResponse([]);

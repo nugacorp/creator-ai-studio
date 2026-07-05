@@ -319,6 +319,23 @@ async function runPipelineJob(job: ProductionJob): Promise<Record<string, unknow
   return { ok: true, mode, youtubeUrl, videoId };
 }
 
+async function runAgentJob(job: ProductionJob): Promise<Record<string, unknown>> {
+  const agentId = job.payload?.agentId;
+  if (typeof agentId !== 'string' || !agentId) {
+    throw new Error('agent job requires payload.agentId');
+  }
+  const res = await apiFetch(`/episodes/${job.episodeId}/agents/${agentId}/run`, {
+    method: 'POST',
+    body: JSON.stringify({
+      async: false,
+      autoEnqueuePlan: job.payload?.autoEnqueuePlan === true,
+      input: job.payload?.input,
+    }),
+  });
+  await assertOk(res, `agent ${agentId}`);
+  return (await res.json()) as Record<string, unknown>;
+}
+
 export async function processJob(job: ProductionJob): Promise<void> {
   console.log(`Processing job ${job.id} (${job.type}) for episode ${job.episodeId}`);
   if (!(await claimJob(job.id))) {
@@ -358,6 +375,9 @@ export async function processJob(job: ProductionJob): Promise<void> {
         break;
       case 'pipeline':
         result = await runPipelineJob(job);
+        break;
+      case 'agent':
+        result = await runAgentJob(job);
         break;
       default:
         throw new Error(`unknown job type: ${job.type}`);

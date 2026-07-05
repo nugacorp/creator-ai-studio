@@ -5,12 +5,7 @@ import path from 'node:path';
 import type { ChannelRecord, CreateChannelInput } from '@creator-ai-studio/shared';
 import { resolveStoragePath } from '../storage/index.js';
 
-const DEFAULT_CHANNELS: ChannelRecord[] = [
-  { id: 'ch1', name: 'Canal Cristiano', type: 'YouTube', status: 'Produciendo', subscribers: 125000, avatar: '⛪' },
-  { id: 'ch2', name: 'Canal Finanzas', type: 'YouTube', status: 'Publicado', subscribers: 84000, avatar: '💰' },
-  { id: 'ch3', name: 'Canal IA', type: 'TikTok', status: 'En edición', subscribers: 45000, avatar: '🤖' },
-  { id: 'ch4', name: 'Canal Podcast', type: 'Podcast', status: 'Investigación', subscribers: 18000, avatar: '🎙️' },
-];
+const DEFAULT_CHANNELS: ChannelRecord[] = [];
 
 function channelsPath(): string {
   return path.join(resolveStoragePath(), '..', 'channels.json');

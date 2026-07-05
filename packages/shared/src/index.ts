@@ -248,8 +248,75 @@ export const JOB_TYPES = [
   'publish_package',
   'archive',
   'pipeline',
+  /** Run a specialized agent (payload.agentId required). */
+  'agent',
 ] as const;
 export type JobType = (typeof JOB_TYPES)[number];
+
+/** Official specialized agent identifiers. Hermes is the VPS orchestrator. */
+export const AGENT_IDS = [
+  'hermes',
+  'researcher',
+  'scriptwriter',
+  'doctrine_reviewer',
+  'editorial_reviewer',
+  'narrator',
+  'audio_engineer',
+  'video_editor',
+  'thumbnail_designer',
+  'seo_optimizer',
+  'analytics_agent',
+] as const;
+export type AgentId = (typeof AGENT_IDS)[number];
+
+export type AgentRunStatus = 'running' | 'completed' | 'failed' | 'blocked' | 'awaiting_approval';
+
+/** Quality checks performed by an agent before handoff. */
+export interface AgentQualityGate {
+  passed: boolean;
+  checks: { key: string; label: string; ok: boolean; detail?: string }[];
+}
+
+/** Handoff instructions to the next agent or human reviewer. */
+export interface AgentHandoff {
+  nextAgentId?: AgentId;
+  nextStage?: EpisodeStage;
+  notes: string;
+  requiresHumanApproval?: boolean;
+}
+
+/** Persisted record of one agent execution on an episode. */
+export interface AgentRunRecord {
+  id: string;
+  episodeId: string;
+  agentId: AgentId;
+  status: AgentRunStatus;
+  startedAt: string;
+  completedAt?: string;
+  input?: Record<string, unknown>;
+  output?: Record<string, unknown>;
+  logs: string[];
+  qualityGate?: AgentQualityGate;
+  handoff?: AgentHandoff;
+  jobId?: string;
+}
+
+/** Public agent metadata returned by GET /agents. */
+export interface AgentDefinition {
+  id: AgentId;
+  name: string;
+  role: string;
+  description: string;
+  episodeStage?: EpisodeStage;
+  expertise: string[];
+  /** Job types this agent may enqueue (Hermes can enqueue all). */
+  allowedJobTypes: JobType[];
+  status: 'active' | 'planned';
+}
+
+export function isAgentId(value: unknown): value is AgentId {
+  return typeof value === 'string' && (AGENT_IDS as readonly string[]).includes(value);
+}
 
 /**
  * Pipeline execution modes.

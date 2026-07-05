@@ -24,10 +24,7 @@ import { useAuth } from './context/AuthContext';
 import { isSupabaseAuthEnabled } from './lib/supabase';
 
 import {
-  INITIAL_CHANNELS,
-  INITIAL_NOTIFICATIONS,
   INITIAL_SERIES,
-  TEAM_MEMBERS,
 } from './data';
 import { Channel, VideoProject, Notification, TeamMember } from './types';
 import type { EpisodeDetail, EpisodeSummary } from '@creator-ai-studio/shared';
@@ -79,13 +76,13 @@ export function App({ initialView = 'home' }: AppProps = {}) {
     const params = new URLSearchParams(window.location.search);
     return params.get('view') ?? initialView;
   });
-  const [channels, setChannels] = useState<Channel[]>(INITIAL_CHANNELS);
-  const [selectedChannel, setSelectedChannel] = useState<Channel>(INITIAL_CHANNELS[0]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [projects, setProjects] = useState<VideoProject[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string>('');
   const [workspaceRefreshToken, setWorkspaceRefreshToken] = useState(0);
-  const [team, setTeam] = useState<TeamMember[]>(TEAM_MEMBERS);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
 
@@ -164,19 +161,24 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   useEffect(() => {
     if (!canAccessApi) return;
     void fetchChannels()
-      .then(data =>
-        setChannels(
-          data.map(c => ({
-            id: c.id,
-            name: c.name,
-            status: c.status as Channel['status'],
-            subscribers: c.subscribers,
-            avatar: c.avatar,
-            type: c.type as Channel['type'],
-          })),
-        ),
-      )
-      .catch(() => undefined);
+      .then(data => {
+        const mapped = data.map(c => ({
+          id: c.id,
+          name: c.name,
+          status: c.status as Channel['status'],
+          subscribers: c.subscribers,
+          avatar: c.avatar,
+          type: c.type as Channel['type'],
+        }));
+        setChannels(mapped);
+        setSelectedChannel(prev =>
+          prev && mapped.some(c => c.id === prev.id) ? prev : mapped[0] ?? null,
+        );
+      })
+      .catch(() => {
+        setChannels([]);
+        setSelectedChannel(null);
+      });
   }, [canAccessApi]);
 
   const handleContinueWorking = (projectId: string) => {

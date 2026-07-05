@@ -24,7 +24,7 @@ Cursor + Hermes
 
 ## Last Updated
 
-2026-07-05
+2026-07-04
 
 ## Purpose
 
@@ -47,6 +47,10 @@ Estimated completion: **~70%** toward production Definition of Done (code ~85%, 
 
 ### Completed (code)
 
+- **Agent System v1** — Hermes orquestador + 10 especialistas (`apps/api/src/agents/`)
+  - Endpoints: `GET /api/agents`, `POST /api/episodes/:id/agents/:agentId/run`, `GET .../agent-runs`
+  - Job type `agent` en worker; UI `AgentsView` consume API real
+  - Persistencia en `{episode}/00-control/agent-runs.json`
 - AI provider diagnostics + fallback (CAS-CURSOR-WO-0033)
 - Security hardening (auth, rate limit, job claim)
 - Safe pipeline API (`run-safe-pipeline`, `publish-package`)

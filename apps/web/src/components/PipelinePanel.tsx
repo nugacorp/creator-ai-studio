@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Clapperboard,
   CloudUpload,
@@ -9,14 +9,18 @@ import {
   ExternalLink,
   Package,
   ShieldAlert,
+  Download,
 } from 'lucide-react';
 import {
   authorizePublish,
   buildPublishPackage,
   confirmPublish,
+  downloadEpisodeFile,
+  fetchEpisodeAssets,
   fetchStorageStats,
   runSafePipeline,
   fetchJob,
+  type EpisodeAssetsResponse,
   type PipelineMode,
   type PublishChecklistItem,
   type StorageStats,
@@ -54,12 +58,27 @@ export default function PipelinePanel({
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [checklist, setChecklist] = useState<PublishChecklistItem[] | null>(null);
   const [publishReady, setPublishReady] = useState(false);
+  const [assets, setAssets] = useState<EpisodeAssetsResponse | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const loadAssets = useCallback(() => {
+    void fetchEpisodeAssets(episodeId)
+      .then(data => {
+        if (data && Array.isArray(data.files)) {
+          setAssets(data);
+        } else {
+          setAssets(null);
+        }
+      })
+      .catch(() => setAssets(null));
+  }, [episodeId]);
 
   useEffect(() => {
     void fetchStorageStats()
       .then(setStorage)
       .catch(() => setStorage(null));
-  }, []);
+    loadAssets();
+  }, [loadAssets]);
 
   const startPipeline = async (mode: PipelineMode, label: string) => {
     setRunning(true);
@@ -91,6 +110,7 @@ export default function PipelinePanel({
             );
             onPipelineComplete?.();
             void fetchStorageStats().then(setStorage);
+            loadAssets();
           }
           if (updated.status === 'failed') {
             clearInterval(poll);
@@ -312,6 +332,61 @@ export default function PipelinePanel({
           Ya publiqué → archivar
         </button>
       </div>
+
+      {assets && Array.isArray(assets.files) && (
+        <div className="rounded-xl border border-white/10 bg-[#0B0F14] p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-slate-200">Archivos del episodio</p>
+            <button
+              type="button"
+              onClick={loadAssets}
+              className="text-[10px] text-indigo-300 hover:text-indigo-200"
+            >
+              Actualizar
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-500 font-mono">
+            Carpeta: {assets.workspacePath}
+            {assets.storageLocation === 'local'
+              ? ' (disco del servidor, no Google Drive hasta archivar)'
+              : assets.drivePath
+                ? ` (archivado en ${assets.drivePath})`
+                : ' (archivado, fuera del disco local)'}
+          </p>
+          {assets.message && (
+            <p className="text-[10px] text-amber-400">{assets.message}</p>
+          )}
+          <ul className="space-y-1">
+            {assets.files.map(file => (
+              <li key={file.key} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className={file.available ? 'text-slate-300' : 'text-slate-600'}>
+                  {file.available ? '✓' : '○'} {file.label}
+                  {file.filename ? ` (${file.filename})` : ''}
+                </span>
+                {file.available && (
+                  <button
+                    type="button"
+                    disabled={downloading === file.key}
+                    onClick={() => {
+                      setDownloading(file.key);
+                      void downloadEpisodeFile(episodeId, file.key)
+                        .catch(() => setError('No se pudo descargar el archivo'))
+                        .finally(() => setDownloading(null));
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg border border-white/10 hover:border-indigo-500/40 text-indigo-300 disabled:opacity-50"
+                  >
+                    <Download className="w-3 h-3" />
+                    {downloading === file.key ? '…' : 'Descargar'}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[10px] text-slate-500">
+            Descarga el MP4 o la narración para editar en DaVinci, Premiere u otra app. Los archivos viven en el volumen del servidor hasta que uses «Ya publiqué → archivar» con Drive configurado.
+          </p>
+        </div>
+      )}
     </section>
   );
 }

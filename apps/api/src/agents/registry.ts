@@ -1,0 +1,134 @@
+import type { AgentDefinition } from '@creator-ai-studio/shared';
+
+/** Canonical agent roster — Hermes orchestrates; specialists execute domain work. */
+export const AGENT_REGISTRY: AgentDefinition[] = [
+  {
+    id: 'hermes',
+    name: 'Hermes',
+    role: 'Orquestador de Producción',
+    description:
+      'Agente instalado en el VPS. Planifica el episodio, asigna tareas, coordina handoffs y bloquea publicación sin aprobación humana.',
+    episodeStage: 'planning',
+    expertise: ['planificación', 'coordinación', 'control de calidad', 'handoff'],
+    allowedJobTypes: [
+      'agent',
+      'script',
+      'seo',
+      'tts',
+      'render',
+      'thumbnail',
+      'shorts',
+      'publish_package',
+      'pipeline',
+    ],
+    status: 'active',
+  },
+  {
+    id: 'researcher',
+    name: 'Investigador Bíblico',
+    role: 'Research Agent',
+    description: 'Investiga tema, versículos, contexto histórico y notas doctrinales con fuentes verificables.',
+    episodeStage: 'research',
+    expertise: ['exégesis', 'versículos', 'contexto histórico', 'fuentes'],
+    allowedJobTypes: ['agent'],
+    status: 'active',
+  },
+  {
+    id: 'scriptwriter',
+    name: 'Guionista',
+    role: 'Scriptwriter Agent',
+    description: 'Transforma la investigación en guion narrativo con gancho, ritmo YouTube y tono cristiano.',
+    episodeStage: 'script',
+    expertise: ['guion', 'storytelling', 'hooks', 'duración'],
+    allowedJobTypes: ['agent', 'script'],
+    status: 'active',
+  },
+  {
+    id: 'doctrine_reviewer',
+    name: 'Revisor Doctrinal',
+    role: 'Doctrine Review Agent',
+    description: 'Valida exactitud bíblica, citas y sensibilidad doctrinal antes de producción.',
+    episodeStage: 'doctrine_review',
+    expertise: ['doctrina', 'teología', 'citas bíblicas', 'compliance'],
+    allowedJobTypes: ['agent'],
+    status: 'active',
+  },
+  {
+    id: 'editorial_reviewer',
+    name: 'Revisor Editorial',
+    role: 'Editorial Review Agent',
+    description: 'Revisa claridad, tono, redundancias y legibilidad del guion.',
+    episodeStage: 'editorial_review',
+    expertise: ['edición', 'claridad', 'tono', 'estilo'],
+    allowedJobTypes: ['agent'],
+    status: 'active',
+  },
+  {
+    id: 'narrator',
+    name: 'Narrador',
+    role: 'Voice Direction Agent',
+    description: 'Adapta el guion para TTS: pausas, énfasis, segmentación y selección de voz.',
+    episodeStage: 'audio',
+    expertise: ['dirección de voz', 'TTS', 'ritmo', 'pronunciación'],
+    allowedJobTypes: ['agent', 'tts'],
+    status: 'active',
+  },
+  {
+    id: 'audio_engineer',
+    name: 'Ingeniero de Audio',
+    role: 'Audio Engineer Agent',
+    description: 'Valida narración generada y documenta requisitos de mezcla/mastering.',
+    episodeStage: 'audio',
+    expertise: ['audio', 'niveles', 'limpieza', 'mezcla'],
+    allowedJobTypes: ['agent', 'tts'],
+    status: 'active',
+  },
+  {
+    id: 'video_editor',
+    name: 'Editor de Video',
+    role: 'Video Editor Agent',
+    description: 'Coordina escenas, timing visual y render FFmpeg del episodio.',
+    episodeStage: 'video',
+    expertise: ['edición', 'escenas', 'timing', 'render'],
+    allowedJobTypes: ['agent', 'render', 'shorts'],
+    status: 'active',
+  },
+  {
+    id: 'thumbnail_designer',
+    name: 'Diseñador de Miniaturas',
+    role: 'Thumbnail Designer Agent',
+    description: 'Concepto visual, prompt de imagen, texto CTR y variantes de miniatura.',
+    episodeStage: 'thumbnail',
+    expertise: ['diseño', 'CTR', 'composición', 'imagen IA'],
+    allowedJobTypes: ['agent', 'thumbnail'],
+    status: 'active',
+  },
+  {
+    id: 'seo_optimizer',
+    name: 'Optimizador SEO',
+    role: 'SEO Agent',
+    description: 'Títulos, descripción, tags, capítulos y keywords para YouTube.',
+    episodeStage: 'seo',
+    expertise: ['SEO', 'keywords', 'metadatos', 'YouTube'],
+    allowedJobTypes: ['agent', 'seo'],
+    status: 'active',
+  },
+  {
+    id: 'analytics_agent',
+    name: 'Analista',
+    role: 'Analytics Agent',
+    description: 'Interpreta métricas y recomienda mejoras para próximos episodios.',
+    episodeStage: 'analytics',
+    expertise: ['métricas', 'CTR', 'retención', 'recomendaciones'],
+    allowedJobTypes: ['agent'],
+    status: 'active',
+  },
+];
+
+export function getAgentDefinition(id: string): AgentDefinition | undefined {
+  return AGENT_REGISTRY.find(a => a.id === id);
+}
+
+export function listAgentDefinitions(): AgentDefinition[] {
+  return [...AGENT_REGISTRY];
+}

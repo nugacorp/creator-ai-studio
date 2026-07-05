@@ -27,6 +27,7 @@ import { registerSecretRoutes } from './secrets/routes.js';
 import { registerOAuthRoutes } from './oauth/routes.js';
 import { registerAIRoutes } from './ai/routes.js';
 import { registerJobRoutes } from './jobs/routes.js';
+import { registerAgentRoutes } from './agents/routes.js';
 import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
 import { createChannel, deleteChannel, listChannels, updateChannel } from './channels/store.js';
@@ -61,6 +62,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerRoutes(app, storage, prefix);
     registerAIRoutes(app, prefix);
     registerJobRoutes(app, prefix);
+    registerAgentRoutes(app, prefix, storage);
     registerSecretRoutes(app, prefix);
     registerOAuthRoutes(app, prefix);
   }
@@ -112,6 +114,91 @@ function registerRoutes(
       return { error: 'episode not found' };
     }
     return detail;
+  });
+
+  app.get(route(prefix, '/episodes/:id/assets'), async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const episode = await getEpisodeForUser(storage, id, request.userId);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      return {
+        episodeId: id,
+        workspacePath: episode.workspacePath,
+        storageLocation: 'remote',
+        drivePath: episode.drivePath ?? null,
+        message:
+          'Este episodio está archivado. Restáuralo desde Drive o contacta al administrador del servidor.',
+        files: [],
+      };
+    }
+    const { listEpisodeAssets } = await import('./media/assets.js');
+    const files = listEpisodeAssets(dir);
+    const hasScript = episode.content.script.trim().length > 0;
+    return {
+      episodeId: id,
+      workspacePath: episode.workspacePath,
+      storageLocation: 'local',
+      storageRoot: 'LOCAL_STORAGE_PATH en el servidor (p. ej. /data/episodes)',
+      files: [
+        ...files,
+        {
+          key: 'script',
+          label: 'Guion (texto)',
+          available: hasScript,
+          filename: hasScript ? 'guion.txt' : undefined,
+        },
+      ],
+    };
+  });
+
+  app.get(route(prefix, '/episodes/:id/files/:asset'), async (request, reply) => {
+    const { id, asset } = request.params as { id: string; asset: string };
+    const episode = await getEpisodeForUser(storage, id, request.userId);
+    if (!episode) {
+      reply.code(404);
+      return { error: 'episode not found' };
+    }
+    const dir = await storage.getEpisodeDirectory(id);
+    if (!dir) {
+      reply.code(400);
+      return { error: 'episodio archivado — no disponible en disco local' };
+    }
+
+    const { createReadStream } = await import('node:fs');
+    const { resolveEpisodeAssetPath, buildScriptDownload } = await import('./media/assets.js');
+
+    if (asset === 'script') {
+      if (!episode.content.script.trim()) {
+        reply.code(404);
+        return { error: 'guion no disponible' };
+      }
+      const { body, filename } = await buildScriptDownload(dir, episode.title, episode.content.script);
+      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      reply.type('text/plain; charset=utf-8');
+      return body;
+    }
+
+    const allowed = new Set(['video', 'short', 'thumbnail', 'audio', 'content']);
+    if (!allowed.has(asset)) {
+      reply.code(400);
+      return { error: 'invalid asset' };
+    }
+
+    const resolved = resolveEpisodeAssetPath(
+      dir,
+      asset as 'video' | 'short' | 'thumbnail' | 'audio' | 'content',
+    );
+    if (!resolved) {
+      reply.code(404);
+      return { error: 'archivo no encontrado' };
+    }
+    reply.header('Content-Disposition', `attachment; filename="${resolved.filename}"`);
+    reply.type(resolved.contentType);
+    return reply.send(createReadStream(resolved.path));
   });
 
   app.post(route(prefix, '/episodes'), { schema: { body: createEpisodeBody } }, async (request, reply) => {
