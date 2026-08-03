@@ -126,7 +126,7 @@ Music tests pass without Lyria credentials (`dcb557a`).
 
 1. **Production environment** — no separate Coolify app yet
 2. **Domain** — still sslip.io
-3. **rclone on VPS** � `RCLONE_REMOTE` synced; interactive OAuth (`vps-setup-rclone.sh`) still pending
+3. **rclone on VPS** � `RCLONE_REMOTE` synced; interactive OAuth (`vps-setup-rclone.sh`) still pending
 4. **E2E staging** — full TTS + FFmpeg render sign-off pending
 
 ### Next objectives

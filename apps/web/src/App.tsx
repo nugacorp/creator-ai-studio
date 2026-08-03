@@ -649,7 +649,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
             />
           )}
 
-          {currentView === 'automation' && <AutomationView />}
+          {currentView === 'automation' && (
+            <AutomationView activeEpisodeId={activeProject?.id ?? null} />
+          )}
 
           {currentView === 'agents' && (
             <AgentStudioView onOpenProjects={() => setCurrentView('projects')} />

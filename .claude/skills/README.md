@@ -13,6 +13,7 @@ them automatically when this repo is open; invoke one explicitly with
 | [cloudflare-tunnel](cloudflare-tunnel/SKILL.md) | Public HTTPS URL for localhost | ⚙️ install | `winget install Cloudflare.cloudflared` |
 | [testsprite-testing](testsprite-testing/SKILL.md) | AI-generated e2e tests with video (MCP) | ⚙️ key | `TESTSPRITE_API_KEY` + restart Claude Code |
 | [context7-docs](context7-docs/SKILL.md) | Inject current library docs (MCP) | ⚙️ enable | approve MCP; optional `CONTEXT7_API_KEY` |
+| [ui-ux-pro-max](ui-ux-pro-max/SKILL.md) | UI/UX design intelligence and reusable design-system guidance | ✅ in-repo | — |
 
 ## MCP servers
 Context7 and TestSprite run as MCP servers, configured in

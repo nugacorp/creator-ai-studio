@@ -7,6 +7,12 @@
       "skillPath": ".claude/skills/ffmpeg/SKILL.md",
       "computedHash": "453ce416b404291eb9ae04164b68447b3f35d9fb019f924ab5b72c503b2a6dc8"
     },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "0b6d8c6d0e9c6f4f65b19076f4d3f8d4c7d5d65eb4f21d44a7d7a4fd14bce3f1"
+    },
     "monorepo-management": {
       "source": "wshobson/agents",
       "sourceType": "github",

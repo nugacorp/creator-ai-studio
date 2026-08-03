@@ -28,7 +28,28 @@
 
 import { getSupabaseClient, isSupabaseAuthEnabled } from './lib/supabase';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+const RAW_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
+
+function resolveApiBaseUrl(): string {
+  const raw = RAW_API_BASE_URL;
+  if (typeof window === 'undefined' || !raw.startsWith('http')) {
+    return raw;
+  }
+
+  try {
+    const target = new URL(raw);
+    const currentOrigin = window.location.origin;
+    const isLocalTarget = ['localhost', '127.0.0.1', '0.0.0.0'].includes(target.hostname);
+    if (isLocalTarget && target.origin !== currentOrigin) {
+      return '/api';
+    }
+    return raw;
+  } catch {
+    return raw;
+  }
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 let apiAccessToken: string | null = null;
 let onUnauthorized: (() => void) | null = null;
