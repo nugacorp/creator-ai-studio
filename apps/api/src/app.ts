@@ -30,6 +30,7 @@ import { registerJobRoutes } from './jobs/routes.js';
 import { registerAgentRoutes } from './agents/routes.js';
 import { registerIdeaRoutes } from './ideas/routes.js';
 import { registerTeamRoutes } from './team/routes.js';
+import { registerDigitalAssetRoutes } from './digital-assets/routes.js';
 import { registerCopilotRoutes } from './copilot/routes.js';
 import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
@@ -91,6 +92,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerAgentRoutes(app, prefix, storage);
     registerIdeaRoutes(app, prefix, storage);
     registerTeamRoutes(app, prefix);
+    registerDigitalAssetRoutes(app, prefix);
     registerCopilotRoutes(app, prefix, storage);
     registerSecretRoutes(app, prefix);
     registerOAuthRoutes(app, prefix);
@@ -590,7 +592,7 @@ function registerRoutes(
     return { template };
   });
 
-  app.post(route(prefix, '/calendar/sunday-service-post/image'), async (request, reply) => {
+  app.post(route(prefix, '/calendar/sunday-service-post/image'), async (request) => {
     const query = request.query as { channelId?: string };
     const body = (request.body ?? {}) as {
       serviceTopic?: string;

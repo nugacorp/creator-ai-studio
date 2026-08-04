@@ -1,4 +1,6 @@
 > ⚠️ **Snapshot histórico — ver [PROJECT_STATE.md](../../PROJECT_STATE.md) para el estado actual.** Este roadmap refleja fases 0–7 al 2026-06-25 y puede estar desfasado respecto a `staging`.
+>
+> 🧭 **Nuevo rumbo de producto (equipo digital de iglesia):** ver [PLAN_IGLESIA_EQUIPO_DIGITAL.md](../03-product/PLAN_IGLESIA_EQUIPO_DIGITAL.md).
 
 ## Document ID
 

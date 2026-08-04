@@ -61,6 +61,14 @@ function canManageTeam(team: TeamData, userId?: string): boolean {
   return team.ownerUserId === userId;
 }
 
+function canWriteForRole(team: TeamData, userId?: string): boolean {
+  if (!team.ownerUserId) return true;
+  if (!userId) return false;
+  if (team.ownerUserId === userId) return true;
+  const member = team.members.find(m => m.userId === userId);
+  return member?.role === 'editor';
+}
+
 function findOwner(team: TeamData): TeamMemberRecord | undefined {
   return team.members.find(m => m.role === 'owner');
 }
@@ -72,6 +80,11 @@ export async function getTeamResponse(userId?: string): Promise<TeamResponse> {
     currentUserId: userId,
     canManage: canManageTeam(team, userId),
   };
+}
+
+export async function canWriteWorkspaceContent(userId?: string): Promise<boolean> {
+  const team = await readTeam();
+  return canWriteForRole(team, userId);
 }
 
 export async function syncTeamOwner(

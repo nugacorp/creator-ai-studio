@@ -988,6 +988,142 @@ export interface AgentsListResponse {
   orchestrator: string;
 }
 
+export type DigitalAssetType = import('@creator-ai-studio/shared').DigitalAssetType;
+export type DigitalMinistry = import('@creator-ai-studio/shared').DigitalMinistry;
+export type DigitalPlatform = import('@creator-ai-studio/shared').DigitalPlatform;
+export type DigitalAssetSourceKind = import('@creator-ai-studio/shared').DigitalAssetSourceKind;
+
+export interface DigitalAssetRecord {
+  id: string;
+  name: string;
+  type: DigitalAssetType;
+  ministry: DigitalMinistry;
+  tags: string[];
+  platforms: DigitalPlatform[];
+  sourceKind: DigitalAssetSourceKind;
+  episodeId?: string;
+  assetKey?: string;
+  externalUrl?: string;
+  uploadedFileName?: string;
+  uploadedMimeType?: string;
+  uploadedSizeBytes?: number;
+  uploadedFilePath?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  userId?: string;
+}
+
+export interface CreateDigitalAssetInput {
+  name: string;
+  type: DigitalAssetType;
+  ministry?: DigitalMinistry;
+  tags?: string[];
+  platforms?: DigitalPlatform[];
+  sourceKind: DigitalAssetSourceKind;
+  episodeId?: string;
+  assetKey?: string;
+  externalUrl?: string;
+  notes?: string;
+}
+
+export interface UpdateDigitalAssetInput {
+  name?: string;
+  type?: DigitalAssetType;
+  ministry?: DigitalMinistry;
+  tags?: string[];
+  platforms?: DigitalPlatform[];
+  sourceKind?: DigitalAssetSourceKind;
+  episodeId?: string;
+  assetKey?: string;
+  externalUrl?: string;
+  notes?: string;
+}
+
+export interface UploadDigitalAssetInput {
+  name: string;
+  type: DigitalAssetType;
+  ministry?: DigitalMinistry;
+  tags?: string[];
+  platforms?: DigitalPlatform[];
+  notes?: string;
+  file: {
+    name: string;
+    mimeType?: string;
+    contentBase64: string;
+  };
+}
+
+export async function fetchDigitalAssets(options?: {
+  ministry?: DigitalMinistry;
+  type?: DigitalAssetType;
+  search?: string;
+}): Promise<DigitalAssetRecord[]> {
+  const params = new URLSearchParams();
+  if (options?.ministry) params.set('ministry', options.ministry);
+  if (options?.type) params.set('type', options.type);
+  if (options?.search?.trim()) params.set('search', options.search.trim());
+  const query = params.toString();
+  const data = await apiFetch<{ items: DigitalAssetRecord[] }>(`/digital-assets${query ? `?${query}` : ''}`);
+  return data.items;
+}
+
+export async function createDigitalAsset(input: CreateDigitalAssetInput): Promise<DigitalAssetRecord> {
+  return apiFetch<DigitalAssetRecord>('/digital-assets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateDigitalAsset(
+  id: string,
+  input: UpdateDigitalAssetInput,
+): Promise<DigitalAssetRecord> {
+  return apiFetch<DigitalAssetRecord>(`/digital-assets/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function uploadDigitalAsset(input: UploadDigitalAssetInput): Promise<DigitalAssetRecord> {
+  return apiFetch<DigitalAssetRecord>('/digital-assets/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteDigitalAsset(id: string): Promise<{ ok: boolean; id: string }> {
+  return apiFetch<{ ok: boolean; id: string }>(`/digital-assets/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function downloadDigitalAssetFile(
+  id: string,
+  fallbackFilename = 'asset-file',
+): Promise<void> {
+  const headers = await buildAuthHeaders();
+  const response = await fetch(`${API_BASE_URL}/digital-assets/${encodeURIComponent(id)}/file`, {
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error(`download failed (${response.status})`);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match?.[1] ?? fallbackFilename;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export interface AgentRunsResponse {
   episodeId: string;
   runs: import('@creator-ai-studio/shared').AgentRunRecord[];

@@ -147,6 +147,97 @@ export const updateTeamMemberBody = {
   additionalProperties: false,
 } as const;
 
+export const createDigitalAssetBody = {
+  type: 'object',
+  required: ['name', 'type', 'sourceKind'],
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+    type: TEXT_SHORT,
+    ministry: TEXT_SHORT,
+    tags: {
+      type: 'array',
+      maxItems: 50,
+      items: { type: 'string', maxLength: 80 },
+    },
+    platforms: {
+      type: 'array',
+      maxItems: 20,
+      items: { type: 'string', maxLength: 40 },
+    },
+    sourceKind: { type: 'string', enum: ['episode_asset', 'external_url', 'uploaded_file'] },
+    episodeId: TEXT_SHORT,
+    assetKey: TEXT_SHORT,
+    externalUrl: TEXT_MEDIUM,
+    uploadedFileName: TEXT_SHORT,
+    uploadedMimeType: TEXT_SHORT,
+    uploadedSizeBytes: { type: 'integer', minimum: 0, maximum: 1_000_000_000 },
+    uploadedFilePath: TEXT_MEDIUM,
+    notes: TEXT_MEDIUM,
+  },
+  additionalProperties: false,
+} as const;
+
+export const updateDigitalAssetBody = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+    type: TEXT_SHORT,
+    ministry: TEXT_SHORT,
+    tags: {
+      type: 'array',
+      maxItems: 50,
+      items: { type: 'string', maxLength: 80 },
+    },
+    platforms: {
+      type: 'array',
+      maxItems: 20,
+      items: { type: 'string', maxLength: 40 },
+    },
+    sourceKind: { type: 'string', enum: ['episode_asset', 'external_url', 'uploaded_file'] },
+    episodeId: TEXT_SHORT,
+    assetKey: TEXT_SHORT,
+    externalUrl: TEXT_MEDIUM,
+    uploadedFileName: TEXT_SHORT,
+    uploadedMimeType: TEXT_SHORT,
+    uploadedSizeBytes: { type: 'integer', minimum: 0, maximum: 1_000_000_000 },
+    uploadedFilePath: TEXT_MEDIUM,
+    notes: TEXT_MEDIUM,
+  },
+  additionalProperties: false,
+} as const;
+
+export const uploadDigitalAssetBody = {
+  type: 'object',
+  required: ['name', 'type', 'file'],
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+    type: TEXT_SHORT,
+    ministry: TEXT_SHORT,
+    tags: {
+      type: 'array',
+      maxItems: 50,
+      items: { type: 'string', maxLength: 80 },
+    },
+    platforms: {
+      type: 'array',
+      maxItems: 20,
+      items: { type: 'string', maxLength: 40 },
+    },
+    notes: TEXT_MEDIUM,
+    file: {
+      type: 'object',
+      required: ['name', 'contentBase64'],
+      properties: {
+        name: { type: 'string', minLength: 1, maxLength: 255 },
+        mimeType: { type: 'string', maxLength: 150 },
+        contentBase64: TEXT_LONG,
+      },
+      additionalProperties: false,
+    },
+  },
+  additionalProperties: false,
+} as const;
+
 export const createJobBody = {
   type: 'object',
   required: ['type'],

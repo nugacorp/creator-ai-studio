@@ -33,7 +33,7 @@ const SIDEBAR_ITEMS = [
   'Proyectos',
   'Contenido',
   'IA Copilot',
-  'Biblioteca IA',
+  'Biblioteca y DAM',
   'Publicaciones',
   'Analytics',
   'Automatización',

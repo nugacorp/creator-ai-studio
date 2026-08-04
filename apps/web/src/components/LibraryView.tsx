@@ -13,15 +13,28 @@ import {
   RefreshCw,
   FolderOpen,
   Layers,
+  Trash2,
 } from 'lucide-react';
 import {
   aiGenerateScript,
+  createDigitalAsset,
+  downloadDigitalAssetFile,
+  deleteDigitalAsset,
   downloadEpisodeFile,
+  fetchDigitalAssets,
   fetchEpisodeAssets,
   fetchEpisodeDetail,
   fetchEpisodes,
   generateEpisodeMusic,
   fetchEpisodeAssetObjectUrl,
+  type CreateDigitalAssetInput,
+  type DigitalAssetRecord,
+  type UpdateDigitalAssetInput,
+  type DigitalAssetType,
+  type DigitalMinistry,
+  type DigitalPlatform,
+  updateDigitalAsset,
+  uploadDigitalAsset,
 } from '../api';
 import type { WorkspaceTab } from '../lib/dashboardNavigation';
 import {
@@ -40,7 +53,38 @@ interface LibraryViewProps {
   onOpenWorkspace: (episodeId: string, initialTab?: WorkspaceTab) => void;
 }
 
-type LibraryTab = 'browse' | 'templates' | 'music';
+type LibraryTab = 'browse' | 'templates' | 'music' | 'dam';
+
+const DAM_TYPES: DigitalAssetType[] = [
+  'video',
+  'audio',
+  'image',
+  'document',
+  'thumbnail',
+  'overlay',
+  'template',
+  'stream',
+];
+
+const DAM_MINISTRIES: DigitalMinistry[] = [
+  'general',
+  'predicacion',
+  'adoracion',
+  'jovenes',
+  'ninos',
+  'comunicacion',
+  'produccion',
+];
+
+const DAM_PLATFORMS: DigitalPlatform[] = [
+  'youtube',
+  'facebook',
+  'instagram',
+  'tiktok',
+  'x',
+  'web',
+  'stream',
+];
 
 const FILTER_OPTIONS: { id: LibraryFilter; label: string }[] = [
   { id: 'all', label: 'Todos' },
@@ -81,6 +125,36 @@ export default function LibraryView({ onAddNewScript, onOpenWorkspace }: Library
   const [musicLabel, setMusicLabel] = useState<string | null>(null);
   const [musicError, setMusicError] = useState<string | null>(null);
   const [musicSkipped, setMusicSkipped] = useState(false);
+
+  const [damAssets, setDamAssets] = useState<DigitalAssetRecord[]>([]);
+  const [damLoading, setDamLoading] = useState(false);
+  const [damError, setDamError] = useState<string | null>(null);
+  const [damSearch, setDamSearch] = useState('');
+  const [damTypeFilter, setDamTypeFilter] = useState<DigitalAssetType | 'all'>('all');
+  const [damMinistryFilter, setDamMinistryFilter] = useState<DigitalMinistry | 'all'>('all');
+
+  const [damName, setDamName] = useState('');
+  const [damType, setDamType] = useState<DigitalAssetType>('image');
+  const [damMinistry, setDamMinistry] = useState<DigitalMinistry>('general');
+  const [damSourceKind, setDamSourceKind] = useState<'episode_asset' | 'external_url' | 'uploaded_file'>('episode_asset');
+  const [damEpisodeId, setDamEpisodeId] = useState('');
+  const [damAssetKey, setDamAssetKey] = useState('thumbnail');
+  const [damExternalUrl, setDamExternalUrl] = useState('');
+  const [damTags, setDamTags] = useState('');
+  const [damPlatforms, setDamPlatforms] = useState<DigitalPlatform[]>(['youtube']);
+  const [damNotes, setDamNotes] = useState('');
+  const [damSaving, setDamSaving] = useState(false);
+  const [damUploadFile, setDamUploadFile] = useState<File | null>(null);
+  const [damUploading, setDamUploading] = useState(false);
+  const [damEditingId, setDamEditingId] = useState<string | null>(null);
+  const [damEditDraft, setDamEditDraft] = useState<{
+    name: string;
+    type: DigitalAssetType;
+    ministry: DigitalMinistry;
+    tags: string;
+    notes: string;
+    platforms: DigitalPlatform[];
+  } | null>(null);
 
   useEffect(() => {
     if (!musicEpisodeId && entries.length > 0) {
@@ -155,9 +229,188 @@ export default function LibraryView({ onAddNewScript, onOpenWorkspace }: Library
     }
   }, []);
 
+  const loadDamAssets = useCallback(async () => {
+    setDamLoading(true);
+    setDamError(null);
+    try {
+      const items = await fetchDigitalAssets({
+        ...(damTypeFilter !== 'all' ? { type: damTypeFilter } : {}),
+        ...(damMinistryFilter !== 'all' ? { ministry: damMinistryFilter } : {}),
+        ...(damSearch.trim() ? { search: damSearch.trim() } : {}),
+      });
+      setDamAssets(items);
+    } catch {
+      setDamError('No se pudo cargar el Centro DAM.');
+      setDamAssets([]);
+    } finally {
+      setDamLoading(false);
+    }
+  }, [damTypeFilter, damMinistryFilter, damSearch]);
+
   useEffect(() => {
     void loadLibrary();
   }, [loadLibrary]);
+
+  useEffect(() => {
+    if (activeTab === 'dam') {
+      void loadDamAssets();
+    }
+  }, [activeTab, loadDamAssets]);
+
+  const handleCreateDamAsset = async () => {
+    if (!damName.trim()) return;
+
+    const input: CreateDigitalAssetInput = {
+      name: damName.trim(),
+      type: damType,
+      ministry: damMinistry,
+      tags: damTags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(Boolean),
+      platforms: damPlatforms,
+      sourceKind: damSourceKind,
+      ...(damSourceKind === 'episode_asset'
+        ? {
+            episodeId: damEpisodeId,
+            assetKey: damAssetKey,
+          }
+        : damSourceKind === 'external_url'
+          ? {
+            externalUrl: damExternalUrl.trim(),
+          }
+          : {}),
+      ...(damNotes.trim() ? { notes: damNotes.trim() } : {}),
+    };
+
+    setDamSaving(true);
+    try {
+      await createDigitalAsset(input);
+      setDamName('');
+      setDamTags('');
+      setDamNotes('');
+      setDamExternalUrl('');
+      await loadDamAssets();
+    } catch (e) {
+      setDamError(e instanceof Error ? e.message : 'No se pudo crear el activo.');
+    } finally {
+      setDamSaving(false);
+    }
+  };
+
+  const handleDeleteDamAsset = async (id: string) => {
+    const ok = window.confirm('Eliminar este activo del Centro DAM?');
+    if (!ok) return;
+    try {
+      await deleteDigitalAsset(id);
+      await loadDamAssets();
+    } catch {
+      setDamError('No se pudo eliminar el activo.');
+    }
+  };
+
+  const handleDuplicateDamAsset = async (asset: DigitalAssetRecord) => {
+    try {
+      if (asset.sourceKind === 'uploaded_file') {
+        setDamError('Los activos subidos se duplican manualmente subiendo el archivo de nuevo.');
+        return;
+      }
+      await createDigitalAsset({
+        name: `Copia de ${asset.name}`,
+        type: asset.type,
+        ministry: asset.ministry,
+        tags: asset.tags,
+        platforms: asset.platforms,
+        sourceKind: asset.sourceKind,
+        ...(asset.episodeId ? { episodeId: asset.episodeId } : {}),
+        ...(asset.assetKey ? { assetKey: asset.assetKey } : {}),
+        ...(asset.externalUrl ? { externalUrl: asset.externalUrl } : {}),
+        ...(asset.notes ? { notes: asset.notes } : {}),
+      });
+      await loadDamAssets();
+    } catch {
+      setDamError('No se pudo duplicar el activo.');
+    }
+  };
+
+  const handleStartEditDamAsset = (asset: DigitalAssetRecord) => {
+    setDamEditingId(asset.id);
+    setDamEditDraft({
+      name: asset.name,
+      type: asset.type,
+      ministry: asset.ministry,
+      tags: asset.tags.join(', '),
+      notes: asset.notes ?? '',
+      platforms: asset.platforms,
+    });
+  };
+
+  const handleSaveEditDamAsset = async () => {
+    if (!damEditingId || !damEditDraft) return;
+    const patch: UpdateDigitalAssetInput = {
+      name: damEditDraft.name,
+      type: damEditDraft.type,
+      ministry: damEditDraft.ministry,
+      tags: damEditDraft.tags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(Boolean),
+      platforms: damEditDraft.platforms,
+      notes: damEditDraft.notes,
+    };
+    try {
+      await updateDigitalAsset(damEditingId, patch);
+      setDamEditingId(null);
+      setDamEditDraft(null);
+      await loadDamAssets();
+    } catch {
+      setDamError('No se pudo actualizar el activo.');
+    }
+  };
+
+  const handleUploadDamAsset = async () => {
+    if (!damUploadFile || !damName.trim()) return;
+    try {
+      setDamUploading(true);
+      const contentBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = String(reader.result ?? '');
+          const [, base64 = ''] = result.split(',');
+          resolve(base64);
+        };
+        reader.onerror = () => reject(new Error('No se pudo leer el archivo seleccionado'));
+        reader.readAsDataURL(damUploadFile);
+      });
+
+      await uploadDigitalAsset({
+        name: damName.trim(),
+        type: damType,
+        ministry: damMinistry,
+        tags: damTags
+          .split(',')
+          .map(tag => tag.trim())
+          .filter(Boolean),
+        platforms: damPlatforms,
+        notes: damNotes.trim() || undefined,
+        file: {
+          name: damUploadFile.name,
+          mimeType: damUploadFile.type || 'application/octet-stream',
+          contentBase64,
+        },
+      });
+
+      setDamUploadFile(null);
+      setDamName('');
+      setDamTags('');
+      setDamNotes('');
+      await loadDamAssets();
+    } catch (e) {
+      setDamError(e instanceof Error ? e.message : 'No se pudo subir el archivo.');
+    } finally {
+      setDamUploading(false);
+    }
+  };
 
   const filteredEntries = useMemo(
     () => entries.filter(entry => matchesLibraryFilter(entry, filter)),
@@ -221,7 +474,7 @@ export default function LibraryView({ onAddNewScript, onOpenWorkspace }: Library
     <div className="space-y-6 animate-in fade-in duration-200">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-display font-bold text-white">Biblioteca IA</h2>
+          <h2 className="text-lg font-display font-bold text-white">Biblioteca y Centro DAM</h2>
           <p className="text-xs text-[#8B949E] mt-1 max-w-xl">
             Activos centralizados de tus episodios: guiones, imágenes de escenas (04-assets), miniaturas, audio y video.
             Las imágenes se reutilizan desde Escenas — no se regeneran si ya existen.
@@ -241,6 +494,7 @@ export default function LibraryView({ onAddNewScript, onOpenWorkspace }: Library
       <div className="flex items-center gap-1.5 border-b border-[rgba(255,255,255,0.05)]">
         {[
           { id: 'browse' as const, label: 'Explorar activos', icon: FolderOpen },
+          { id: 'dam' as const, label: 'Centro DAM', icon: Layers },
           { id: 'templates' as const, label: 'Plantillas de guion', icon: Sliders },
           { id: 'music' as const, label: 'Generador Lyria', icon: Music },
         ].map(tab => {
@@ -362,6 +616,59 @@ export default function LibraryView({ onAddNewScript, onOpenWorkspace }: Library
             musicError={musicError}
             musicSkipped={musicSkipped}
             onGenerate={() => void handleGenerateMusic()}
+            onOpenWorkspace={onOpenWorkspace}
+          />
+        ) : activeTab === 'dam' ? (
+          <DamPanel
+            assets={damAssets}
+            loading={damLoading}
+            error={damError}
+            search={damSearch}
+            setSearch={setDamSearch}
+            typeFilter={damTypeFilter}
+            setTypeFilter={setDamTypeFilter}
+            ministryFilter={damMinistryFilter}
+            setMinistryFilter={setDamMinistryFilter}
+            onReload={() => void loadDamAssets()}
+            onDelete={id => void handleDeleteDamAsset(id)}
+            onDuplicate={asset => void handleDuplicateDamAsset(asset)}
+            name={damName}
+            setName={setDamName}
+            type={damType}
+            setType={setDamType}
+            ministry={damMinistry}
+            setMinistry={setDamMinistry}
+            sourceKind={damSourceKind}
+            setSourceKind={setDamSourceKind}
+            episodeId={damEpisodeId}
+            setEpisodeId={setDamEpisodeId}
+            assetKey={damAssetKey}
+            setAssetKey={setDamAssetKey}
+            externalUrl={damExternalUrl}
+            setExternalUrl={setDamExternalUrl}
+            tags={damTags}
+            setTags={setDamTags}
+            platforms={damPlatforms}
+            setPlatforms={setDamPlatforms}
+            notes={damNotes}
+            setNotes={setDamNotes}
+            saving={damSaving}
+            uploadFile={damUploadFile}
+            setUploadFile={setDamUploadFile}
+            uploading={damUploading}
+            onUpload={() => void handleUploadDamAsset()}
+            onCreate={() => void handleCreateDamAsset()}
+            editingId={damEditingId}
+            editDraft={damEditDraft}
+            setEditDraft={setDamEditDraft}
+            onStartEdit={handleStartEditDamAsset}
+            onCancelEdit={() => {
+              setDamEditingId(null);
+              setDamEditDraft(null);
+            }}
+            onSaveEdit={() => void handleSaveEditDamAsset()}
+            onDownloadUploaded={asset => void downloadDigitalAssetFile(asset.id, asset.uploadedFileName ?? asset.name)}
+            episodes={entries.map(entry => ({ id: entry.episode.id, title: entry.episode.title }))}
             onOpenWorkspace={onOpenWorkspace}
           />
         ) : (
@@ -716,6 +1023,537 @@ function MusicGeneratorPanel({
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function DamPanel({
+  assets,
+  loading,
+  error,
+  search,
+  setSearch,
+  typeFilter,
+  setTypeFilter,
+  ministryFilter,
+  setMinistryFilter,
+  onReload,
+  onDelete,
+  onDuplicate,
+  name,
+  setName,
+  type,
+  setType,
+  ministry,
+  setMinistry,
+  sourceKind,
+  setSourceKind,
+  episodeId,
+  setEpisodeId,
+  assetKey,
+  setAssetKey,
+  externalUrl,
+  setExternalUrl,
+  tags,
+  setTags,
+  platforms,
+  setPlatforms,
+  notes,
+  setNotes,
+  saving,
+  uploadFile,
+  setUploadFile,
+  uploading,
+  onUpload,
+  onCreate,
+  editingId,
+  editDraft,
+  setEditDraft,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onDownloadUploaded,
+  episodes,
+  onOpenWorkspace,
+}: {
+  assets: DigitalAssetRecord[];
+  loading: boolean;
+  error: string | null;
+  search: string;
+  setSearch: (value: string) => void;
+  typeFilter: DigitalAssetType | 'all';
+  setTypeFilter: (value: DigitalAssetType | 'all') => void;
+  ministryFilter: DigitalMinistry | 'all';
+  setMinistryFilter: (value: DigitalMinistry | 'all') => void;
+  onReload: () => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (asset: DigitalAssetRecord) => void;
+  name: string;
+  setName: (value: string) => void;
+  type: DigitalAssetType;
+  setType: (value: DigitalAssetType) => void;
+  ministry: DigitalMinistry;
+  setMinistry: (value: DigitalMinistry) => void;
+  sourceKind: 'episode_asset' | 'external_url' | 'uploaded_file';
+  setSourceKind: (value: 'episode_asset' | 'external_url' | 'uploaded_file') => void;
+  episodeId: string;
+  setEpisodeId: (value: string) => void;
+  assetKey: string;
+  setAssetKey: (value: string) => void;
+  externalUrl: string;
+  setExternalUrl: (value: string) => void;
+  tags: string;
+  setTags: (value: string) => void;
+  platforms: DigitalPlatform[];
+  setPlatforms: (value: DigitalPlatform[]) => void;
+  notes: string;
+  setNotes: (value: string) => void;
+  saving: boolean;
+  uploadFile: File | null;
+  setUploadFile: (value: File | null) => void;
+  uploading: boolean;
+  onUpload: () => void;
+  onCreate: () => void;
+  editingId: string | null;
+  editDraft: {
+    name: string;
+    type: DigitalAssetType;
+    ministry: DigitalMinistry;
+    tags: string;
+    notes: string;
+    platforms: DigitalPlatform[];
+  } | null;
+  setEditDraft: (value: {
+    name: string;
+    type: DigitalAssetType;
+    ministry: DigitalMinistry;
+    tags: string;
+    notes: string;
+    platforms: DigitalPlatform[];
+  } | null) => void;
+  onStartEdit: (asset: DigitalAssetRecord) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => void;
+  onDownloadUploaded: (asset: DigitalAssetRecord) => void;
+  episodes: Array<{ id: string; title: string }>;
+  onOpenWorkspace: (episodeId: string, initialTab?: WorkspaceTab) => void;
+}) {
+  const togglePlatform = (platform: DigitalPlatform) => {
+    if (platforms.includes(platform)) {
+      setPlatforms(platforms.filter(p => p !== platform));
+      return;
+    }
+    setPlatforms([...platforms, platform]);
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="lg:col-span-2 space-y-4 bg-[#0B0F14] p-5 rounded-2xl border border-[rgba(255,255,255,0.05)]">
+        <div className="flex items-center justify-between">
+          <h4 className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">Nuevo activo digital</h4>
+          <button
+            type="button"
+            onClick={onReload}
+            className="text-[10px] text-[#8B949E] hover:text-white font-semibold cursor-pointer"
+          >
+            Recargar
+          </button>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Nombre</label>
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+            placeholder="Miniatura serie esperanza"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Tipo</label>
+            <select
+              value={type}
+              onChange={e => setType(e.target.value as DigitalAssetType)}
+              className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-2.5 py-2 text-xs text-white"
+            >
+              {DAM_TYPES.map(item => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Ministerio</label>
+            <select
+              value={ministry}
+              onChange={e => setMinistry(e.target.value as DigitalMinistry)}
+              className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-2.5 py-2 text-xs text-white"
+            >
+              {DAM_MINISTRIES.map(item => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Fuente</label>
+          <select
+            value={sourceKind}
+            onChange={e => setSourceKind(e.target.value as 'episode_asset' | 'external_url' | 'uploaded_file')}
+            className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+          >
+            <option value="episode_asset">Activo de episodio</option>
+            <option value="external_url">URL externa</option>
+            <option value="uploaded_file">Subir archivo</option>
+          </select>
+        </div>
+
+        {sourceKind === 'episode_asset' ? (
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Episodio</label>
+              <select
+                value={episodeId}
+                onChange={e => setEpisodeId(e.target.value)}
+                className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+              >
+                <option value="">Selecciona un episodio...</option>
+                {episodes.map(ep => (
+                  <option key={ep.id} value={ep.id}>
+                    {ep.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Asset key</label>
+              <select
+                value={assetKey}
+                onChange={e => setAssetKey(e.target.value)}
+                className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+              >
+                {['video', 'short', 'thumbnail', 'audio', 'music', 'script'].map(key => (
+                  <option key={key} value={key}>
+                    {key}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : sourceKind === 'external_url' ? (
+          <div>
+            <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">URL externa</label>
+            <input
+              value={externalUrl}
+              onChange={e => setExternalUrl(e.target.value)}
+              className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+              placeholder="https://..."
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Archivo</label>
+            <input
+              type="file"
+              onChange={e => setUploadFile(e.target.files?.[0] ?? null)}
+              className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+            />
+            {uploadFile ? (
+              <p className="text-[10px] text-[#8B949E] mt-1">
+                {uploadFile.name} ({Math.round(uploadFile.size / 1024)} KB)
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        <div>
+          <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Tags (coma)</label>
+          <input
+            value={tags}
+            onChange={e => setTags(e.target.value)}
+            className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+            placeholder="sermon, domingo, esperanza"
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Plataformas</label>
+          <div className="flex flex-wrap gap-1.5">
+            {DAM_PLATFORMS.map(platform => {
+              const active = platforms.includes(platform);
+              return (
+                <button
+                  key={platform}
+                  type="button"
+                  onClick={() => togglePlatform(platform)}
+                  className={`px-2 py-1 rounded-full text-[10px] font-bold border cursor-pointer ${
+                    active
+                      ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-300'
+                      : 'bg-[#15191E] border-white/10 text-[#8B949E]'
+                  }`}
+                >
+                  {platform}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Notas</label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            rows={2}
+            className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl p-2 text-xs text-white resize-none"
+          />
+        </div>
+
+        {sourceKind === 'uploaded_file' ? (
+          <button
+            type="button"
+            disabled={uploading || !name.trim() || !uploadFile}
+            onClick={onUpload}
+            className="w-full py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold cursor-pointer"
+          >
+            {uploading ? 'Subiendo...' : 'Subir y registrar activo'}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={saving || !name.trim()}
+            onClick={onCreate}
+            className="w-full py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold cursor-pointer"
+          >
+            {saving ? 'Guardando...' : 'Guardar activo'}
+          </button>
+        )}
+      </div>
+
+      <div className="lg:col-span-3 bg-[#0B0F14] p-5 rounded-2xl border border-[rgba(255,255,255,0.05)] space-y-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+          <div className="flex-1">
+            <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Buscar</label>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+              placeholder="nombre, tags, notas"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Tipo</label>
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value as DigitalAssetType | 'all')}
+              className="bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+            >
+              <option value="all">Todos</option>
+              {DAM_TYPES.map(item => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-[#8B949E] uppercase tracking-wider block mb-1">Ministerio</label>
+            <select
+              value={ministryFilter}
+              onChange={e => setMinistryFilter(e.target.value as DigitalMinistry | 'all')}
+              className="bg-[#15191E] border border-[rgba(255,255,255,0.05)] rounded-2xl px-3 py-2 text-xs text-white"
+            >
+              <option value="all">Todos</option>
+              {DAM_MINISTRIES.map(item => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={onReload}
+            className="px-3 py-2 rounded-2xl bg-[#15191E] border border-white/10 text-xs text-[#8B949E] hover:text-white cursor-pointer"
+          >
+            Filtrar
+          </button>
+        </div>
+
+        {error ? <p className="text-xs text-rose-400">{error}</p> : null}
+
+        {loading ? (
+          <div className="py-12 text-center text-xs text-[#8B949E]">
+            <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-500" />
+            Cargando activos...
+          </div>
+        ) : assets.length === 0 ? (
+          <div className="py-12 text-center text-xs text-[#8B949E]">No hay activos registrados en DAM.</div>
+        ) : (
+          <div className="space-y-2">
+            {assets.map(item => (
+              <div key={item.id} className="bg-[#15191E] border border-white/5 rounded-xl px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 w-full">
+                    {editingId === item.id && editDraft ? (
+                      <div className="space-y-2">
+                        <input
+                          value={editDraft.name}
+                          onChange={e => setEditDraft({ ...editDraft, name: e.target.value })}
+                          className="w-full bg-[#0B0F14] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <select
+                            value={editDraft.type}
+                            onChange={e => setEditDraft({ ...editDraft, type: e.target.value as DigitalAssetType })}
+                            className="bg-[#0B0F14] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white"
+                          >
+                            {DAM_TYPES.map(typeOption => (
+                              <option key={typeOption} value={typeOption}>
+                                {typeOption}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={editDraft.ministry}
+                            onChange={e => setEditDraft({ ...editDraft, ministry: e.target.value as DigitalMinistry })}
+                            className="bg-[#0B0F14] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white"
+                          >
+                            {DAM_MINISTRIES.map(ministryOption => (
+                              <option key={ministryOption} value={ministryOption}>
+                                {ministryOption}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <input
+                          value={editDraft.tags}
+                          onChange={e => setEditDraft({ ...editDraft, tags: e.target.value })}
+                          placeholder="tags separadas por coma"
+                          className="w-full bg-[#0B0F14] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white"
+                        />
+                        <textarea
+                          value={editDraft.notes}
+                          onChange={e => setEditDraft({ ...editDraft, notes: e.target.value })}
+                          rows={2}
+                          className="w-full bg-[#0B0F14] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white"
+                        />
+                        <div className="flex flex-wrap gap-1.5">
+                          {DAM_PLATFORMS.map(platform => {
+                            const active = editDraft.platforms.includes(platform);
+                            return (
+                              <button
+                                key={platform}
+                                type="button"
+                                onClick={() => {
+                                  const nextPlatforms = active
+                                    ? editDraft.platforms.filter(itemPlatform => itemPlatform !== platform)
+                                    : [...editDraft.platforms, platform];
+                                  setEditDraft({ ...editDraft, platforms: nextPlatforms });
+                                }}
+                                className={`px-2 py-1 rounded-full text-[10px] border ${
+                                  active
+                                    ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-300'
+                                    : 'bg-[#0B0F14] border-white/10 text-[#8B949E]'
+                                }`}
+                              >
+                                {platform}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={onSaveEdit}
+                            className="text-[10px] px-2 py-1 rounded bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 cursor-pointer"
+                          >
+                            Guardar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onCancelEdit}
+                            className="text-[10px] px-2 py-1 rounded bg-[#0B0F14] border border-white/10 text-[#8B949E] cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold text-white truncate">{item.name}</p>
+                        <p className="text-[10px] text-[#8B949E] mt-0.5">
+                          {item.type} · {item.ministry} · {item.platforms.join(', ') || 'sin plataformas'}
+                        </p>
+                        {item.tags.length > 0 ? (
+                          <p className="text-[10px] text-indigo-300 mt-1">#{item.tags.join(' #')}</p>
+                        ) : null}
+                        {item.notes ? <p className="text-[10px] text-[#8B949E] mt-1">{item.notes}</p> : null}
+                        {item.sourceKind === 'episode_asset' && item.episodeId ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenWorkspace(item.episodeId!, 'video')}
+                            className="mt-2 text-[10px] text-indigo-400 hover:text-indigo-300 cursor-pointer"
+                          >
+                            Abrir episodio vinculado
+                          </button>
+                        ) : item.sourceKind === 'external_url' && item.externalUrl ? (
+                          <a
+                            href={item.externalUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-block text-[10px] text-indigo-400 hover:text-indigo-300"
+                          >
+                            Abrir URL externa
+                          </a>
+                        ) : item.sourceKind === 'uploaded_file' ? (
+                          <button
+                            type="button"
+                            onClick={() => onDownloadUploaded(item)}
+                            className="mt-2 inline-block text-[10px] text-indigo-400 hover:text-indigo-300 cursor-pointer"
+                          >
+                            Descargar archivo subido
+                          </button>
+                        ) : null}
+                        <div className="flex gap-2 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => onStartEdit(item)}
+                            className="text-[10px] px-2 py-1 rounded bg-[#0B0F14] border border-white/10 text-[#8B949E] hover:text-white cursor-pointer"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDuplicate(item)}
+                            className="text-[10px] px-2 py-1 rounded bg-indigo-600/15 border border-indigo-500/30 text-indigo-300 cursor-pointer"
+                          >
+                            Duplicar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(item.id)}
+                            className="text-[10px] px-2 py-1 rounded bg-rose-600/15 border border-rose-500/30 text-rose-300 cursor-pointer"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 inline" /> Eliminar
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

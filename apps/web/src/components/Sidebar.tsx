@@ -28,7 +28,7 @@ export default function Sidebar({ currentView, setCurrentView, mobileOpen = fals
     { id: 'projects', label: 'Proyectos', icon: FolderKanban },
     { id: 'contenido', label: 'Contenido', icon: Lightbulb },
     { id: 'copilot', label: 'IA Copilot', icon: Bot },
-    { id: 'library', label: 'Biblioteca IA', icon: Library },
+    { id: 'library', label: 'Biblioteca y DAM', icon: Library },
     { id: 'calendar', label: 'Publicaciones', icon: Calendar },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'automation', label: 'Automatización', icon: Network },

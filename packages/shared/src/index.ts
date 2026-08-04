@@ -609,6 +609,110 @@ export interface CreateChannelInput {
   publishSchedule?: PublishSchedule;
 }
 
+/** Canonical asset types used by the church DAM module. */
+export const DIGITAL_ASSET_TYPES = [
+  'video',
+  'audio',
+  'image',
+  'document',
+  'thumbnail',
+  'overlay',
+  'template',
+  'stream',
+] as const;
+
+export type DigitalAssetType = (typeof DIGITAL_ASSET_TYPES)[number];
+
+/** Ministry buckets used for filtering and ownership of assets. */
+export const DIGITAL_MINISTRIES = [
+  'general',
+  'predicacion',
+  'adoracion',
+  'jovenes',
+  'ninos',
+  'comunicacion',
+  'produccion',
+] as const;
+
+export type DigitalMinistry = (typeof DIGITAL_MINISTRIES)[number];
+
+/** Where a digital asset can be reused. */
+export type DigitalPlatform =
+  | 'youtube'
+  | 'facebook'
+  | 'instagram'
+  | 'tiktok'
+  | 'x'
+  | 'web'
+  | 'stream';
+
+/** Source for the DAM entry. */
+export type DigitalAssetSourceKind = 'episode_asset' | 'external_url' | 'uploaded_file';
+
+/** One curated item in the church digital asset manager. */
+export interface DigitalAssetRecord {
+  id: string;
+  name: string;
+  type: DigitalAssetType;
+  ministry: DigitalMinistry;
+  tags: string[];
+  platforms: DigitalPlatform[];
+  sourceKind: DigitalAssetSourceKind;
+  episodeId?: string;
+  assetKey?: string;
+  externalUrl?: string;
+  uploadedFileName?: string;
+  uploadedMimeType?: string;
+  uploadedSizeBytes?: number;
+  uploadedFilePath?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  userId?: string;
+}
+
+export interface CreateDigitalAssetInput {
+  name: string;
+  type: DigitalAssetType;
+  ministry?: DigitalMinistry;
+  tags?: string[];
+  platforms?: DigitalPlatform[];
+  sourceKind: DigitalAssetSourceKind;
+  episodeId?: string;
+  assetKey?: string;
+  externalUrl?: string;
+  uploadedFileName?: string;
+  uploadedMimeType?: string;
+  uploadedSizeBytes?: number;
+  uploadedFilePath?: string;
+  notes?: string;
+}
+
+export interface UpdateDigitalAssetInput {
+  name?: string;
+  type?: DigitalAssetType;
+  ministry?: DigitalMinistry;
+  tags?: string[];
+  platforms?: DigitalPlatform[];
+  sourceKind?: DigitalAssetSourceKind;
+  episodeId?: string;
+  assetKey?: string;
+  externalUrl?: string;
+  uploadedFileName?: string;
+  uploadedMimeType?: string;
+  uploadedSizeBytes?: number;
+  uploadedFilePath?: string;
+  notes?: string;
+}
+
+export function isDigitalAssetType(value: unknown): value is DigitalAssetType {
+  return typeof value === 'string' && (DIGITAL_ASSET_TYPES as readonly string[]).includes(value);
+}
+
+export function isDigitalMinistry(value: unknown): value is DigitalMinistry {
+  return typeof value === 'string' && (DIGITAL_MINISTRIES as readonly string[]).includes(value);
+}
+
 /** Workspace collaborator role (Equipos). */
 export type TeamRole = 'owner' | 'editor' | 'viewer';
 
