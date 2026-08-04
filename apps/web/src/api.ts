@@ -474,6 +474,146 @@ export async function fetchCalendarEvents(channelId?: string): Promise<CalendarE
   return apiFetch<CalendarEvent[]>(`/calendar/events${qs ? `?${qs}` : ''}`);
 }
 
+export interface SundayServicePost {
+  generatedAt: string;
+  fridayDate: string;
+  sundayDate?: string;
+  foundSundayEvent: boolean;
+  message: string;
+  event?: {
+    id: string;
+    title: string;
+    time: string;
+    channel: string;
+    youtubeUrl?: string;
+  };
+}
+
+export async function fetchSundayServicePost(channelId?: string): Promise<SundayServicePost> {
+  const params = new URLSearchParams();
+  if (channelId) params.set('channelId', channelId);
+  const qs = params.toString();
+  return apiFetch<SundayServicePost>(`/calendar/sunday-service-post${qs ? `?${qs}` : ''}`);
+}
+
+export interface SundayServicePostImage {
+  imageUrl: string;
+  prompt: string;
+  isFallback?: boolean;
+  fallbackReason?: string;
+  templateUsed?: boolean;
+  post: SundayServicePost;
+}
+
+export interface SundayServicePostTemplate {
+  serviceTopic?: string;
+  visualDirection?: string;
+  promptOverride?: string;
+  updatedAt: string;
+}
+
+export interface SundayServicePostArtifact {
+  channelId: string;
+  generatedAt: string;
+  fridayDate: string;
+  imageUrl: string;
+  prompt: string;
+  isFallback: boolean;
+  fallbackReason?: string;
+  post: SundayServicePost;
+}
+
+export async function generateSundayServicePostImage(
+  channelId?: string,
+  input?: {
+    serviceTopic?: string;
+    visualDirection?: string;
+    promptOverride?: string;
+  },
+): Promise<SundayServicePostImage> {
+  const params = new URLSearchParams();
+  if (channelId) params.set('channelId', channelId);
+  const qs = params.toString();
+  return apiFetch<SundayServicePostImage>(
+    `/calendar/sunday-service-post/image${qs ? `?${qs}` : ''}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input ?? {}),
+    },
+  );
+}
+
+export async function fetchLatestSundayServicePostArtifact(channelId?: string): Promise<{
+  artifact: SundayServicePostArtifact | null;
+}> {
+  const params = new URLSearchParams();
+  if (channelId) params.set('channelId', channelId);
+  const qs = params.toString();
+  return apiFetch<{ artifact: SundayServicePostArtifact | null }>(
+    `/calendar/sunday-service-post/latest${qs ? `?${qs}` : ''}`,
+  );
+}
+
+export async function fetchSundayServicePostTemplate(channelId?: string): Promise<{
+  template: SundayServicePostTemplate | null;
+}> {
+  const params = new URLSearchParams();
+  if (channelId) params.set('channelId', channelId);
+  const qs = params.toString();
+  return apiFetch<{ template: SundayServicePostTemplate | null }>(
+    `/calendar/sunday-service-post/template${qs ? `?${qs}` : ''}`,
+  );
+}
+
+export async function saveSundayServicePostTemplate(
+  input: {
+    channelId?: string;
+    serviceTopic?: string;
+    visualDirection?: string;
+    promptOverride?: string;
+  },
+): Promise<{ template: SundayServicePostTemplate }> {
+  const params = new URLSearchParams();
+  if (input.channelId) params.set('channelId', input.channelId);
+  const qs = params.toString();
+  return apiFetch<{ template: SundayServicePostTemplate }>(
+    `/calendar/sunday-service-post/template${qs ? `?${qs}` : ''}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serviceTopic: input.serviceTopic,
+        visualDirection: input.visualDirection,
+        promptOverride: input.promptOverride,
+      }),
+    },
+  );
+}
+
+export async function triggerSundayServicePostAutoRun(input?: {
+  channelId?: string;
+  force?: boolean;
+}): Promise<{
+  created: boolean;
+  skipped: boolean;
+  reason?: string;
+  channelId: string;
+  artifact?: SundayServicePostArtifact | null;
+}> {
+  const params = new URLSearchParams();
+  if (input?.channelId) params.set('channelId', input.channelId);
+  const qs = params.toString();
+  return apiFetch(
+    `/calendar/sunday-service-post/auto-run${qs ? `?${qs}` : ''}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: input?.force === true }),
+    },
+  );
+}
+
 export interface AnalyticsData {
   isDemo?: boolean;
   connected?: boolean;

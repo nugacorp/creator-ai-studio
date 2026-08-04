@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:3000/api';
 const POLL_MS = Number(process.env.WORKER_POLL_INTERVAL_MS ?? 5000);
+const FRIDAY_POST_CHECK_MS = Number(process.env.WORKER_FRIDAY_POST_CHECK_INTERVAL_MS ?? 60 * 60 * 1000);
 const REDIS_URL = process.env.REDIS_URL;
 
 const PIPELINE_STEP_LABELS: Record<string, string> = {
@@ -518,6 +519,45 @@ export async function processJob(job: ProductionJob): Promise<void> {
 }
 
 let polling = false;
+let lastFridayPostCheckMs = 0;
+
+async function maybeRunFridayPostAutomation(): Promise<void> {
+  const nowMs = Date.now();
+  if (nowMs - lastFridayPostCheckMs < FRIDAY_POST_CHECK_MS) return;
+  lastFridayPostCheckMs = nowMs;
+
+  try {
+    const response = await apiFetch('/calendar/sunday-service-post/auto-run', {
+      method: 'POST',
+      body: JSON.stringify({ force: false }),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      console.warn(
+        `Friday post auto-run failed (${response.status}): ${text.slice(0, 200)}`,
+      );
+      return;
+    }
+    const data = (await response.json()) as {
+      created?: boolean;
+      skipped?: boolean;
+      reason?: string;
+      channelId?: string;
+    };
+    if (data.created) {
+      console.log(
+        `[automation] Post semanal generado para canal ${data.channelId ?? 'default'}`,
+      );
+      return;
+    }
+    if (data.skipped && data.reason) {
+      console.log(`[automation] Post semanal omitido (${data.reason})`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Friday post auto-run network error: ${message}`);
+  }
+}
 
 /** Wait until the API health endpoint responds (Docker/local startup race). */
 export async function waitForApiReady(
@@ -553,6 +593,7 @@ export async function pollLoop(): Promise<void> {
   if (polling) return;
   polling = true;
   try {
+    await maybeRunFridayPostAutomation();
     const jobs = await fetchPendingJobs();
     for (const job of jobs) {
       await processJob(job);

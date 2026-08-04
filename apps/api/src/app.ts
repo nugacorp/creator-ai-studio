@@ -521,6 +521,276 @@ function registerRoutes(
     return result.events;
   });
 
+  app.get(route(prefix, '/calendar/sunday-service-post'), async (request) => {
+    const query = request.query as { channelId?: string };
+    const channelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
+    const { buildCalendarEvents } = await import('./calendar/events.js');
+    const { buildSundayServicePost } = await import('./calendar/sunday-post.js');
+    const result = await buildCalendarEvents(storage, request.userId, channelId);
+    return buildSundayServicePost(result.events);
+  });
+
+  app.get(route(prefix, '/calendar/sunday-service-post/latest'), async (request) => {
+    const query = request.query as { channelId?: string };
+    let selectedChannelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
+    if (!selectedChannelId) {
+      const settings = await getSettings();
+      selectedChannelId = settings.activeChannelId;
+    }
+    const storeChannelId = selectedChannelId ?? 'default';
+    const { getLatestSundayServicePostArtifact } = await import('./calendar/sunday-post-store.js');
+    const artifact = await getLatestSundayServicePostArtifact(storeChannelId);
+    return { artifact };
+  });
+
+  app.get(route(prefix, '/calendar/sunday-service-post/template'), async (request) => {
+    const query = request.query as { channelId?: string };
+    let selectedChannelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
+    if (!selectedChannelId) {
+      const settings = await getSettings();
+      selectedChannelId = settings.activeChannelId;
+    }
+    const storeChannelId = selectedChannelId ?? 'default';
+    const { getSundayServicePostTemplate } = await import('./calendar/sunday-post-store.js');
+    const template = await getSundayServicePostTemplate(storeChannelId);
+    return { template };
+  });
+
+  app.patch(route(prefix, '/calendar/sunday-service-post/template'), async (request) => {
+    const query = request.query as { channelId?: string };
+    const body = (request.body ?? {}) as {
+      serviceTopic?: string;
+      visualDirection?: string;
+      promptOverride?: string;
+    };
+    let selectedChannelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
+    if (!selectedChannelId) {
+      const settings = await getSettings();
+      selectedChannelId = settings.activeChannelId;
+    }
+    const storeChannelId = selectedChannelId ?? 'default';
+    const { saveSundayServicePostTemplate } = await import('./calendar/sunday-post-store.js');
+    const template = await saveSundayServicePostTemplate(storeChannelId, {
+      serviceTopic: body.serviceTopic,
+      visualDirection: body.visualDirection,
+      promptOverride: body.promptOverride,
+    });
+    return { template };
+  });
+
+  app.post(route(prefix, '/calendar/sunday-service-post/image'), async (request, reply) => {
+    const query = request.query as { channelId?: string };
+    const body = (request.body ?? {}) as {
+      serviceTopic?: string;
+      visualDirection?: string;
+      promptOverride?: string;
+    };
+    let selectedChannelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
+    if (!selectedChannelId) {
+      const settings = await getSettings();
+      selectedChannelId = settings.activeChannelId;
+    }
+    const storeChannelId = selectedChannelId ?? 'default';
+
+    const { buildCalendarEvents } = await import('./calendar/events.js');
+    const { buildSundayServicePost, buildSundayServiceImagePrompt } = await import(
+      './calendar/sunday-post.js'
+    );
+    const { saveSundayServicePostArtifact, getSundayServicePostTemplate } = await import(
+      './calendar/sunday-post-store.js'
+    );
+
+    const result = await buildCalendarEvents(storage, request.userId, selectedChannelId);
+    const post = buildSundayServicePost(result.events);
+    const basePrompt = buildSundayServiceImagePrompt(post);
+
+    const template = await getSundayServicePostTemplate(storeChannelId);
+    const serviceTopic = body.serviceTopic?.trim() || template?.serviceTopic?.trim();
+    const visualDirection = body.visualDirection?.trim() || template?.visualDirection?.trim();
+    const promptOverride = body.promptOverride?.trim() || template?.promptOverride?.trim();
+
+    const prompt =
+      promptOverride && promptOverride.length > 0
+        ? promptOverride
+        : [
+            basePrompt,
+            serviceTopic ? `Service topic focus: ${serviceTopic}.` : '',
+            visualDirection ? `Visual direction: ${visualDirection}.` : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+
+    try {
+      const { withProvider } = await import('./ai/router.js');
+      const imageUrl = await withProvider('image', provider =>
+        provider.generateImage(prompt, {
+          aspectRatio: '16:9',
+          style: 'cinematic biblical',
+        }),
+      );
+      const artifact = await saveSundayServicePostArtifact({
+        channelId: storeChannelId,
+        generatedAt: new Date().toISOString(),
+        fridayDate: post.fridayDate,
+        imageUrl,
+        prompt,
+        isFallback: false,
+        post,
+      });
+      return {
+        imageUrl,
+        prompt,
+        isFallback: false,
+        templateUsed: Boolean(template),
+        artifact,
+        post,
+      };
+    } catch (error) {
+      const imageUrl =
+        'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=1280';
+      const fallbackReason =
+        error instanceof Error
+          ? error.message
+          : 'No se pudo generar la imagen con el proveedor IA.';
+      const artifact = await saveSundayServicePostArtifact({
+        channelId: storeChannelId,
+        generatedAt: new Date().toISOString(),
+        fridayDate: post.fridayDate,
+        imageUrl,
+        prompt,
+        isFallback: true,
+        fallbackReason,
+        post,
+      });
+      return {
+        imageUrl,
+        prompt,
+        isFallback: true,
+        templateUsed: Boolean(template),
+        fallbackReason,
+        artifact,
+        post,
+      };
+    }
+  });
+
+  app.post(route(prefix, '/calendar/sunday-service-post/auto-run'), async (request) => {
+    const query = request.query as { channelId?: string };
+    const body = (request.body ?? {}) as { force?: boolean };
+
+    let selectedChannelId =
+      typeof query.channelId === 'string' && query.channelId.trim().length > 0
+        ? query.channelId.trim()
+        : undefined;
+    if (!selectedChannelId) {
+      const settings = await getSettings();
+      selectedChannelId = settings.activeChannelId;
+    }
+    const storeChannelId = selectedChannelId ?? 'default';
+
+    const now = new Date();
+    const todayUtc = now.toISOString().slice(0, 10);
+    const isFridayUtc = now.getUTCDay() === 5;
+    const targetFridayDate = (() => {
+      const d = new Date(now.getTime());
+      const delta = (5 - d.getUTCDay() + 7) % 7;
+      d.setUTCDate(d.getUTCDate() + delta);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    const { getLatestSundayServicePostArtifact, saveSundayServicePostArtifact } = await import(
+      './calendar/sunday-post-store.js'
+    );
+
+    const latest = await getLatestSundayServicePostArtifact(storeChannelId);
+    if (!body.force) {
+      if (latest?.fridayDate === targetFridayDate) {
+        return {
+          created: false,
+          skipped: true,
+          reason: 'already_generated_for_friday',
+          todayUtc,
+          targetFridayDate,
+          channelId: storeChannelId,
+          artifact: latest,
+        };
+      }
+      if (!isFridayUtc) {
+        return {
+          created: false,
+          skipped: true,
+          reason: 'not_friday_utc',
+          todayUtc,
+          targetFridayDate,
+          channelId: storeChannelId,
+          artifact: latest,
+        };
+      }
+    }
+
+    const { buildCalendarEvents } = await import('./calendar/events.js');
+    const { buildSundayServicePost, buildSundayServiceImagePrompt } = await import(
+      './calendar/sunday-post.js'
+    );
+    const eventsResult = await buildCalendarEvents(storage, request.userId, selectedChannelId);
+    const post = buildSundayServicePost(eventsResult.events, now);
+    const prompt = buildSundayServiceImagePrompt(post);
+
+    let imageUrl =
+      'https://images.unsplash.com/photo-1499209974431-9dddcece7f88?auto=format&fit=crop&q=80&w=1280';
+    let isFallback = true;
+    let fallbackReason: string | undefined;
+
+    try {
+      const { withProvider } = await import('./ai/router.js');
+      imageUrl = await withProvider('image', provider =>
+        provider.generateImage(prompt, {
+          aspectRatio: '16:9',
+          style: 'cinematic biblical',
+        }),
+      );
+      isFallback = false;
+    } catch (error) {
+      fallbackReason =
+        error instanceof Error
+          ? error.message
+          : 'No se pudo generar la imagen con el proveedor IA.';
+    }
+
+    const artifact = await saveSundayServicePostArtifact({
+      channelId: storeChannelId,
+      generatedAt: new Date().toISOString(),
+      fridayDate: post.fridayDate,
+      imageUrl,
+      prompt,
+      isFallback,
+      fallbackReason,
+      post,
+    });
+
+    return {
+      created: true,
+      skipped: false,
+      channelId: storeChannelId,
+      artifact,
+    };
+  });
+
   app.get(route(prefix, '/integrations/youtube/channels'), async () => {
     const { fetchYouTubeChannels } = await import('./integrations/youtube.js');
     return fetchYouTubeChannels();

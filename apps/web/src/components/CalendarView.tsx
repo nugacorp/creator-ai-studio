@@ -1,7 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
 import { suggestNextPublishSlot, DEFAULT_PUBLISH_SCHEDULE, formatNextPublishSlot } from '@creator-ai-studio/shared';
-import { fetchCalendarEvents, fetchSettings, type CalendarEvent as ApiCalendarEvent } from '../api';
+import {
+  fetchCalendarEvents,
+  fetchSettings,
+  fetchLatestSundayServicePostArtifact,
+  fetchSundayServicePostTemplate,
+  fetchSundayServicePost,
+  generateSundayServicePostImage,
+  saveSundayServicePostTemplate,
+  type CalendarEvent as ApiCalendarEvent,
+  type SundayServicePost,
+} from '../api';
 
 interface CalendarEvent {
   id: string;
@@ -74,15 +84,40 @@ export default function CalendarView({
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loadError, setLoadError] = useState(false);
+  const [sundayPost, setSundayPost] = useState<SundayServicePost | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [sundayPostImageUrl, setSundayPostImageUrl] = useState<string | null>(null);
+  const [generatingSundayImage, setGeneratingSundayImage] = useState(false);
+  const [imageFeedback, setImageFeedback] = useState<string | null>(null);
+  const [serviceTopic, setServiceTopic] = useState('');
+  const [visualDirection, setVisualDirection] = useState('');
+  const [promptOverride, setPromptOverride] = useState('');
+  const [templateFeedback, setTemplateFeedback] = useState<string | null>(null);
 
   const loadEvents = useCallback(() => {
-    void fetchCalendarEvents(activeChannelId ?? undefined)
-      .then(apiEvents => {
+    void Promise.all([
+      fetchCalendarEvents(activeChannelId ?? undefined),
+      fetchSundayServicePost(activeChannelId ?? undefined),
+      fetchLatestSundayServicePostArtifact(activeChannelId ?? undefined),
+      fetchSundayServicePostTemplate(activeChannelId ?? undefined),
+    ])
+      .then(([apiEvents, post, latest, templateResult]) => {
         setEvents(apiEvents.map(mapApiEvent));
+        setSundayPost(post);
+        setSundayPostImageUrl(latest.artifact?.imageUrl ?? null);
+        setImageFeedback(latest.artifact ? 'Imagen semanal cargada' : null);
+        setServiceTopic(templateResult.template?.serviceTopic ?? '');
+        setVisualDirection(templateResult.template?.visualDirection ?? '');
+        setPromptOverride(templateResult.template?.promptOverride ?? '');
+        setTemplateFeedback(null);
         setLoadError(false);
       })
       .catch(() => {
         setEvents([]);
+        setSundayPost(null);
+        setSundayPostImageUrl(null);
+        setImageFeedback(null);
+        setTemplateFeedback(null);
         setLoadError(true);
       });
   }, [activeChannelId]);
@@ -145,6 +180,70 @@ export default function CalendarView({
       setSlotPreviewLabel(formatNextPublishSlot(slot, kind));
     } catch {
       setSlotPreviewLabel(null);
+    }
+  };
+
+  const handleCopySundayPost = async () => {
+    if (!sundayPost?.message) return;
+    try {
+      if (typeof navigator === 'undefined' || !navigator.clipboard) {
+        throw new Error('clipboard_unavailable');
+      }
+      await navigator.clipboard.writeText(sundayPost.message);
+      setCopyFeedback('Texto copiado');
+    } catch {
+      setCopyFeedback('No se pudo copiar automaticamente');
+    }
+  };
+
+  const handleGenerateSundayImage = async () => {
+    setGeneratingSundayImage(true);
+    setImageFeedback(null);
+    try {
+      const result = await generateSundayServicePostImage(activeChannelId ?? undefined, {
+        serviceTopic: serviceTopic.trim() || undefined,
+        visualDirection: visualDirection.trim() || undefined,
+        promptOverride: promptOverride.trim() || undefined,
+      });
+      setSundayPostImageUrl(result.imageUrl);
+      setImageFeedback(
+        result.isFallback
+          ? 'Imagen fallback cargada (revisa credenciales IA para generación real)'
+          : 'Imagen generada',
+      );
+    } catch {
+      setImageFeedback('No se pudo generar la imagen');
+    } finally {
+      setGeneratingSundayImage(false);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    try {
+      await saveSundayServicePostTemplate({
+        channelId: activeChannelId ?? undefined,
+        serviceTopic: serviceTopic.trim() || undefined,
+        visualDirection: visualDirection.trim() || undefined,
+        promptOverride: promptOverride.trim() || undefined,
+      });
+      setTemplateFeedback('Plantilla guardada para este canal');
+    } catch {
+      setTemplateFeedback('No se pudo guardar la plantilla');
+    }
+  };
+
+  const handleOpenImage = () => {
+    if (!sundayPostImageUrl) return;
+    window.open(sundayPostImageUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleCopyImageUrl = async () => {
+    if (!sundayPostImageUrl) return;
+    try {
+      await navigator.clipboard.writeText(sundayPostImageUrl);
+      setImageFeedback('URL de imagen copiada');
+    } catch {
+      setImageFeedback('No se pudo copiar la URL de la imagen');
     }
   };
 
@@ -307,6 +406,108 @@ export default function CalendarView({
                   )}
                 </div>
               ))
+            )}
+          </div>
+
+          <div className="pt-4 border-t border-[rgba(255,255,255,0.05)] space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <h5 className="text-[11px] font-bold text-[#8B949E] uppercase tracking-wider font-mono">
+                Post del Viernes (Servicio Domingo)
+              </h5>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateSundayImage()}
+                  disabled={!sundayPost || generatingSundayImage}
+                  className="px-2.5 py-1 rounded-lg border border-emerald-500/40 text-[10px] font-bold text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-50"
+                >
+                  {generatingSundayImage ? 'Generando...' : 'Generar imagen'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleCopySundayPost()}
+                  disabled={!sundayPost}
+                  className="px-2.5 py-1 rounded-lg border border-indigo-500/40 text-[10px] font-bold text-indigo-300 hover:bg-indigo-500/10 disabled:opacity-50"
+                >
+                  Copiar
+                </button>
+              </div>
+            </div>
+            {sundayPost ? (
+              <>
+                <p className="text-[10px] text-[#8B949E] font-mono">
+                  Viernes objetivo: {sundayPost.fridayDate}
+                  {sundayPost.sundayDate ? ` · Domingo: ${sundayPost.sundayDate}` : ''}
+                </p>
+                <pre className="text-[10px] leading-relaxed whitespace-pre-wrap rounded-xl bg-[#0B0F14] border border-[rgba(255,255,255,0.05)] p-3 text-[#E6EDF2]">
+                  {sundayPost.message}
+                </pre>
+                <div className="space-y-2">
+                  <label className="text-[10px] text-[#8B949E] block">Tema del servicio (para la imagen)</label>
+                  <input
+                    type="text"
+                    value={serviceTopic}
+                    onChange={e => setServiceTopic(e.target.value)}
+                    placeholder={sundayPost.event?.title ?? 'Ej. Fe y esperanza en tiempos de prueba'}
+                    className="w-full bg-[#0B0F14] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                  <label className="text-[10px] text-[#8B949E] block">Dirección visual (opcional)</label>
+                  <input
+                    type="text"
+                    value={visualDirection}
+                    onChange={e => setVisualDirection(e.target.value)}
+                    placeholder="Ej. amanecer, Biblia abierta, tono cálido, familias"
+                    className="w-full bg-[#0B0F14] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                  <label className="text-[10px] text-[#8B949E] block">Prompt manual (sobrescribe lo demás, opcional)</label>
+                  <textarea
+                    value={promptOverride}
+                    onChange={e => setPromptOverride(e.target.value)}
+                    placeholder="Describe exactamente la imagen deseada"
+                    rows={3}
+                    className="w-full bg-[#0B0F14] border border-[rgba(255,255,255,0.08)] rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveTemplate()}
+                      className="px-2.5 py-1 rounded-lg border border-fuchsia-500/40 text-[10px] font-bold text-fuchsia-300 hover:bg-fuchsia-500/10"
+                    >
+                      Guardar plantilla
+                    </button>
+                    {templateFeedback && <span className="text-[10px] text-fuchsia-300">{templateFeedback}</span>}
+                  </div>
+                </div>
+                {copyFeedback && <p className="text-[10px] text-indigo-300">{copyFeedback}</p>}
+                {imageFeedback && <p className="text-[10px] text-emerald-300">{imageFeedback}</p>}
+                {sundayPostImageUrl && (
+                  <div className="space-y-2">
+                    <img
+                      src={sundayPostImageUrl}
+                      alt="Vista previa del post de servicio dominical"
+                      className="w-full rounded-xl border border-[rgba(255,255,255,0.08)]"
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleOpenImage}
+                        className="px-2.5 py-1 rounded-lg border border-indigo-500/40 text-[10px] font-bold text-indigo-300 hover:bg-indigo-500/10"
+                      >
+                        Abrir imagen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyImageUrl()}
+                        className="px-2.5 py-1 rounded-lg border border-emerald-500/40 text-[10px] font-bold text-emerald-300 hover:bg-emerald-500/10"
+                      >
+                        Copiar URL
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-[#8B949E]">No se pudo generar el post semanal desde la API.</p>
             )}
           </div>
         </div>
