@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import fastifyMultipart from '@fastify/multipart';
 import {
   canTransitionStage,
   isEpisodeStage,
@@ -12,6 +13,7 @@ import {
   type UpdateStageInput,
 } from '@creator-ai-studio/shared';
 import { registerAuthHook } from './auth/middleware.js';
+import { registerRoutePermissions } from './auth/route-permissions.js';
 import { getAuthConfig } from './auth/config.js';
 import { registerHardening } from './http/hardening.js';
 import {
@@ -31,6 +33,8 @@ import { registerAgentRoutes } from './agents/routes.js';
 import { registerIdeaRoutes } from './ideas/routes.js';
 import { registerTeamRoutes } from './team/routes.js';
 import { registerDigitalAssetRoutes } from './digital-assets/routes.js';
+import { registerChurchRoutes } from './church-ops/routes.js';
+import { MAX_ASSET_BYTES } from './church-ops/asset-files.js';
 import { registerCopilotRoutes } from './copilot/routes.js';
 import { fetchYouTubeAnalytics } from './integrations/youtube.js';
 import { getSettings, saveSettings } from './settings/store.js';
@@ -79,10 +83,19 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     },
   );
 
+  // Raw sermon footage is uploaded straight to the DAM, so the limit is the
+  // asset ceiling (default 5 GB) rather than Fastify's 1 MB JSON default.
+  // Files are streamed to disk in church-ops; nothing is buffered in memory.
+  void app.register(fastifyMultipart, {
+    limits: { fileSize: MAX_ASSET_BYTES, files: 1, fields: 20 },
+  });
+
   const storage = options.storage ?? new EpisodeStorage(resolveStoragePath());
 
   registerHardening(app);
   registerAuthHook(app);
+  // Authorization (WO-0): the permission table gates every mutating route.
+  registerRoutePermissions(app);
 
   const prefixes = ['', '/api'] as const;
   for (const prefix of prefixes) {
@@ -93,6 +106,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerIdeaRoutes(app, prefix, storage);
     registerTeamRoutes(app, prefix);
     registerDigitalAssetRoutes(app, prefix);
+    registerChurchRoutes(app, prefix);
     registerCopilotRoutes(app, prefix, storage);
     registerSecretRoutes(app, prefix);
     registerOAuthRoutes(app, prefix);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, Menu, Trash2, Wrench } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import HomeView from './components/HomeView';
@@ -24,6 +24,12 @@ import LoginView from './components/LoginView';
 import AuthMisconfiguredView from './components/AuthMisconfiguredView';
 import { useAuth } from './context/AuthContext';
 import { isSupabaseAuthEnabled } from './lib/supabase';
+import ChurchShell, {
+  ChurchSidebar,
+  isChurchSpace,
+  type ChurchSpaceId,
+} from './church/ChurchShell';
+import { ChurchProvider, useChurch } from './church/ChurchContext';
 
 import {
   INITIAL_SERIES,
@@ -115,8 +121,22 @@ interface AppProps {
   initialView?: string;
 }
 
-export function App({ initialView = 'home' }: AppProps = {}) {
+/**
+ * The church session provider lives here rather than at the root so that
+ * rendering <App /> alone — in a test, or from another entry point — always
+ * produces a complete, working tree.
+ */
+export function App(props: AppProps = {}) {
+  return (
+    <ChurchProvider>
+      <AppShell {...props} />
+    </ChurchProvider>
+  );
+}
+
+function AppShell({ initialView = 'today' }: AppProps = {}) {
   const { authEnabled, loading, session } = useAuth();
+  const { can: churchCan, church } = useChurch();
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authStatusLoading, setAuthStatusLoading] = useState(true);
   const [currentView, setCurrentView] = useState<string>(() => {
@@ -144,6 +164,9 @@ export function App({ initialView = 'home' }: AppProps = {}) {
   const [deletingEpisode, setDeletingEpisode] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
 
+  // The six church spaces render through ChurchShell; everything else is the
+  // legacy episode tooling, reachable from the sidebar footer.
+  const inChurchSpace = isChurchSpace(currentView);
   const activeProject = projects.find(p => p.id === activeProjectId);
   const episodeSync = useEpisodeSync(
     currentView === 'workspace' && activeProjectId ? activeProjectId : null,
@@ -480,31 +503,97 @@ export function App({ initialView = 'home' }: AppProps = {}) {
 
   return (
     <div className="flex bg-[#0B0F14] text-[#E6EDF2] min-h-screen font-sans antialiased selection:bg-indigo-600/30 selection:text-indigo-300">
-      <Sidebar
-        currentView={currentView}
-        setCurrentView={handleSetCurrentView}
-        mobileOpen={mobileSidebarOpen}
-        setMobileOpen={setMobileSidebarOpen}
-      />
+      {inChurchSpace ? (
+        <ChurchSidebar
+          space={currentView}
+          onNavigate={handleSetCurrentView}
+          mobileOpen={mobileSidebarOpen}
+          setMobileOpen={setMobileSidebarOpen}
+          legacyFooter={
+            // The legacy episode pipeline still does the heavy AI/render work.
+            // It stays reachable, but only for people who can actually use it,
+            // and it is no longer part of the six everyday spaces (§8).
+            churchCan('production.render') ? (
+              <div className="p-3 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSetCurrentView('projects');
+                    setMobileSidebarOpen(false);
+                  }}
+                  className="w-full flex items-center gap-3 min-h-11 px-3 py-2.5 rounded-xl text-xs text-[#7C8794] hover:text-white hover:bg-white/5 transition-colors duration-150 cursor-pointer text-left"
+                >
+                  <Wrench className="w-4 h-4 shrink-0" aria-hidden />
+                  <span>Herramientas avanzadas</span>
+                </button>
+              </div>
+            ) : undefined
+          }
+        />
+      ) : (
+        <Sidebar
+          currentView={currentView}
+          setCurrentView={handleSetCurrentView}
+          mobileOpen={mobileSidebarOpen}
+          setMobileOpen={setMobileSidebarOpen}
+        />
+      )}
 
       <div className="flex-1 flex flex-col min-w-0">
-        <Header
-          channels={channels}
-          selectedChannel={selectedChannel}
-          setSelectedChannel={handleSelectChannel}
-          youtubeConnected={youtubeConnected}
-          channelsLoading={channelsLoading}
-          channelsError={channelsError}
-          youtubeAccountEmail={youtubeAccountEmail}
-          onGoToSettings={() => setCurrentView('settings')}
-          onGoToMultichannel={() => setCurrentView('multichannel')}
-          notifications={notifications}
-          setNotifications={setNotifications}
-          onMenuClick={() => setMobileSidebarOpen(true)}
-        />
+        {inChurchSpace ? (
+          // The church spaces have no YouTube channel scope, so the heavy
+          // channel-picker header would only add noise. A menu button is enough.
+          <header className="h-16 shrink-0 border-b border-white/5 bg-[#0B0F14] flex items-center gap-3 px-4 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              aria-label="Abrir menú"
+            >
+              <Menu className="w-5 h-5" aria-hidden />
+            </button>
+            <span className="font-display font-bold text-sm text-white truncate">
+              {church?.name ?? 'Estudio de la iglesia'}
+            </span>
+          </header>
+        ) : (
+          <Header
+            channels={channels}
+            selectedChannel={selectedChannel}
+            setSelectedChannel={handleSelectChannel}
+            youtubeConnected={youtubeConnected}
+            channelsLoading={channelsLoading}
+            channelsError={channelsError}
+            youtubeAccountEmail={youtubeAccountEmail}
+            onGoToSettings={() => setCurrentView('settings')}
+            onGoToMultichannel={() => setCurrentView('multichannel')}
+            notifications={notifications}
+            setNotifications={setNotifications}
+            onMenuClick={() => setMobileSidebarOpen(true)}
+          />
+        )}
 
         <main ref={mainRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 max-w-7xl w-full mx-auto">
           <DemoModeBanner />
+
+          {inChurchSpace && (
+            <ChurchShell
+              space={currentView as ChurchSpaceId}
+              onNavigate={handleSetCurrentView}
+            />
+          )}
+
+          {!inChurchSpace && (
+            <button
+              type="button"
+              onClick={() => handleSetCurrentView('today')}
+              className="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" aria-hidden />
+              Volver al estudio de la iglesia
+            </button>
+          )}
+
           {currentView === 'home' && (
             <HomeView
               onContinueWorking={handleContinueWorking}

@@ -49,7 +49,7 @@ function resolveApiBaseUrl(): string {
   }
 }
 
-const API_BASE_URL = resolveApiBaseUrl();
+export const API_BASE_URL = resolveApiBaseUrl();
 
 let apiAccessToken: string | null = null;
 let onUnauthorized: (() => void) | null = null;
@@ -74,7 +74,7 @@ async function resolveAccessToken(): Promise<string | null> {
   return token;
 }
 
-async function buildAuthHeaders(extra?: HeadersInit): Promise<Headers> {
+export async function buildAuthHeaders(extra?: HeadersInit): Promise<Headers> {
   const headers = new Headers(extra);
   const token = await resolveAccessToken();
   if (token) {
@@ -114,7 +114,11 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
   return (await response.json()) as AuthStatus;
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * Fetch with auth and a single refresh-and-retry, returning the raw Response.
+ * Used for binary payloads (thumbnails, media) where JSON parsing is wrong.
+ */
+export async function apiFetchRaw(path: string, init?: RequestInit): Promise<Response> {
   let headers = await buildAuthHeaders(init?.headers);
   let response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
 
@@ -132,6 +136,12 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
 
+  return response;
+}
+
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await apiFetchRaw(path, init);
+
   if (response.status === 401) {
     const body = (await response.clone().json().catch(() => ({}))) as { error?: string };
     if (body.error === 'invalid_token') {
@@ -140,7 +150,13 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiUnauthorizedError();
   }
   if (!response.ok) {
-    throw new ApiHttpError(response.status);
+    // Surface the server's own wording — a 403 from the permission matrix says
+    // exactly which role is missing which capability, and the user should read it.
+    const body = (await response.clone().json().catch(() => ({}))) as {
+      message?: string;
+      error?: string;
+    };
+    throw new ApiHttpError(response.status, body.message ?? body.error);
   }
   return (await response.json()) as T;
 }

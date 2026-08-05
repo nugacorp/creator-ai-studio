@@ -7,6 +7,12 @@ import { verifySupabaseAccessToken } from './supabase-jwt.js';
 declare module 'fastify' {
   interface FastifyRequest {
     userId?: string;
+    /**
+     * The caller's Supabase access token, kept so church-ops can talk to
+     * PostgREST *as the user*. That makes row-level security the real
+     * enforcement layer instead of a formality the service_role key bypasses.
+     */
+    accessToken?: string;
   }
 }
 
@@ -74,6 +80,7 @@ export function registerAuthHook(app: FastifyInstance): void {
       const verified = await verifySupabaseAccessToken(bearerToken);
       if (verified?.userId) {
         request.userId = verified.userId;
+        request.accessToken = bearerToken;
         return;
       }
       reply.code(401);
