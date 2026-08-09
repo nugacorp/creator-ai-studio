@@ -53,7 +53,7 @@ Cada decisión de este plan se apoya en una observación del código, no en docu
 | # | Hecho | Evidencia | Consecuencia |
 |---|---|---|---|
 | H-1 | La API consulta PostgREST **con el token del usuario**; RLS es el enforcement real | [postgrest.ts:4-12](../../apps/api/src/church-ops/postgrest.ts#L4-L12), [middleware.ts:10-15](../../apps/api/src/auth/middleware.ts#L10-L15) | Un visitante sin token no puede usar el camino existente |
-| H-2 | Todas las políticas RLS dependen de `auth.uid()` vía `is_church_member()` / `church_can()` | Migración `20260804120000`, líneas 359-496 | `anon` (uid nulo) hoy **no ve absolutamente nada** |
+| H-2 | Todas las políticas RLS dependen de `auth.uid()` vía helpers privados `private.is_church_member()` / `private.church_can()` tras hardening | Migraciones `20260804120000` + `20260809180000` | `anon` (uid nulo) hoy **no ve absolutamente nada** |
 | H-3 | No existe ningún `GRANT` a `anon` ni vista pública | `grep -niE "grant\|anon\|create view" supabase/migrations/` | Todo acceso público debe crearse explícitamente |
 | H-4 | **No existe ejecutor de `calendar_entries`**: ningún worker ni job la procesa | `grep -rn "calendar_entries" apps workers packages` → solo `church-ops/*` | Programar vía calendario dejaría filas `programado` eternas |
 | H-5 | `calendarCompliance` de `/church/insights` cuenta entradas no `publicado` como incumplimiento | [routes.ts:195-217](../../apps/api/src/church-ops/routes.ts#L195-L217) | Entradas huérfanas degradarían una métrica visible |

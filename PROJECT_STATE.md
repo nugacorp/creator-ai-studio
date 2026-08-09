@@ -137,7 +137,7 @@ Convive con el dashboard legacy: [App.tsx:169](apps/web/src/App.tsx#L169) enruta
 
 1. **Autenticación** ([auth/middleware.ts](apps/api/src/auth/middleware.ts)) — hook `onRequest` global. Supabase JWT o `CAS_API_KEY` estático. Falla cerrado en producción. Rutas públicas hoy: `/health`, `/api/health`, `/auth/status`, `/api/auth/status`, `/system/mode`, `/api/system/mode`, más los prefijos `/oauth/` y `/api/oauth/`. **Ese conjunto es toda la superficie no autenticada existente.**
 2. **Autorización** ([auth/rbac.ts](apps/api/src/auth/rbac.ts) + [auth/route-permissions.ts](apps/api/src/auth/route-permissions.ts)) — 5 roles (`admin`, `lider`, `productor`, `disenador`, `voluntario`) y 13 permisos. Las rutas `/church/*` declaran su propio `requirePermission`; las rutas legacy pasan por la tabla `ROUTE_PERMISSIONS` con escape para operador sin iglesia.
-3. **RLS en Postgres** ([supabase/migrations/20260804120000_church_platform.sql](supabase/migrations/20260804120000_church_platform.sql)) — 10 tablas con RLS activo y políticas basadas en `public.church_can()` / `public.is_church_member()`, funciones `security definer` que resuelven el rol vía `auth.uid()`. La API consulta PostgREST **con el token del usuario** (`userClient`), de modo que RLS es la capa real de enforcement. `serviceClient()` (service_role, bypassa RLS) se usa solo en dos puntos de `core-routes.ts`.
+3. **RLS en Postgres** ([supabase/migrations/20260804120000_church_platform.sql](supabase/migrations/20260804120000_church_platform.sql)) — 10 tablas con RLS activo y políticas basadas en helpers RLS privados (`private.church_can()` / `private.is_church_member()` después de la migración de hardening), funciones `security definer` que resuelven el rol vía `auth.uid()`. La API consulta PostgREST **con el token del usuario** (`userClient`), de modo que RLS es la capa real de enforcement. `serviceClient()` (service_role, bypassa RLS) se usa solo en dos puntos de `core-routes.ts`.
 
 > **Consecuencia para el portal público:** `auth.uid()` es `null` para un visitante anónimo, por lo que **hoy ningún dato es legible sin sesión**. No existe ningún `GRANT` a `anon` ni vista pública en las migraciones. Cualquier acceso público requiere diseño explícito.
 
@@ -241,7 +241,7 @@ Tabla `publish_targets`, plataformas admitidas por CHECK: `youtube`, `facebook`,
 | D-5 | Rate limit en memoria: no sobrevive reinicio ni escala horizontalmente | [hardening.ts:9-11](apps/api/src/http/hardening.ts#L9-L11) |
 | D-6 | Dos DAM y dos módulos de calendario coexisten | `digital-assets/` + `church-ops/`; `calendar/` + `church-ops/calendar-routes.ts` |
 | D-7 | Rama `staging` restaurada; requiere protección de branch y PR obligatoria | `origin/staging` @ `b12f812` + `deploy-staging.yml` |
-| D-8 | Sin tests de RLS ni de integración PostgREST | `apps/api/test/` |
+| D-8 | Sin tests automatizados de RLS/PostgREST; migración de hardening agregada para warnings Supabase de `SECURITY DEFINER` y `search_path` | `apps/api/test/`, `supabase/migrations/20260809180000_harden_security_definer_functions.sql` |
 | D-9 | rclone: OAuth interactivo en VPS aún pendiente | [docs/02-operations/RCLONE_DRIVE.md](docs/02-operations/RCLONE_DRIVE.md) |
 | D-10 | Compose de producción duplicado/obsoleto en raíz | `docker-compose.production.yml` referencia `Dockerfile.*` inexistentes; workflow usa `deploy/docker-compose.production.yml` |
 
@@ -290,7 +290,7 @@ Ordenados por precedencia; los cuatro primeros bloquean el inicio de Church Publ
 | B-5 | **CORS** — dependencia ausente; requerido para consumo cross-origin | Implementación |
 | B-6 | **Caché** — `no-store` global debe exceptuarse para rutas públicas | Implementación |
 | B-7 | **Proxies confiables y rate limiting** — `trustProxy: true` sin allowlist; **bloqueante antes de cualquier escritura pública**, no antes de V1 solo lectura | Seguridad |
-| B-8 | Producción real en Coolify + branch protections para `main`/`staging` | Operaciones |
+| B-8 | Producción real en Coolify + Supabase runtime completo (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) + branch protections para `main`/`staging` | Operaciones |
 | B-9 | E2E de staging con TTS y render reales | Operaciones |
 
 ---
@@ -338,3 +338,4 @@ Se conserva el historial; se marca lo que dejó de ser válido.
 | 2026-08-09 | 2.1.0 | Codex | Re-verificación contra HEAD real `fe52bc2`; working tree documental no limpio; gates locales `typecheck`, `test` y `build` en verde; deuda D-10 sobre compose de producción raíz; Church Public Portal V1 enlazado como plan propuesto |
 
 | 2026-08-09 | 2.2.0 | Hermes | Reorganización Git: clone oficial definido, worktrees habilitados, `main` sincronizada con `origin/main`, `staging` restaurada/publicada desde `origin/main`, reglas multiagente incorporadas en `AGENTS.md`. |
+| 2026-08-09 | 2.3.0 | Hermes | Added Supabase hardening migration for linter warnings: pinned trigger function search paths, moved RLS helpers to private schema, removed public RPC attack surface for SECURITY DEFINER helpers, and clarified required Supabase runtime variables. |

@@ -3,12 +3,12 @@
 # Required repository secrets (Settings â†’ Secrets and variables â†’ Actions):
 #   VPS_HOST      â€” e.g. 217.76.56.66
 #   VPS_SSH_KEY   â€” private SSH key (PEM) for deploy user
-# Optional (staging auth â€” synced to /root/creator-ai-studio/.env.supabase.local):
+# Supabase/church platform secrets (synced to /root/creator-ai-studio/.env.supabase.local):
 #   VPS_USER                  â€” defaults to root
 #   SUPABASE_URL              â€” e.g. https://iiokqyedkylwhonbrrvo.supabase.co
 #   SUPABASE_ANON_KEY         â€” Dashboard â†’ API â†’ anon / publishable key
-#   SUPABASE_JWT_SECRET       â€” Dashboard â†’ API â†’ JWT Secret
-#   SUPABASE_SERVICE_ROLE_KEY â€” optional Postgres sync
+#   SUPABASE_SERVICE_ROLE_KEY â€” Dashboard â†’ API â†’ service_role key
+#   SUPABASE_JWT_SECRET       â€” Dashboard â†’ API â†’ JWT Secret (required if API JWT auth enabled)
 #   CAS_API_KEY               â€” worker + machine-to-machine Bearer
 #   GEMINI_API_KEY              â€” API Gemini provider (optional)
 #   RCLONE_REMOTE               â€” e.g. gdrive:Creator-AI-Studio/episodes (optional)
@@ -67,21 +67,25 @@ jobs:
             "${VPS_USER}@${VPS_HOST}" \
             "bash /root/creator-ai-studio/scripts/vps-post-rsync.sh"
 
-      - name: Verify Supabase secrets for web login build
+      - name: Verify Supabase secrets for church platform build/runtime
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_JWT_SECRET }}
         run: |
-          if [ -n "${SUPABASE_JWT_SECRET}" ] && { [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; }; then
-            echo "::error::SUPABASE_JWT_SECRET is set but SUPABASE_URL and/or SUPABASE_ANON_KEY GitHub secrets are missing."
-            echo "Add them under Settings â†’ Secrets â†’ Actions so the web image is built with VITE_SUPABASE_*."
+          missing=()
+          [ -n "${SUPABASE_URL}" ] || missing+=(SUPABASE_URL)
+          [ -n "${SUPABASE_ANON_KEY}" ] || missing+=(SUPABASE_ANON_KEY)
+          [ -n "${SUPABASE_SERVICE_ROLE_KEY}" ] || missing+=(SUPABASE_SERVICE_ROLE_KEY)
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Church platform requires Supabase GitHub secrets: ${missing[*]}."
+            echo "Add them under Settings â†’ Secrets â†’ Actions. The web image needs SUPABASE_URL/SUPABASE_ANON_KEY at build time; the API needs SUPABASE_SERVICE_ROLE_KEY at runtime."
             echo "See docs/02-operations/SUPABASE_AUTH.md"
             exit 1
           fi
-          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
-            echo "::warning::SUPABASE_URL or SUPABASE_ANON_KEY not in GitHub secrets."
-            echo "Web login requires them at build time unless /root/creator-ai-studio/.env.supabase.local already exists on the VPS."
+          if [ -n "${SUPABASE_JWT_SECRET}" ]; then
+            echo "Supabase JWT auth secret is configured (value redacted)."
           fi
 
       - name: Sync Supabase env on VPS

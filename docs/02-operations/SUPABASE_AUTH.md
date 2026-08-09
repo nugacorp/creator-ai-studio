@@ -79,7 +79,7 @@ Migraciones en `supabase/migrations/`:
 | `SUPABASE_URL` | API (runtime) | Sync Postgres + JWKS fallback; alias para derivar `VITE_SUPABASE_URL` |
 | `SUPABASE_ANON_KEY` | VPS / CI | Alias para derivar `VITE_SUPABASE_ANON_KEY` en el build |
 | `SUPABASE_JWT_SECRET` | API (runtime) | Validar JWT (`Project Settings → API → JWT Secret`) |
-| `SUPABASE_SERVICE_ROLE_KEY` | API (opcional) | Sync Postgres |
+| `SUPABASE_SERVICE_ROLE_KEY` | API (runtime, requerido para plataforma de iglesia) | Cliente service role para operaciones internas controladas y bootstrap de contexto iglesia |
 | `CAS_API_KEY` | API + worker | Auth máquina-a-máquina (worker) |
 
 Endpoint público de diagnóstico: `GET /api/auth/status` → `{ authRequired, apiKeyAuth, supabaseAuth }`.
@@ -91,7 +91,8 @@ Si la API tiene `SUPABASE_JWT_SECRET` pero la web se construyó **sin** `VITE_*`
 Antes del primer deploy con login, confirma en **Settings → Secrets and variables → Actions**:
 
 - [ ] `VPS_HOST`, `VPS_SSH_KEY` (y opcional `VPS_USER`)
-- [ ] `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET` (obligatorios si la API exige JWT)
+- [ ] `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (obligatorios para plataforma de iglesia)
+- [ ] `SUPABASE_JWT_SECRET` (obligatorio si la API exige JWT)
 - [ ] `CAS_SECRETS_KEY`, `CAS_API_KEY` (recomendados en staging)
 - [ ] `GEMINI_API_KEY` (opcional; la API la recibe en runtime vía sync + compose)
 
@@ -106,7 +107,7 @@ En el repo **Settings → Secrets and variables → Actions**, define:
 | `SUPABASE_URL` | `https://iiokqyedkylwhonbrrvo.supabase.co` |
 | `SUPABASE_ANON_KEY` | Dashboard → Settings → API → **anon** o **publishable** key |
 | `SUPABASE_JWT_SECRET` | Dashboard → Settings → API → **JWT Secret** |
-| `SUPABASE_SERVICE_ROLE_KEY` | (opcional) service role |
+| `SUPABASE_SERVICE_ROLE_KEY` | Dashboard → Settings → API → **service_role** key |
 | `CAS_API_KEY` | (opcional) clave para el worker |
 | `CAS_SECRETS_KEY` | (opcional) cifrado de claves en UI |
 | `GEMINI_API_KEY` | (opcional) proveedor Gemini en API |
@@ -121,13 +122,18 @@ SSH al VPS y crea o edita `/root/creator-ai-studio/.env.supabase.local` (no comm
 SUPABASE_URL=https://iiokqyedkylwhonbrrvo.supabase.co
 SUPABASE_ANON_KEY=<anon-o-publishable-key-del-dashboard>
 SUPABASE_JWT_SECRET=<jwt-secret-del-dashboard>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key-del-dashboard>
 # opcional:
-# SUPABASE_SERVICE_ROLE_KEY=
 # CAS_API_KEY=
 # CAS_SECRETS_KEY=
 ```
 
 `vps-sync-supabase-env.sh` y `vps-redeploy.sh` derivan `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` desde `SUPABASE_URL` / `SUPABASE_ANON_KEY` si no están explícitos.
+
+
+### Error: plataforma de iglesia necesita Supabase configurado
+
+Si la UI/API muestra “La plataforma de iglesia requiere Supabase configurado” o “Define `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`”, falta una de esas tres variables en el servicio API del servidor. Define las tres en GitHub Actions secrets o en `/root/creator-ai-studio/.env.supabase.local` y ejecuta redeploy completo. No basta reiniciar el contenedor web porque las variables `VITE_*` se embeben en build time.
 
 ### Rebuild obligatorio (web)
 
