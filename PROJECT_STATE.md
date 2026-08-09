@@ -8,7 +8,7 @@ Project State
 
 ## Version
 
-2.1.0
+2.2.0
 
 ## Status
 
@@ -24,22 +24,22 @@ Cursor + Hermes + Claude + Codex
 
 ## Last Updated
 
-2026-08-09 (verificación post-pivote y plan Church Public Portal V1 contra `main` @ `fe52bc2`)
+2026-08-09 (gobierno Git saneado; `main` y `staging` publicados en `b12f812`)
 
 ## HEAD verificado
 
 | Item | Valor |
 |---|---|
-| Rama actual | `main` |
-| HEAD | `fe52bc2383d8ca6fb239f21cf4e6f4560ffcc1c7` |
-| Commit | `feat: Implement initial church platform module` (2026-08-05) |
-| Working tree al iniciar esta orden | Cambios documentales existentes: `M PROJECT_STATE.md`, `?? docs/03-product/CHURCH_PUBLIC_PORTAL_V1_PLAN.md` |
-| Ramas existentes | `main`, `origin/main` — **la rama `staging` ya no existe** |
-| Remoto | `https://github.com/nugacorp/creator-ai-studio.git` |
+| Rama actual | `staging` |
+| HEAD | `b12f8124bad3321a788e5ec6c8cce3182d21949f` |
+| Commit | `fix: load Supabase env for church platform` (2026-08-09) |
+| Working tree al iniciar esta orden | Limpio en worktree `docs/hermes/repo-governance-setup` antes de cambios de gobierno |
+| Ramas existentes | `main`, `staging`, `origin/main`, `origin/staging` — `main` y `staging` alineadas en `b12f812` |
+| Remoto | `git@github.com:nugacorp/creator-ai-studio.git` |
 | Tags | Ninguno |
 | Verificación local 2026-08-09 | `npm run typecheck`, `npm run test`, `npm run build` pasan |
 
-> **Fuente de verdad canónica.** Este archivo se verifica contra el repositorio, no contra documentos previos. `docs/00-governance/PROJECT_STATE.md` es un puntero a este archivo; `docs/00-governance/ROADMAP.md` y `docs/02-operations/STAGING_SNAPSHOT.md` son snapshots históricos pre-pivote.
+> **Fuente de verdad canónica.** Este archivo se verifica contra el repositorio, no contra documentos previos. `docs/00-governance/PROJECT_STATE.md` es un puntero a este archivo; `docs/00-governance/ROADMAP.md` registra el roadmap operativo vigente; `docs/02-operations/STAGING_SNAPSHOT.md` conserva snapshots operativos históricos.
 
 ## Purpose
 
@@ -175,7 +175,7 @@ Tabla `publish_targets`, plataformas admitidas por CHECK: `youtube`, `facebook`,
 | Web | nginx sirve la SPA en `:8080` y proxya `/api` → `api:3000` ([deploy/nginx.web.conf](deploy/nginx.web.conf)) — **mismo origen**, por eso la ausencia de CORS no se nota hoy |
 | Fastify | `trustProxy: true` sin lista de proxies confiables ([app.ts:62](apps/api/src/app.ts#L62)) |
 | Hardening | Headers de seguridad, `cache-control: no-store` global, rate limit en memoria por IP ([http/hardening.ts](apps/api/src/http/hardening.ts)) |
-| CI/CD | `.github/workflows/`: `ci.yml`, `deploy-staging.yml`, `deploy-production.yml`, `setup-rclone-vps.yml` |
+| CI/CD | `.github/workflows/`: `ci.yml`, `deploy-staging.yml`, `deploy-production.yml` |
 | Compose producción | Workflow usa `deploy/docker-compose.production.yml`; el `docker-compose.production.yml` de raíz apunta a `Dockerfile.*` en raíz, que no existen |
 | Base de datos | Supabase, PostgreSQL 17, PostgREST v14.5, GoTrue v2.191.0 |
 
@@ -226,7 +226,7 @@ Tabla `publish_targets`, plataformas admitidas por CHECK: `youtube`, `facebook`,
 
 ### 3.5 Staging y producción
 
-- **Staging:** `https://creator-ai-studio.217.76.56.66.sslip.io`. ⚠️ `deploy-staging.yml` se dispara con push a la rama `staging`, **que ya no existe en el repositorio**. El despliegue de staging está, de hecho, huérfano.
+- **Staging:** `https://creator-ai-studio.217.76.56.66.sslip.io`. La rama remota `staging` fue restaurada el 2026-08-09 desde `origin/main` en `b12f812`; `deploy-staging.yml` vuelve a tener rama disparadora.
 - **Producción:** existe `deploy-production.yml` (push a `main` o dispatch manual) y apunta a `deploy/docker-compose.production.yml`, pero requiere app Coolify y secretos separados. **Sin dominio propio ni HTTPS con certificado válido: se sigue en `sslip.io`.** El `docker-compose.production.yml` de la raíz parece obsoleto porque referencia `Dockerfile.api`, `Dockerfile.web` y `Dockerfile.worker` en raíz, archivos que no existen.
 - El código de iglesia (`fe52bc2`) está en `main`; **no consta despliegue verificado de este commit en ningún entorno**.
 
@@ -240,7 +240,7 @@ Tabla `publish_targets`, plataformas admitidas por CHECK: `youtube`, `facebook`,
 | D-4 | No hay CORS: cualquier consumidor fuera del origen de nginx falla | Sin `@fastify/cors` en dependencias |
 | D-5 | Rate limit en memoria: no sobrevive reinicio ni escala horizontalmente | [hardening.ts:9-11](apps/api/src/http/hardening.ts#L9-L11) |
 | D-6 | Dos DAM y dos módulos de calendario coexisten | `digital-assets/` + `church-ops/`; `calendar/` + `church-ops/calendar-routes.ts` |
-| D-7 | Rama `staging` inexistente con workflow que la referencia | `git branch -a` + `deploy-staging.yml` |
+| D-7 | Rama `staging` restaurada; requiere protección de branch y PR obligatoria | `origin/staging` @ `b12f812` + `deploy-staging.yml` |
 | D-8 | Sin tests de RLS ni de integración PostgREST | `apps/api/test/` |
 | D-9 | rclone: OAuth interactivo en VPS aún pendiente | [docs/02-operations/RCLONE_DRIVE.md](docs/02-operations/RCLONE_DRIVE.md) |
 | D-10 | Compose de producción duplicado/obsoleto en raíz | `docker-compose.production.yml` referencia `Dockerfile.*` inexistentes; workflow usa `deploy/docker-compose.production.yml` |
@@ -290,7 +290,7 @@ Ordenados por precedencia; los cuatro primeros bloquean el inicio de Church Publ
 | B-5 | **CORS** — dependencia ausente; requerido para consumo cross-origin | Implementación |
 | B-6 | **Caché** — `no-store` global debe exceptuarse para rutas públicas | Implementación |
 | B-7 | **Proxies confiables y rate limiting** — `trustProxy: true` sin allowlist; **bloqueante antes de cualquier escritura pública**, no antes de V1 solo lectura | Seguridad |
-| B-8 | Producción real en Coolify + rama de despliegue coherente | Operaciones |
+| B-8 | Producción real en Coolify + branch protections para `main`/`staging` | Operaciones |
 | B-9 | E2E de staging con TTS y render reales | Operaciones |
 
 ---
@@ -301,13 +301,13 @@ Se conserva el historial; se marca lo que dejó de ser válido.
 
 | Afirmación previa | Estado |
 |---|---|
-| "Staging HEAD `staging` @ `0cee3a4`" (v1.0.0) | ❌ Obsoleto — la rama `staging` no existe; HEAD real es `main` @ `fe52bc2` |
+| "Staging HEAD `staging` @ `0cee3a4`" (v1.0.0) | ❌ Obsoleto — `staging` fue restaurada desde `main` @ `b12f812` el 2026-08-09 |
 | "14 agentes orquestados por Hermes como pipeline obligatorio" | ⚠️ Reencuadrado — el código sigue, el flujo obligatorio no |
 | "Módulos UI: Home, Contenido, Proyectos, Workspace, Multicanal…" | ⚠️ Vigente solo como shell legacy; la shell activa de iglesia son los 6 espacios |
 | "Control de OBS por obs-websocket v5" (AD-2 del plan técnico) | ❌ **No implementado** — es diseño, no estado |
 | "Persistencia JSON en `/data` para las entidades nuevas" (§5 del plan técnico) | ❌ Superado — la implementación usa tablas Supabase con RLS |
 | "Estimado ~90% hacia producción" | ❌ Obsoleto — la métrica medía el producto anterior |
-| `docs/00-governance/ROADMAP.md` (fases 0–7) | ⚠️ Snapshot histórico pre-pivote |
+| `docs/00-governance/ROADMAP.md` anterior (fases 0–7) | ⚠️ Superado — el archivo vigente fue reencuadrado a roadmap post-pivote y gobierno Git el 2026-08-09 |
 | `docs/02-operations/STAGING_SNAPSHOT.md` | ⚠️ Snapshot histórico pre-pivote |
 
 ---
@@ -336,3 +336,5 @@ Se conserva el historial; se marca lo que dejó de ser válido.
 | 2026-07-05 | 1.0.0 | Cursor | Sync with staging `0cee3a4`: 14 agents, Contenido, channels, rclone, deploy env |
 | 2026-08-06 | 2.0.0 | Claude | Sincronización post-pivote contra `main` @ `fe52bc2`: identidad de plataforma de iglesia, módulos `church-ops`, RBAC+RLS, DAM real, corrección de OBS como no implementado, ejecutor de calendario ausente, deudas D-1…D-10, bloqueadores B-1…B-9, Church Public Portal V1 como próxima iniciativa |
 | 2026-08-09 | 2.1.0 | Codex | Re-verificación contra HEAD real `fe52bc2`; working tree documental no limpio; gates locales `typecheck`, `test` y `build` en verde; deuda D-10 sobre compose de producción raíz; Church Public Portal V1 enlazado como plan propuesto |
+
+| 2026-08-09 | 2.2.0 | Hermes | Reorganización Git: clone oficial definido, worktrees habilitados, `main` sincronizada con `origin/main`, `staging` restaurada/publicada desde `origin/main`, reglas multiagente incorporadas en `AGENTS.md`. |

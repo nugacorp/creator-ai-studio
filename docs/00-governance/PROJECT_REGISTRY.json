@@ -1,17 +1,24 @@
 {
   "title": "PROJECT_REGISTRY",
-  "version": "0.3.0",
+  "version": "2.2.0",
   "created": "2026-06-25",
-  "last_modified": "2026-06-25",
-  "author": "Hermes \u2014 Chief PMO & Document Controller",
-  "status": "Draft",
+  "last_modified": "2026-08-09",
+  "author": "Hermes — Chief PMO & Document Controller",
+  "status": "Active",
   "project": {
     "name": "Creator AI Studio",
-    "phase": "Phase 0: Blueprint",
-    "repository": "git@github.com:nugacorp/creator-ai-studio.git"
+    "phase": "Post-pivot: church digital team platform / repository governance setup",
+    "repository": "git@github.com:nugacorp/creator-ai-studio.git",
+    "canonical_clone": "/home/creator/projects/creator-ai-studio",
+    "worktrees_root": "/home/creator/worktrees/creator-ai-studio",
+    "default_branch": "main",
+    "integration_branch": "staging",
+    "current_head": "b12f8124bad3321a788e5ec6c8cce3182d21949f"
   },
   "official_documents": [
     "README.md",
+    "AGENTS.md",
+    "PROJECT_STATE.md",
     "docs/00-governance/PROJECT_STATE.md",
     "docs/00-governance/CHANGELOG.md",
     "docs/00-governance/ROADMAP.md",
@@ -19,20 +26,20 @@
     "docs/00-governance/MASTER_INDEX.md",
     "docs/00-governance/PROJECT_REGISTRY.json",
     "docs/01-architecture/TECH_STACK.md",
-    ".system/standards/DOCUMENTATION_STANDARD.md",
-    ".system/standards/DOCUMENT_STANDARD.md",
-    "docs/01-architecture/DEPLOYMENT_STAGING.md"
+    "docs/01-architecture/DEPLOYMENT_STAGING.md",
+    "docs/02-operations/RUNBOOK.md",
+    "docs/03-product/CHURCH_PUBLIC_PORTAL_V1_PLAN.md",
+    "docs/03-product/PLAN_IGLESIA_EQUIPO_DIGITAL.md",
+    "docs/03-product/PLAN_TECNICO_PLATAFORMA_IGLESIA.md",
+    ".github/pull_request_template.md"
   ],
   "official_directories": [
-    ".system/templates",
-    ".system/registry",
-    ".system/state",
-    ".system/standards",
-    ".system/schemas",
-    ".system/automation",
+    ".github",
+    ".system",
     "docs/00-governance",
     "docs/01-architecture",
     "docs/02-operations",
+    "docs/03-product",
     "docs/templates",
     "apps",
     "workers",
@@ -41,18 +48,26 @@
     "deploy",
     "supabase"
   ],
+  "branch_policy": {
+    "main": "production/stable; protected; PR required",
+    "staging": "integration/preproduction; protected; PR required",
+    "working_prefixes": [
+      "feature/",
+      "fix/",
+      "docs/",
+      "ops/",
+      "agent/",
+      "review/",
+      "refactor/"
+    ],
+    "archive_prefix": "archive/"
+  },
   "change_history": [
     {
       "date": "2026-06-25",
       "version": "0.1.0",
       "author": "Hermes",
       "change": "Initial project registry created."
-    },
-    {
-      "date": "2026-06-25",
-      "version": "0.1.0",
-      "author": "Hermes",
-      "change": "Normalized existing Markdown documents to official documentation standard."
     },
     {
       "date": "2026-06-25",
@@ -64,28 +79,13 @@
       "date": "2026-06-25",
       "version": "0.3.0",
       "author": "Hermes",
-      "change": "Prepared Coolify staging deployment configuration and registered DEPLOYMENT_STAGING document for CAS-HERMES-DEPLOY-0023."
+      "change": "Prepared Coolify staging deployment configuration and registered DEPLOYMENT_STAGING document."
+    },
+    {
+      "date": "2026-08-09",
+      "version": "2.2.0",
+      "author": "Hermes",
+      "change": "Updated registry for post-pivot project state, restored main/staging branch model, worktree root, and multi-agent governance."
     }
-  ],
-  "documentation_standard": ".system/standards/DOCUMENTATION_STANDARD.md",
-  "normalized_markdown_documents": [
-    ".system/standards/DOCUMENT_STANDARD.md",
-    "docs/00-governance/CHANGELOG.md",
-    "docs/00-governance/DOCUMENT_REGISTRY.md",
-    "docs/00-governance/MASTER_INDEX.md",
-    "docs/00-governance/PROJECT_STATE.md",
-    "README.md",
-    "docs/00-governance/ROADMAP.md",
-    "docs/templates/adr-template.md",
-    "docs/templates/agent-template.md",
-    "docs/templates/change-log-template.md",
-    "docs/templates/decision-template.md",
-    "docs/templates/document-template.md",
-    "docs/templates/meeting-template.md",
-    "docs/templates/module-template.md",
-    "docs/templates/roadmap-template.md",
-    "docs/templates/work-order-template.md",
-    "docs/templates/workflow-template.md",
-    "docs/01-architecture/DEPLOYMENT_STAGING.md"
   ]
 }

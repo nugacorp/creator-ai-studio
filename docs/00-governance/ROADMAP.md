@@ -1,7 +1,3 @@
-> ⚠️ **Snapshot histórico — ver [PROJECT_STATE.md](../../PROJECT_STATE.md) para el estado actual.** Este roadmap refleja fases 0–7 al 2026-06-25 y puede estar desfasado respecto a `staging`.
->
-> 🧭 **Nuevo rumbo de producto (equipo digital de iglesia):** ver [PLAN_IGLESIA_EQUIPO_DIGITAL.md](../03-product/PLAN_IGLESIA_EQUIPO_DIGITAL.md).
-
 ## Document ID
 
 ROADMAP
@@ -12,7 +8,7 @@ Roadmap
 
 ## Version
 
-1.0.0
+2.2.0
 
 ## Status
 
@@ -28,38 +24,49 @@ Hermes
 
 ## Last Updated
 
-2026-06-25
+2026-08-09
 
 ## Purpose
 
-Maintain the project roadmap with defined phases through production-ready state.
+Mantener el roadmap operativo vigente de Creator AI Studio después del pivote a plataforma del equipo digital de iglesia.
 
 ## Scope
 
-| Phase | Name | Status | Completion |
-|---|---|---|---|
-| 0 | MVP Staging & CI | Completed | 100% |
-| 1 | Unified Data Model | Completed | 100% |
-| 2 | Multi-Provider AI Gateway | Completed | 100% |
-| 3 | Connected Views | Completed | 100% |
-| 4 | Worker & Job Queue | Completed | 100% |
-| 5 | Auth & Database | Completed | 100% |
-| 6 | External Integrations | Completed | 100% |
-| 7 | Production Hardening | Completed | 100% |
+### Ramas y operación de repositorio
 
-Estimated overall completion: **85%** (pending: Coolify deploy verification, Supabase migration, real API keys in production).
+| Área | Estado | Siguiente control |
+|---|---|---|
+| `main` | Restaurada como rama estable/producción y alineada con `origin/main` @ `b12f812` | Proteger branch en GitHub |
+| `staging` | Restaurada/publicada desde `origin/main` @ `b12f812` | Proteger branch y usar PRs |
+| Worktrees IA | Directorio operativo creado en `/home/creator/worktrees/creator-ai-studio` | Crear un worktree por tarea/agente |
+| Gobierno multiagente | `AGENTS.md` actualizado | Hacer cumplir vía PR y Work Orders |
+
+### Roadmap funcional vigente
+
+| Fase | Nombre | Estado | Nota |
+|---|---|---|---|
+| G0 | Saneamiento Git y gobierno multiagente | En progreso | Esta rama establece reglas y documentos base |
+| G1 | Branch protections y PR workflow | Pendiente | Requiere configuración en GitHub por owner/admin |
+| P1 | Church Public Portal V1 | Propuesto | Ver `docs/03-product/CHURCH_PUBLIC_PORTAL_V1_PLAN.md` |
+| O1 | Staging verificable desde `staging` | Pendiente | Requiere push/merge controlado y validación Coolify |
+| O2 | Producción real con dominio/HTTPS | Pendiente | Requiere app Coolify/secretos/domino/protecciones |
+
+### Roadmap histórico pre-pivote
+
+Las fases 0–7 del producto anterior se conservan como historial y no deben presentarse como objetivo funcional actual sin revalidación contra `PROJECT_STATE.md`.
 
 ## Dependencies
 
-PROJECT_STATE.md
+PROJECT_STATE.md, AGENTS.md
 
 ## Related Documents
 
-MASTER_INDEX.md, CHANGELOG.md, docs/01-architecture/TECH_STACK.md
+MASTER_INDEX.md, CHANGELOG.md, DOCUMENT_REGISTRY.md, docs/03-product/CHURCH_PUBLIC_PORTAL_V1_PLAN.md
 
 ## Change History
 
 | Date | Version | Author | Change |
 |---|---:|---|---|
 | 2026-06-25 | 0.1.0 | Hermes | Initial roadmap created. |
-| 2026-06-25 | 1.0.0 | Hermes | Defined phases 0–7 with implementation status. |
+| 2026-06-25 | 1.0.0 | Hermes | Defined original phases 0–7. |
+| 2026-08-09 | 2.2.0 | Hermes | Reframed roadmap around post-pivot repo governance, restored `staging`, branch protections, and Church Public Portal V1. |

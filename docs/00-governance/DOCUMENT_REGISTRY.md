@@ -8,11 +8,11 @@ Document Registry
 
 ## Version
 
-0.2.0
+2.2.0
 
 ## Status
 
-Draft
+Active
 
 ## Author
 
@@ -24,54 +24,48 @@ Hermes
 
 ## Last Updated
 
-2026-06-25
+2026-08-09
 
 ## Purpose
 
-Maintain the official registry of controlled project documents.
+Mantener el registro oficial de documentos controlados y evitar duplicación de fuentes de verdad.
 
 ## Scope
 
-Document registry:
-
 | Document | Category | Status | Owner | Path |
 |---|---|---|---|---|
-| README | Foundation | Draft | Hermes | README.md |
-| MASTER_INDEX | Foundation | Draft | Hermes | docs/00-governance/MASTER_INDEX.md |
-| PROJECT_STATE | State | Draft | Hermes | docs/00-governance/PROJECT_STATE.md |
-| CHANGELOG | Change Control | Draft | Hermes | docs/00-governance/CHANGELOG.md |
-| ROADMAP | Planning | Draft | Hermes | docs/00-governance/ROADMAP.md |
-| DOCUMENT_REGISTRY | Registry | Draft | Hermes | docs/00-governance/DOCUMENT_REGISTRY.md |
-| PROJECT_REGISTRY | Metadata | Draft | Hermes | docs/00-governance/PROJECT_REGISTRY.json |
-| TECH_STACK | Architecture | Draft | Claude Code | docs/01-architecture/TECH_STACK.md |
-| DEPLOYMENT_STAGING | Architecture | Draft | Hermes | docs/01-architecture/DEPLOYMENT_STAGING.md |
-| DOCUMENTATION_STANDARD | Standards | Draft | Hermes | .system/standards/DOCUMENTATION_STANDARD.md |
-| DOCUMENT_STANDARD | Standards | Draft | Hermes | .system/standards/DOCUMENT_STANDARD.md |
-| ADR_TEMPLATE | Template | Draft | Hermes | docs/templates/adr-template.md |
-| AGENT_TEMPLATE | Template | Draft | Hermes | docs/templates/agent-template.md |
-| CHANGE_LOG_TEMPLATE | Template | Draft | Hermes | docs/templates/change-log-template.md |
-| DECISION_TEMPLATE | Template | Draft | Hermes | docs/templates/decision-template.md |
-| DOCUMENT_TEMPLATE | Template | Draft | Hermes | docs/templates/document-template.md |
-| MEETING_TEMPLATE | Template | Draft | Hermes | docs/templates/meeting-template.md |
-| MODULE_TEMPLATE | Template | Draft | Hermes | docs/templates/module-template.md |
-| ROADMAP_TEMPLATE | Template | Draft | Hermes | docs/templates/roadmap-template.md |
-| WORK_ORDER_TEMPLATE | Template | Draft | Hermes | docs/templates/work-order-template.md |
-| WORKFLOW_TEMPLATE | Template | Draft | Hermes | docs/templates/workflow-template.md |
+| README | Foundation | Active | Product Owner + Agents | README.md |
+| AGENTS | Agent Governance | Active | Hermes | AGENTS.md |
+| PROJECT_STATE | State | Active Canonical | Hermes | PROJECT_STATE.md |
+| PROJECT_STATE_POINTER | State Pointer | Active Pointer | Hermes | docs/00-governance/PROJECT_STATE.md |
+| MASTER_INDEX | Governance | Active | Hermes | docs/00-governance/MASTER_INDEX.md |
+| CHANGELOG | Change Control | Active | Hermes | docs/00-governance/CHANGELOG.md |
+| ROADMAP | Planning | Active | Hermes | docs/00-governance/ROADMAP.md |
+| DOCUMENT_REGISTRY | Registry | Active | Hermes | docs/00-governance/DOCUMENT_REGISTRY.md |
+| PROJECT_REGISTRY | Machine Registry | Active | Hermes | docs/00-governance/PROJECT_REGISTRY.json |
+| CONTEXTO_PROYECTO | Context | Historical/Review Required | Hermes | docs/00-governance/CONTEXTO_PROYECTO.md |
+| TECH_STACK | Architecture | Active/Review Required | Architect | docs/01-architecture/TECH_STACK.md |
+| DEPLOYMENT_STAGING | Architecture/Ops | Active/Review Required | Hermes | docs/01-architecture/DEPLOYMENT_STAGING.md |
+| RUNBOOK | Operations | Active | Hermes | docs/02-operations/RUNBOOK.md |
+| E2E_STAGING_CHECKLIST | Operations | Active/Review Required | Hermes | docs/02-operations/E2E_STAGING_CHECKLIST.md |
+| SUPABASE_AUTH | Operations | Active | Hermes | docs/02-operations/SUPABASE_AUTH.md |
+| CHURCH_PUBLIC_PORTAL_V1_PLAN | Product Plan | Proposed | Product Owner + Architect | docs/03-product/CHURCH_PUBLIC_PORTAL_V1_PLAN.md |
+| PLAN_IGLESIA_EQUIPO_DIGITAL | Product Plan | Active Context | Product Owner | docs/03-product/PLAN_IGLESIA_EQUIPO_DIGITAL.md |
+| PLAN_TECNICO_PLATAFORMA_IGLESIA | Technical Plan | Active/Partially Implemented | Architect | docs/03-product/PLAN_TECNICO_PLATAFORMA_IGLESIA.md |
+| PR_TEMPLATE | GitHub Governance | Active | Hermes | .github/pull_request_template.md |
 
 ## Dependencies
 
-MASTER_INDEX.md
+MASTER_INDEX.md, PROJECT_STATE.md
 
 ## Related Documents
 
-PROJECT_REGISTRY.json, DOCUMENTATION_STANDARD.md
+PROJECT_REGISTRY.json, CHANGELOG.md
 
 ## Change History
 
 | Date | Version | Author | Change |
 |---|---:|---|---|
 | 2026-06-25 | 0.1.0 | Hermes | Initial document registry created. |
-| 2026-06-25 | 0.1.0 | Hermes | Registered official documentation standard. |
-| 2026-06-25 | 0.1.0 | Hermes | Normalized document to official documentation standard and registered normalized templates. |
-| 2026-06-25 | 0.2.0 | Claude Code | Registered TECH_STACK architecture document. |
-| 2026-06-25 | 0.2.0 | Hermes | Registered DEPLOYMENT_STAGING architecture document for CAS-HERMES-DEPLOY-0023. |
+| 2026-06-25 | 0.2.0 | Hermes/Claude Code | Registered architecture and deployment documents. |
+| 2026-08-09 | 2.2.0 | Hermes | Updated registry for root canonical `PROJECT_STATE.md`, AGENTS governance, Church Public Portal docs, and PR template. |

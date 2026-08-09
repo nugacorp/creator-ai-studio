@@ -1,61 +1,168 @@
 # AGENTS.md
 
-## Cursor Cloud specific instructions
+## Propósito
 
-Creator AI Studio is an npm workspaces monorepo (Node >= 20). Standard commands are
-documented in `README.md`; the notes below only cover non-obvious startup/run caveats
-for this environment. The update script already runs `npm install` on VM startup.
+Este archivo define las reglas operativas para humanos y agentes IA que trabajen en Creator AI Studio. Es obligatorio para Hermes, Codex, Claude, Cursor y cualquier otro agente que edite este repositorio.
 
-### Services
+Creator AI Studio es un monorepo npm workspaces (Node >= 20) para la plataforma operativa del equipo digital de una iglesia. El repositorio contiene API Fastify, web React/Vite, worker de producción, tipos compartidos, migraciones Supabase, despliegue y documentación de gobierno.
+
+## Fuente de verdad y rol de documentos
+
+- Estado oficial del proyecto: `PROJECT_STATE.md` en la raíz.
+- Gobierno documental: `docs/00-governance/`.
+- Producto/planes funcionales: `docs/03-product/`.
+- Operaciones/runbooks/evidencia: `docs/02-operations/`.
+- Arquitectura/despliegue: `docs/01-architecture/`.
+
+No crees fuentes de verdad duplicadas. Si un documento histórico queda obsoleto, márcalo como snapshot/puntero en lugar de mantener dos versiones activas.
+
+## Ramas oficiales
+
+- `main`: rama estable/producción. Debe estar protegida. No se trabaja directo aquí.
+- `staging`: integración/preproducción. Debe estar protegida. Coolify staging y validaciones operativas deben apuntar aquí.
+- `feature/*`: nuevas funcionalidades.
+- `fix/*`: correcciones.
+- `docs/*`: documentación y gobierno.
+- `ops/*`: infraestructura/despliegue.
+- `agent/*`: trabajo explícitamente aislado de agentes IA.
+- `archive/*`: preservación histórica; no se usa para desarrollo activo.
+
+Todo cambio normal debe salir de una rama corta y entrar por Pull Request. No hagas push directo a `main` ni `staging` salvo autorización explícita del Product Owner.
+
+## Worktrees obligatorios para agentes
+
+El clone oficial local es:
+
+`/home/creator/projects/creator-ai-studio`
+
+Los agentes deben trabajar en worktrees bajo:
+
+`/home/creator/worktrees/creator-ai-studio/`
+
+Ejemplo:
+
+```bash
+git fetch origin
+git worktree add /home/creator/worktrees/creator-ai-studio/hermes-wo-001 \
+  -b docs/hermes/wo-001 origin/staging
+```
+
+No trabajes varios agentes en el mismo directorio ni en la misma rama.
+
+## Roles de agentes
+
+### Hermes
+
+- Rol: Chief PMO & Document Controller, coordinación, validación y reporte.
+- Puede actualizar documentos de control solo con Work Order/autorización explícita.
+- No decide estrategia de producto, arquitectura o negocio por iniciativa propia.
+- No hace merge, deploy, push a ramas protegidas ni publicación externa sin autorización explícita.
+
+### Codex / agentes de implementación
+
+- Rol: implementación, tests, correcciones técnicas.
+- Usar ramas `feature/codex/*`, `fix/codex/*` o `agent/codex/*`.
+- No modificar documentos de gobierno salvo que el scope lo autorice.
+
+### Claude / agentes de arquitectura o revisión
+
+- Rol: revisión, refactor o arquitectura bajo autorización.
+- Usar ramas `review/claude/*`, `refactor/claude/*`, `feature/claude/*` o `agent/claude/*`.
+- Debe dejar evidencia de decisiones arquitectónicas en ADR/documentos autorizados.
+
+## Reglas de scope
+
+- Respeta el alcance de la Work Order.
+- No hagas cambios “de paso”.
+- No cambies decisiones de negocio, producto o arquitectura sin autorización.
+- No introduzcas mocks/demo como evidencia de producción.
+- No ejecutes pipeline, TTS, render, publicación, YouTube upload ni `confirm-publish` sin autorización explícita.
+- No imprimas secretos ni tokens en logs o respuestas.
+- No modifiques `main` directamente.
+- No uses `git push --force` salvo orden explícita y justificación.
+
+## Commits y Pull Requests
+
+Formato de commit:
+
+```text
+type: concise subject
+```
+
+Tipos válidos: `docs`, `fix`, `feat`, `ops`, `test`, `refactor`, `chore`.
+
+Ejemplos:
+
+```text
+docs: establish multi-agent repository governance
+fix: restore church API healthcheck validation
+ops: prepare Coolify staging deployment
+```
+
+PRs deben incluir:
+
+- Objetivo y Work Order relacionada.
+- Rama base y rama origen.
+- Resumen de cambios.
+- Archivos modificados.
+- Validaciones ejecutadas con resultado real.
+- Riesgos y rollback.
+- Confirmación de que no se expusieron secretos.
+
+## Servicios locales
 
 | Service | Location | Run (dev) | Notes |
 |---|---|---|---|
-| API | `apps/api` (`@creator-ai-studio/api`) | `npm run start --workspace @creator-ai-studio/api` | Fastify on port `3000`. Runs `node dist/server.js`, so it must be **built first** (`npm run build` from root, or the workspace `build` script). No watch/hot-reload — rebuild after code changes. Runs without auth in dev (no `CAS_API_KEY`/`SUPABASE_*`). |
-| Web | `apps/web` (`@creator-ai-studio/web`) | `npm run dev --workspace @creator-ai-studio/web` | Vite dev server on port `5173` with HMR. |
-| Worker | `workers/production` (`@creator-ai-studio/production-worker`) | `npm run start --workspace @creator-ai-studio/production-worker` | Polls the API `/jobs/pending` every 5s. Must be **built first** (no watch). No Redis required (falls back to polling). |
+| API | `apps/api` (`@creator-ai-studio/api`) | `npm run start --workspace @creator-ai-studio/api` | Fastify en puerto `3000`. Ejecuta `node dist/server.js`; debe compilarse antes (`npm run build --workspace @creator-ai-studio/api` o build raíz). |
+| Web | `apps/web` (`@creator-ai-studio/web`) | `npm run dev --workspace @creator-ai-studio/web` | Vite en puerto `5173` con HMR. |
+| Worker | `workers/production` (`@creator-ai-studio/production-worker`) | `npm run start --workspace @creator-ai-studio/production-worker` | Polling de `/jobs/pending` cada 5s. Debe compilarse antes. |
 
-### Non-obvious gotchas
+## Gotchas no obvios
 
-#### Local dev: same-origin API (avoid silent demo data)
+### Local dev: same-origin API
 
-The dashboard calls the API via `VITE_API_BASE_URL` (default **`/api`**). In production, nginx serves the SPA and proxies `/api` → the API container (same origin).
-
-**Local default (recommended):** `apps/web/vite.config.ts` defines a Vite dev proxy — `/api` → `http://127.0.0.1:3000`. With the default env, the browser talks to `http://localhost:5173/api/...` (same origin as the dev server); Vite forwards to the API.
+La web usa `VITE_API_BASE_URL` con default `/api`. En producción nginx sirve la SPA y proxya `/api` al contenedor API. En desarrollo, `apps/web/vite.config.ts` debe mantener proxy `/api` -> `http://127.0.0.1:3000`.
 
 ```bash
-# Terminal 1 — build once, then start API on :3000
 npm run build --workspace @creator-ai-studio/api
 npm run start --workspace @creator-ai-studio/api
-
-# Terminal 2 — Vite on :5173 (proxy active)
 npm run dev --workspace @creator-ai-studio/web
 ```
 
-Keep **`VITE_API_BASE_URL=/api`** (or unset — same default). Do **not** point it at `http://localhost:3000/api` unless you also add CORS on the API.
+Mantén `VITE_API_BASE_URL=/api` o unset. No apuntes a `http://localhost:3000/api` salvo que agregues CORS al API.
 
-**Symptoms when misconfigured (cross-origin):** API requests fail (no CORS plugin on Fastify). The UI **silently falls back to built-in demo data** — e.g. sample "David vs Goliat" projects, fake Analytics KPIs, placeholder channels, empty real backend despite API running.
+Síntomas de mala configuración: requests cross-origin fallan y la UI puede caer silenciosamente a datos demo (por ejemplo “David vs Goliat”, KPIs falsos o canales placeholder).
 
-**Fix checklist:**
+### Storage de episodios
 
-1. Open the app at **`http://localhost:5173`** (not `:3000`).
-2. Ensure `.env` / `.env.local` does **not** override `VITE_API_BASE_URL` to a full `http://localhost:3000/...` URL.
-3. Confirm `apps/web/vite.config.ts` proxy block is present (do not remove for local dev).
-4. Rebuild/restart web dev server after env changes (Vite inlines `VITE_*` at startup).
-5. Optional sanity check: Network tab should show requests to `/api/...` on port **5173**, not direct `:3000` calls.
+`LOCAL_STORAGE_PATH` default es `episodes/`, resuelto relativo al cwd del proceso. Si el API se inicia desde workspace, los datos caen en `apps/api/episodes/` y están ignorados por Git.
 
-Alternative: any reverse proxy that serves the web app and forwards `/api/*` to port `3000` on one origin.
+### Límite de episodios activos
 
-- **Episode storage location.** Episodes persist to the local filesystem at
-  `LOCAL_STORAGE_PATH` (default `episodes/`, resolved relative to the process cwd). When
-  the API is started via the workspace `start` script, its cwd is `apps/api`, so data
-  lands in `apps/api/episodes/` (git-ignored).
-- **`maxActiveEpisodes` defaults to 1.** Creating a second active episode returns HTTP
-  `409` until the first is archived/published. Adjust via `PATCH /api/settings`.
-- **Worker render/pipeline jobs need extras.** `render`/`shorts`/`pipeline` jobs require
-  `ffmpeg` and AI/integration keys; without them those jobs fail gracefully while the
-  worker itself keeps polling/claiming normally.
+`maxActiveEpisodes` default es `1`. Crear un segundo episodio activo devuelve HTTP `409` hasta archivar/publicar el primero o cambiar settings con autorización.
 
-### Quality gates
+### Jobs de render/pipeline
 
-Run from the repo root (mirrors CI in `.github/workflows/ci.yml`): `npm run typecheck`,
-`npm run test`, `npm run build`. There is no lint script.
+`render`, `shorts` y `pipeline` requieren `ffmpeg` y credenciales/integraciones reales. Sin esos extras pueden fallar de forma esperada mientras el worker sigue operativo.
+
+## Quality gates
+
+Desde la raíz del repo:
+
+```bash
+npm run typecheck
+npm run test
+npm run build
+```
+
+No declares listo un cambio de código sin ejecutar gates reales o explicar claramente el bloqueo. Para cambios solo documentales, valida al menos JSON/YAML, links internos razonables y `git status`.
+
+## Formato final requerido para Hermes en tareas CAS
+
+- Estado
+- Resumen
+- Archivos creados
+- Archivos modificados
+- Documentación actualizada
+- Inconsistencias detectadas
+- Siguiente paso recomendado
