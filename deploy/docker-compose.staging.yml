@@ -21,6 +21,7 @@ services:
       PIPER_MODEL: ${PIPER_MODEL:-}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
       SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-${VITE_SUPABASE_ANON_KEY:-}}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
       # FASE 8: staging valida flujos reales — mocks bloqueados por defecto.
       ALLOW_MOCKS: ${ALLOW_MOCKS:-false}
