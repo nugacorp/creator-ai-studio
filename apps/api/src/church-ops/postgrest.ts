@@ -210,6 +210,21 @@ export function serviceClient(): ChurchDbClient {
   return new ChurchDbClient(config.url, config.serviceRoleKey, config.serviceRoleKey);
 }
 
+/**
+ * Anonymous PostgREST client for the public church portal.
+ *
+ * Sends the anon key both as `apikey` and as the Bearer token, so PostgREST
+ * evaluates the request as role `anon`. RLS policies with `to anon` and the
+ * column-level grants determine what is visible. Never send a user JWT here:
+ * that would authenticate the request as the wrong identity.
+ */
+export function anonClient(): ChurchDbClient {
+  const config = getSupabaseConfig();
+  const key = anonKey();
+  if (!config || !key) throw new ChurchDbNotConfiguredError();
+  return new ChurchDbClient(config.url, key, key);
+}
+
 /** PostgREST `or=` filter helper: `or(a.eq.1,b.eq.2)`. */
 export function orFilter(...conditions: string[]): string {
   return `(${conditions.join(',')})`;

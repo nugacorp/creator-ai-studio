@@ -19,7 +19,7 @@ describe('FASE 3 — safe pipeline & publish package', () => {
     storageDir = await mkdtemp(path.join(tmpdir(), 'cas-phase3-'));
     // Jobs are stored next to the episodes dir; point both at the tmp dir.
     process.env.LOCAL_STORAGE_PATH = path.join(storageDir, 'episodes');
-    app = buildApp({ storage: new EpisodeStorage(process.env.LOCAL_STORAGE_PATH) });
+    app = await buildApp({ storage: new EpisodeStorage(process.env.LOCAL_STORAGE_PATH) });
     await app.ready();
   });
 

@@ -39,7 +39,7 @@ describe('AI provider errors and fallback', () => {
     delete process.env.AI_SCRIPT_PROVIDER;
     delete process.env.AI_PROVIDER_DEFAULT;
     resetProviderStatusCacheForTests();
-    app = buildApp({ storage: new EpisodeStorage(storageDir) });
+    app = await buildApp({ storage: new EpisodeStorage(storageDir) });
     await app.ready();
   });
 

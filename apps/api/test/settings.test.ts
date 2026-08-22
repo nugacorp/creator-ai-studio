@@ -16,7 +16,7 @@ describe('settings routes', () => {
     rootDir = await mkdtemp(path.join(tmpdir(), 'cas-settings-'));
     storageDir = path.join(rootDir, 'episodes');
     process.env.LOCAL_STORAGE_PATH = storageDir;
-    app = buildApp({ storage: new EpisodeStorage(storageDir) });
+    app = await buildApp({ storage: new EpisodeStorage(storageDir) });
     await app.ready();
   });
 

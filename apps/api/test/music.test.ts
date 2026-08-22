@@ -39,7 +39,7 @@ describe('episode music generation', () => {
     process.env.AI_ALLOW_DEMO_FALLBACK = 'true';
     process.env.ALLOW_MOCKS = 'true';
     storage = new EpisodeStorage(storageDir);
-    app = buildApp({ storage });
+    app = await buildApp({ storage });
     await app.ready();
   });
 

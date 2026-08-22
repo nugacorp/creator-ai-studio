@@ -57,6 +57,7 @@ const PLATFORM_LABELS: Record<PublishPlatform, string> = {
   instagram: 'Instagram',
   tiktok: 'TikTok',
   x: 'X',
+  web: 'Sitio web',
 };
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];

@@ -31,6 +31,7 @@ import {
   updateProduction,
   type ProductionDetail,
 } from '../api';
+import WebPublishingSection from '../components/WebPublishingSection';
 import { useChurch } from '../ChurchContext';
 import {
   Button,
@@ -731,6 +732,15 @@ function ProductionPanel({
                   <p className="text-xs text-[#7C8794]">Todavía no hay guion.</p>
                 )}
               </section>
+
+              <WebPublishingSection
+                production={production}
+                canManage={can('production.publish')}
+                busy={busy}
+                onSave={async input => {
+                  await run(() => updateProduction(production.id, input));
+                }}
+              />
 
               <section>
                 <h3 className="text-xs font-bold uppercase tracking-wide text-[#A9B4C0] mb-3">

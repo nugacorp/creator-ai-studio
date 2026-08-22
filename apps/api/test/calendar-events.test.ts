@@ -16,7 +16,7 @@ describe('calendar events', () => {
     storageDir = await mkdtemp(path.join(tmpdir(), 'cas-calendar-'));
     previousDataPath = process.env.CAS_DATA_PATH;
     process.env.CAS_DATA_PATH = storageDir;
-    app = buildApp({ storage: new EpisodeStorage(storageDir) });
+    app = await buildApp({ storage: new EpisodeStorage(storageDir) });
     await app.ready();
   });
 
