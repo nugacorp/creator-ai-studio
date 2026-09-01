@@ -87,6 +87,10 @@ export function registerChurchLiveRoutes(app: FastifyInstance, prefix: '' | '/ap
         crew?: LiveCrewAssignment[];
         checklist?: string[];
         obsProfile?: string;
+        visibility?: 'interna' | 'equipo' | 'publica';
+        showOnLanding?: boolean;
+        publicTitle?: string;
+        watchUrl?: string;
       };
 
       const scheduledAt = new Date(body.scheduledAt);
@@ -109,6 +113,10 @@ export function registerChurchLiveRoutes(app: FastifyInstance, prefix: '' | '/ap
           obs_profile: body.obsProfile?.trim() || null,
           incidents: [],
           created_by: request.userId ?? null,
+          visibility: body.visibility ?? 'interna',
+          show_on_landing: body.showOnLanding ?? false,
+          public_title: body.publicTitle?.trim() || null,
+          watch_url: body.watchUrl?.trim() || null,
         });
         reply.code(201);
         return toLiveEvent(row);
@@ -132,6 +140,11 @@ export function registerChurchLiveRoutes(app: FastifyInstance, prefix: '' | '/ap
         obsProfile?: string;
         recordingAssetId?: string;
         crew?: LiveCrewAssignment[];
+        visibility?: string;
+        showOnLanding?: boolean;
+        publicTitle?: string;
+        watchUrl?: string;
+        coverAssetId?: string;
       };
 
       const patch: Record<string, unknown> = {
@@ -142,6 +155,20 @@ export function registerChurchLiveRoutes(app: FastifyInstance, prefix: '' | '/ap
         ...(body.obsProfile !== undefined ? { obs_profile: body.obsProfile.trim() || null } : {}),
         ...(body.recordingAssetId !== undefined
           ? { recording_asset_id: body.recordingAssetId || null }
+          : {}),
+        // Public portal V1
+        ...(body.visibility !== undefined ? { visibility: body.visibility } : {}),
+        ...(body.showOnLanding !== undefined
+          ? { show_on_landing: Boolean(body.showOnLanding) }
+          : {}),
+        ...(body.publicTitle !== undefined
+          ? { public_title: String(body.publicTitle).trim() || null }
+          : {}),
+        ...(body.watchUrl !== undefined
+          ? { watch_url: String(body.watchUrl).trim() || null }
+          : {}),
+        ...(body.coverAssetId !== undefined
+          ? { cover_asset_id: body.coverAssetId || null }
           : {}),
       };
 

@@ -30,7 +30,7 @@ describe('auth', () => {
 
   async function buildAuthedApp(): Promise<FastifyInstance> {
     storageDir = await mkdtemp(path.join(tmpdir(), 'cas-auth-'));
-    const instance = buildApp({ storage: new EpisodeStorage(storageDir) });
+    const instance = await buildApp({ storage: new EpisodeStorage(storageDir) });
     await instance.ready();
     return instance;
   }

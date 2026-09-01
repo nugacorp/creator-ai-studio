@@ -24,7 +24,7 @@ Cursor + Hermes + Claude + Codex
 
 ## Last Updated
 
-2026-08-09 (gobierno Git saneado; `main` y `staging` publicados en `b12f812`)
+2026-08-22 (Fase 1 SQL + Fase 2 API + control interno + deudas D-3/D-5/D-10 cerradas; Church Public Portal V1 listo para merge a staging)
 
 ## HEAD verificado
 
@@ -183,6 +183,27 @@ Tabla `publish_targets`, plataformas admitidas por CHECK: `youtube`, `facebook`,
 
 ## 3. Estado real
 
+### 3.0 Delta WO-CAS-PORTAL-V1 (2026-08-22)
+
+Ejecutado por Codex con autorización directa del PO sobre `feature/codex/portal-v1`:
+
+- **Fase 1 SQL** — migración `supabase/migrations/20260822140000_church_public_portal_v1.sql` con campos ortogonales de visibilidad en `productions` y `live_events`, extensión de `publish_targets.platform` con `'web'`, índices parciales, políticas RLS `to anon`, grants por columna, vistas `security_invoker` (`public_live`, `public_events`, `public_latest_sermons`).
+- **Fase 1 tests SQL** — `supabase/tests/church_public_portal_v1.test.sql` cubre T-01…T-16.
+- **Fase 1 tipos** — espejo en `packages/shared`: `ProductionVisibility`, `PublicLiveResponse`, `PublicEventsResponse`, `PublicLatestSermonResponse`, `slugifyProductionTitle`, `canPublishOnWeb`, `isWebPublishable`.
+- **Fase 2 API** — plugin Fastify en `apps/api/src/public-portal/` montado bajo `/api/public/`, `anonClient()` en `church-ops/postgrest.ts`, `@fastify/cors` encapsulado, cabeceras `cache-control: public, max-age=…`, allowlist extendida con `/api/public/` (barra final obligatoria).
+- **Fase 2 tests** — `apps/api/test/public-portal.test.ts` cubre T-20…T-34 (13 tests, todos verdes).
+- **Fase 4 control interno** — `WebPublishingSection` en `apps/web/src/church/components/` integrado en `ProductionsView`. Requiere `production.publish` para editar.
+- **D-3 cerrado** — `deploy/nginx.web.conf` levanta `client_max_body_size` a 5 GB igualando `MAX_ASSET_BYTES`.
+- **D-5 cerrado** — rate limit a Redis cuando `REDIS_URL` está definido (`apps/api/src/http/rate-limit-redis.ts`); fallback en memoria cuando no.
+- **D-10 cerrado** — `docker-compose.production.yml` de raíz eliminado; el workflow usa `deploy/docker-compose.production.yml` exclusivamente.
+- **Runbooks** — `docs/02-operations/PUBLIC_PORTAL_ROLLBACK.md`, `BRANCH_PROTECTION.md`, `RCLONE_OAUTH_VPS.md`.
+
+Pendiente (no bloquea merge):
+
+- **D-7**: ejecutar pasos en `BRANCH_PROTECTION.md` (admin GitHub).
+- **D-9**: ejecutar pasos en `RCLONE_OAUTH_VPS.md` (SSH + OAuth interactivo).
+- **B-1/B-2/B-3**: dominio, hosting de la landing (Cloudflare Pages), `CHURCH_PUBLIC_SLUG` real.
+
 ### 3.1 Implementado y verificado en código
 
 - Esquema de iglesia completo: 10 tablas, índices, triggers `updated_at`, búsqueda full-text en español, bootstrap de membresía del creador.
@@ -242,8 +263,8 @@ Tabla `publish_targets`, plataformas admitidas por CHECK: `youtube`, `facebook`,
 | D-6 | Dos DAM y dos módulos de calendario coexisten | `digital-assets/` + `church-ops/`; `calendar/` + `church-ops/calendar-routes.ts` |
 | D-7 | Rama `staging` restaurada; requiere protección de branch y PR obligatoria | `origin/staging` @ `b12f812` + `deploy-staging.yml` |
 | D-8 | Sin tests automatizados de RLS/PostgREST; migración de hardening agregada para warnings Supabase de `SECURITY DEFINER` y `search_path` | `apps/api/test/`, `supabase/migrations/20260809180000_harden_security_definer_functions.sql` |
-| D-9 | rclone: OAuth interactivo en VPS aún pendiente | [docs/02-operations/RCLONE_DRIVE.md](docs/02-operations/RCLONE_DRIVE.md) |
-| D-10 | Compose de producción duplicado/obsoleto en raíz | `docker-compose.production.yml` referencia `Dockerfile.*` inexistentes; workflow usa `deploy/docker-compose.production.yml` |
+| D-9 | rclone: OAuth interactivo en VPS aún pendiente — **runbook añadido** | [docs/02-operations/RCLONE_OAUTH_VPS.md](docs/02-operations/RCLONE_OAUTH_VPS.md), [docs/02-operations/RCLONE_DRIVE.md](docs/02-operations/RCLONE_DRIVE.md) |
+| D-10 | Compose de producción duplicado en raíz — **CERRADO** | raíz `docker-compose.production.yml` eliminado; workflow usa `deploy/docker-compose.production.yml` |
 
 ---
 
@@ -337,5 +358,5 @@ Se conserva el historial; se marca lo que dejó de ser válido.
 | 2026-08-06 | 2.0.0 | Claude | Sincronización post-pivote contra `main` @ `fe52bc2`: identidad de plataforma de iglesia, módulos `church-ops`, RBAC+RLS, DAM real, corrección de OBS como no implementado, ejecutor de calendario ausente, deudas D-1…D-10, bloqueadores B-1…B-9, Church Public Portal V1 como próxima iniciativa |
 | 2026-08-09 | 2.1.0 | Codex | Re-verificación contra HEAD real `fe52bc2`; working tree documental no limpio; gates locales `typecheck`, `test` y `build` en verde; deuda D-10 sobre compose de producción raíz; Church Public Portal V1 enlazado como plan propuesto |
 
-| 2026-08-09 | 2.2.0 | Hermes | Reorganización Git: clone oficial definido, worktrees habilitados, `main` sincronizada con `origin/main`, `staging` restaurada/publicada desde `origin/main`, reglas multiagente incorporadas en `AGENTS.md`. |
 | 2026-08-09 | 2.3.0 | Hermes | Added Supabase hardening migration for linter warnings: pinned trigger function search paths, moved RLS helpers to private schema, removed public RPC attack surface for SECURITY DEFINER helpers, and clarified required Supabase runtime variables. |
+| 2026-08-22 | 2.4.0 | Codex | WO-CAS-PORTAL-V1 ejecutado: Fase 1 SQL (modelo público + RLS to anon + vistas security_invoker), Fase 2 API (plugin `/api/public/*` + anonClient + CORS + caché), Fase 4 control interno (`WebPublishingSection`). Deudas D-3 (nginx body size), D-5 (rate limit Redis), D-10 (compose obsoleto) cerradas. Runbooks de rollback, branch protection y rclone añadidos. typecheck + test + build en verde. |

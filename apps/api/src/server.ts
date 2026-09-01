@@ -8,7 +8,7 @@ const { buildApp } = await import('./app.js');
 const port = Number(process.env.API_PORT ?? 3000);
 const host = process.env.API_HOST ?? '0.0.0.0';
 
-const app = buildApp({ logger: true });
+const app = await buildApp({ logger: true });
 
 // Graceful shutdown: let in-flight requests finish before the container stops
 // (Coolify/Docker sends SIGTERM on redeploy).

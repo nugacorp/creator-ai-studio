@@ -1,13 +1,12 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { closeRedisRateLimiter, getRedisRateLimiter, type RedisLimiter } from './rate-limit-redis.js';
 
 /**
  * Dependency-free HTTP hardening for the API:
  *  - security headers on every response
- *  - in-memory per-IP rate limiting (fixed window)
+ *  - per-IP rate limiting (fixed window): Redis cuando REDIS_URL está definido,
+ *    en memoria como fallback (single-node). Cumple D-5 del PROJECT_STATE.
  *  - global error handler that never leaks internals
- *
- * For a single-node VPS deployment an in-memory limiter is sufficient; if the
- * API is ever scaled horizontally, replace it with @fastify/rate-limit + Redis.
  */
 
 interface WindowEntry {
@@ -37,6 +36,8 @@ function isExpensivePath(pathname: string): boolean {
 export function registerHardening(app: FastifyInstance): void {
   const general = new Map<string, WindowEntry>();
   const expensive = new Map<string, WindowEntry>();
+  let redis: RedisLimiter | null = null;
+  let redisResolved = false;
 
   // Periodic cleanup so the maps never grow unbounded. unref() keeps the
   // timer from holding the process open (important for tests).
@@ -49,7 +50,10 @@ export function registerHardening(app: FastifyInstance): void {
     }
   }, WINDOW_MS);
   cleanup.unref?.();
-  app.addHook('onClose', async () => clearInterval(cleanup));
+  app.addHook('onClose', async () => {
+    clearInterval(cleanup);
+    await closeRedisRateLimiter();
+  });
 
   function consume(map: Map<string, WindowEntry>, key: string, limit: number): boolean {
     const now = Date.now();
@@ -66,11 +70,40 @@ export function registerHardening(app: FastifyInstance): void {
     const pathname = request.url.split('?')[0] ?? '';
     const ip = request.ip ?? 'unknown';
 
-    if (!consume(general, ip, GENERAL_LIMIT)) {
+    // Inicialización perezosa de Redis para no bloquear el arranque.
+    if (!redisResolved) {
+      redisResolved = true;
+      redis = await getRedisRateLimiter();
+    }
+
+    let generalAllowed = true;
+    let expensiveAllowed = true;
+
+    if (redis) {
+      try {
+        generalAllowed = await redis.consume('general', ip, GENERAL_LIMIT, WINDOW_MS);
+        if (isExpensivePath(pathname)) {
+          expensiveAllowed = await redis.consume('expensive', ip, EXPENSIVE_LIMIT, WINDOW_MS);
+        }
+      } catch {
+        // Si Redis se cae a mitad de vuelo, caemos al limitador en memoria.
+        generalAllowed = consume(general, ip, GENERAL_LIMIT);
+        if (isExpensivePath(pathname)) {
+          expensiveAllowed = consume(expensive, ip, EXPENSIVE_LIMIT);
+        }
+      }
+    } else {
+      generalAllowed = consume(general, ip, GENERAL_LIMIT);
+      if (isExpensivePath(pathname)) {
+        expensiveAllowed = consume(expensive, ip, EXPENSIVE_LIMIT);
+      }
+    }
+
+    if (!generalAllowed) {
       reply.header('retry-after', '60');
       return reply.code(429).send({ error: 'rate_limited', message: 'Too many requests' });
     }
-    if (isExpensivePath(pathname) && !consume(expensive, ip, EXPENSIVE_LIMIT)) {
+    if (isExpensivePath(pathname) && !expensiveAllowed) {
       reply.header('retry-after', '60');
       return reply.code(429).send({
         error: 'rate_limited',

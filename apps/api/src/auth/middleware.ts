@@ -25,7 +25,7 @@ const PUBLIC_PATHS = new Set([
   '/system/mode',
   '/api/system/mode',
 ]);
-const PUBLIC_PATH_PREFIXES = ['/oauth/', '/api/oauth/'];
+const PUBLIC_PATH_PREFIXES = ['/oauth/', '/api/oauth/', '/api/public/'];
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) {

@@ -25,7 +25,7 @@ describe('YouTube channels integration', () => {
     process.env.LOCAL_STORAGE_PATH = storageDir;
     process.env.GOOGLE_OAUTH_CLIENT_ID = '123-test.apps.googleusercontent.com';
     process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'test-client-secret';
-    app = buildApp({ storage: new EpisodeStorage(storageDir) });
+    app = await buildApp({ storage: new EpisodeStorage(storageDir) });
     await app.ready();
     vi.restoreAllMocks();
   });

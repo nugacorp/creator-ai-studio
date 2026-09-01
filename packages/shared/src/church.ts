@@ -184,6 +184,26 @@ export interface Asset {
   driveId?: string;
 }
 
+// --- Visibility (orthogonal axis to status) --------------------------------
+
+/**
+ * Visibilidad de un recurso en el portal público de la iglesia.
+ * Es ortogonal al status: una producción `publicado` en YouTube puede no
+ * estar marcada como pública para la web, y viceversa.
+ */
+export const PRODUCTION_VISIBILITIES = ['interna', 'equipo', 'publica'] as const;
+export type ProductionVisibility = (typeof PRODUCTION_VISIBILITIES)[number];
+
+export function isProductionVisibility(value: unknown): value is ProductionVisibility {
+  return typeof value === 'string' && (PRODUCTION_VISIBILITIES as readonly string[]).includes(value);
+}
+
+export const PRODUCTION_VISIBILITY_LABELS: Record<ProductionVisibility, string> = {
+  interna: 'Solo equipo interno',
+  equipo: 'Visible para el equipo',
+  publica: 'Visible en el sitio web',
+};
+
 // --- Productions -----------------------------------------------------------
 
 export const PRODUCTION_FORMATS = [
@@ -287,6 +307,15 @@ export interface Production {
   createdAt: string;
   updatedAt: string;
   publishedAt?: string;
+  // Public portal fields (Church Public Portal V1)
+  visibility: ProductionVisibility;
+  showOnLanding: boolean;
+  slug?: string;
+  publicTitle?: string;
+  publicSummary?: string;
+  watchUrl?: string;
+  coverAssetId?: string;
+  expiresAt?: string;
 }
 
 export const APPROVAL_DECISIONS = ['aprobado', 'cambios'] as const;
@@ -315,7 +344,7 @@ export interface ProductionComment {
 
 // --- Publishing ------------------------------------------------------------
 
-export const PUBLISH_PLATFORMS = ['youtube', 'facebook', 'instagram', 'tiktok', 'x'] as const;
+export const PUBLISH_PLATFORMS = ['youtube', 'facebook', 'instagram', 'tiktok', 'x', 'web'] as const;
 export type PublishPlatform = (typeof PUBLISH_PLATFORMS)[number];
 
 export function isPublishPlatform(value: unknown): value is PublishPlatform {
@@ -325,11 +354,14 @@ export function isPublishPlatform(value: unknown): value is PublishPlatform {
 /**
  * `auto` publishes through an API. `assisted` builds the ready-to-post package
  * and notifies a human — the honest mode for Instagram and TikTok (see AD-3).
+ *
+ * For `web`, the destination is the public church portal: la programación
+ * temporal se resuelve con `published_at <= now()`; no requiere ejecutor.
  */
 export type PublishMode = 'auto' | 'assisted';
 
 /** Platforms that can genuinely publish unattended today. */
-export const AUTO_CAPABLE_PLATFORMS: readonly PublishPlatform[] = ['youtube', 'facebook'];
+export const AUTO_CAPABLE_PLATFORMS: readonly PublishPlatform[] = ['youtube', 'facebook', 'web'];
 
 export const RENDER_PRESETS = ['16:9-1080p', '9:16-1080x1920', '1:1-1080'] as const;
 export type RenderPreset = (typeof RENDER_PRESETS)[number];
@@ -340,6 +372,16 @@ export const PLATFORM_DEFAULT_PRESET: Record<PublishPlatform, RenderPreset> = {
   instagram: '1:1-1080',
   tiktok: '9:16-1080x1920',
   x: '16:9-1080p',
+  web: '16:9-1080p',
+};
+
+export const PUBLISH_PLATFORM_LABELS: Record<PublishPlatform, string> = {
+  youtube: 'YouTube',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  x: 'X (Twitter)',
+  web: 'Sitio web',
 };
 
 export interface PublishTarget {
@@ -433,6 +475,12 @@ export interface LiveEvent {
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
+  // Public portal fields (Church Public Portal V1)
+  visibility: ProductionVisibility;
+  showOnLanding: boolean;
+  publicTitle?: string;
+  watchUrl?: string;
+  coverAssetId?: string;
 }
 
 /** Default preflight checklist seeded on every new live event. */
@@ -508,6 +556,15 @@ export interface UpdateProductionInput {
   bibleRef?: string;
   assignedTo?: string[];
   sourceAssetIds?: string[];
+  visibility?: ProductionVisibility;
+  showOnLanding?: boolean;
+  slug?: string;
+  publicTitle?: string;
+  publicSummary?: string;
+  watchUrl?: string;
+  coverAssetId?: string | null;
+  publishedAt?: string | null;
+  expiresAt?: string | null;
 }
 
 export interface CreateLiveEventInput {
@@ -518,6 +575,10 @@ export interface CreateLiveEventInput {
   crew?: LiveCrewAssignment[];
   checklist?: string[];
   obsProfile?: string;
+  visibility?: ProductionVisibility;
+  showOnLanding?: boolean;
+  publicTitle?: string;
+  watchUrl?: string;
 }
 
 export interface CreatePublishTargetInput {
@@ -544,4 +605,92 @@ export interface ChurchSession {
   role: ChurchRole | null;
   permissions: ChurchPermission[];
   memberships: Array<{ church: Church; role: ChurchRole }>;
+}
+
+// --- Public portal (V1) ----------------------------------------------------
+//
+// Contratos estables de las respuestas de `/api/public/*`. La landing consume
+// exactamente esta forma; cualquier cambio debe pasar por una versión de API.
+
+export type PublicLiveStatus = 'offline' | 'live' | 'scheduled';
+
+export interface PublicLiveItem {
+  id: string;
+  title: string;
+  scheduledAt: string;
+  watchUrl: string | null;
+}
+
+export interface PublicLiveResponse {
+  status: PublicLiveStatus;
+  title?: string;
+  watchUrl?: string;
+  scheduledAt?: string;
+  next: PublicLiveItem | null;
+}
+
+export interface PublicEventItem {
+  id: string;
+  title: string;
+  scheduledAt: string;
+  watchUrl: string | null;
+}
+
+export interface PublicEventsResponse {
+  items: PublicEventItem[];
+}
+
+export interface PublicSermonItem {
+  id: string;
+  title: string;
+  summary: string | null;
+  slug: string | null;
+  preacher: string | null;
+  bibleRef: string | null;
+  serviceDate: string | null;
+  publishedAt: string;
+  watchUrl: string | null;
+  coverUrl: string | null;
+}
+
+export interface PublicLatestSermonResponse {
+  sermon: PublicSermonItem | null;
+}
+
+// --- Validation helpers ----------------------------------------------------
+
+/**
+ * A production can be published on the web only when status is one of these.
+ * Anything earlier shows the toggle disabled in the UI.
+ */
+export const PUBLIC_PORTAL_PUBLISHABLE_STATUSES = ['aprobado', 'publicado'] as const satisfies readonly ProductionStatus[];
+
+export function canPublishOnWeb(status: ProductionStatus): boolean {
+  return (PUBLIC_PORTAL_PUBLISHABLE_STATUSES as readonly ProductionStatus[]).includes(status);
+}
+
+/**
+ * A production is ready for the web when it has at least a watch URL or a
+ * cover asset, a public title (defaulting to internal), and a publishedAt.
+ */
+export function isWebPublishable(input: {
+  status: ProductionStatus;
+  watchUrl?: string;
+  coverAssetId?: string;
+}): boolean {
+  if (!canPublishOnWeb(input.status)) return false;
+  return Boolean(input.watchUrl || input.coverAssetId);
+}
+
+/** Auto-generate a URL slug from a title. Light implementation; collision-safe by slug uniqueness. */
+export function slugifyProductionTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .slice(0, 80) || 'produccion';
 }

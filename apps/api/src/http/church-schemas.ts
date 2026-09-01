@@ -21,9 +21,21 @@ const PRODUCTION_STATUS = {
   type: 'string',
   enum: ['idea', 'grabacion', 'edicion', 'revision', 'aprobado', 'publicado'],
 } as const;
+const VISIBILITY = {
+  type: 'string',
+  enum: ['interna', 'equipo', 'publica'],
+} as const;
+const ISO_DATE_TIME = { type: 'string', minLength: 4, maxLength: 40 } as const;
+const URL_OR_EMPTY = {
+  type: 'string',
+  maxLength: 600,
+  // Permitimos string vacío para "desmarcar" la URL sin borrarla por separado.
+  pattern: '^(https?://.+)?$',
+} as const;
+const SLUG = { type: 'string', maxLength: 80, pattern: '^[a-z0-9-]+$' } as const;
 const PLATFORM = {
   type: 'string',
-  enum: ['youtube', 'facebook', 'instagram', 'tiktok', 'x'],
+  enum: ['youtube', 'facebook', 'instagram', 'tiktok', 'x', 'web'],
 } as const;
 const RENDER_PRESET = {
   type: 'string',
@@ -147,6 +159,9 @@ export const createProductionBody = {
     assignedTo: UUID_LIST,
     sourceAssetIds: UUID_LIST,
     legacyEpisodeId: SHORT,
+    // Public portal defaults
+    visibility: VISIBILITY,
+    showOnLanding: { type: 'boolean' },
   },
   additionalProperties: false,
 } as const;
@@ -163,6 +178,16 @@ export const updateProductionBody = {
     bibleRef: SHORT,
     assignedTo: UUID_LIST,
     sourceAssetIds: UUID_LIST,
+    // Public portal V1 fields
+    visibility: VISIBILITY,
+    showOnLanding: { type: 'boolean' },
+    slug: SLUG,
+    publicTitle: { type: 'string', maxLength: 220 },
+    publicSummary: { type: 'string', maxLength: 1_500 },
+    watchUrl: URL_OR_EMPTY,
+    coverAssetId: UUID,
+    publishedAt: { type: ['string', 'null'], maxLength: 40 },
+    expiresAt: { type: ['string', 'null'], maxLength: 40 },
   },
   additionalProperties: false,
 } as const;
@@ -250,7 +275,7 @@ export const createLiveEventBody = {
   properties: {
     churchId: UUID,
     title: { type: 'string', minLength: 1, maxLength: 200 },
-    scheduledAt: { type: 'string', minLength: 4, maxLength: 40 },
+    scheduledAt: ISO_DATE_TIME,
     targetIds: UUID_LIST,
     crew: {
       type: 'array',
@@ -267,6 +292,11 @@ export const createLiveEventBody = {
     },
     checklist: { type: 'array', maxItems: 40, items: { type: 'string', maxLength: 200 } },
     obsProfile: SHORT,
+    // Public portal V1
+    visibility: VISIBILITY,
+    showOnLanding: { type: 'boolean' },
+    publicTitle: { type: 'string', maxLength: 200 },
+    watchUrl: URL_OR_EMPTY,
   },
   additionalProperties: false,
 } as const;
@@ -275,12 +305,18 @@ export const updateLiveEventBody = {
   type: 'object',
   properties: {
     title: { type: 'string', minLength: 1, maxLength: 200 },
-    scheduledAt: { type: 'string', minLength: 4, maxLength: 40 },
+    scheduledAt: ISO_DATE_TIME,
     status: { type: 'string', enum: ['planeado', 'preflight', 'en_vivo', 'finalizado'] },
     targetIds: UUID_LIST,
     obsProfile: SHORT,
     recordingAssetId: UUID,
     crew: createLiveEventBody.properties.crew,
+    // Public portal V1
+    visibility: VISIBILITY,
+    showOnLanding: { type: 'boolean' },
+    publicTitle: { type: 'string', maxLength: 200 },
+    watchUrl: URL_OR_EMPTY,
+    coverAssetId: UUID,
   },
   additionalProperties: false,
 } as const;

@@ -42,6 +42,7 @@ Registrar cambios importantes de proyecto, gobierno, operación y documentación
 | 2026-07-05 | Cursor | Production Readiness Master Plan | Safe pipeline UI, mock policy, Supabase metadata, production compose. |
 | 2026-08-03/06 | Claude/Codex | Project pivot | Reframed Creator AI Studio as church digital team platform and documented Church Public Portal V1 proposal. |
 | 2026-08-09 | Hermes | Repository governance setup | Preserved divergent local `main`, synchronized local `main` to `origin/main`, restored/published `staging`, created worktree root, updated multi-agent governance docs. |
+| 2026-08-22 | Codex | WO-CAS-PORTAL-V1 | Church Public Portal V1 — Fase 1 SQL (modelo público + RLS to anon + vistas security_invoker), Fase 2 API (`/api/public/*` + CORS + caché), Fase 4 control interno (`WebPublishingSection`). Deudas D-3/D-5/D-10 cerradas. 13 tests verdes. typecheck/test/build en verde. Runbooks de rollback, branch protection y rclone. |
 
 ## Dependencies
 

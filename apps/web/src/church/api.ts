@@ -359,6 +359,15 @@ export async function updateProduction(
     bibleRef: string;
     assignedTo: string[];
     sourceAssetIds: string[];
+    visibility: 'interna' | 'equipo' | 'publica';
+    showOnLanding: boolean;
+    slug: string;
+    publicTitle: string;
+    publicSummary: string;
+    watchUrl: string;
+    coverAssetId: string | null;
+    publishedAt: string | null;
+    expiresAt: string | null;
   }>,
 ): Promise<Production> {
   return apiFetch<Production>(`/church/productions/${encodeURIComponent(id)}`, {

@@ -100,7 +100,7 @@ describe('route permission table', () => {
   });
 
   it('leaves no mutating route unguarded by accident', async () => {
-    const app = buildApp();
+    const app = await buildApp();
     await app.ready();
 
     // printRoutes gives a tree; the routes map is easier to walk.

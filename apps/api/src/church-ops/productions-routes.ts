@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  canPublishOnWeb,
   canTransitionProduction,
   isProductionStatus,
   PRODUCTION_STATUS_LABELS,
   PRODUCTION_STATUS_PERMISSION,
   roleCan,
+  slugifyProductionTitle,
   type Production,
   type ProductionStatus,
 } from '@creator-ai-studio/shared';
@@ -150,6 +152,7 @@ export function registerChurchProductionRoutes(app: FastifyInstance, prefix: '' 
       const { id } = request.params as { id: string };
       const body = request.body as Record<string, unknown>;
       const canEditScript = roleCan(context.role, 'production.edit_script');
+      const canPublishOnWebPerm = roleCan(context.role, 'production.publish');
 
       if (!canEditScript && body.script !== undefined) {
         reply.code(403);
@@ -157,6 +160,28 @@ export function registerChurchProductionRoutes(app: FastifyInstance, prefix: '' 
           error: 'forbidden',
           permission: 'production.edit_script',
           message: 'Tu rol no permite editar el guion de una producción.',
+        };
+      }
+
+      // Los campos públicos solo los mueve quien tiene `production.publish`.
+      const portalFields = [
+        'visibility',
+        'showOnLanding',
+        'slug',
+        'publicTitle',
+        'publicSummary',
+        'watchUrl',
+        'coverAssetId',
+        'publishedAt',
+        'expiresAt',
+      ] as const;
+      const touchesPortal = portalFields.some(field => body[field] !== undefined);
+      if (touchesPortal && !canPublishOnWebPerm) {
+        reply.code(403);
+        return {
+          error: 'forbidden',
+          permission: 'production.publish',
+          message: 'Solo un líder o administrador puede mover el contenido al sitio web.',
         };
       }
 
@@ -184,6 +209,36 @@ export function registerChurchProductionRoutes(app: FastifyInstance, prefix: '' 
           });
         }
 
+        if (canPublishOnWebPerm) {
+          Object.assign(patch, {
+            ...(body.visibility !== undefined ? { visibility: body.visibility } : {}),
+            ...(body.showOnLanding !== undefined
+              ? { show_on_landing: Boolean(body.showOnLanding) }
+              : {}),
+            ...(body.slug !== undefined
+              ? { slug: String(body.slug).trim().toLowerCase() || null }
+              : {}),
+            ...(body.publicTitle !== undefined
+              ? { public_title: String(body.publicTitle).trim() || null }
+              : {}),
+            ...(body.publicSummary !== undefined
+              ? { public_summary: String(body.publicSummary).trim() || null }
+              : {}),
+            ...(body.watchUrl !== undefined
+              ? { watch_url: String(body.watchUrl).trim() || null }
+              : {}),
+            ...(body.coverAssetId !== undefined
+              ? { cover_asset_id: body.coverAssetId || null }
+              : {}),
+            ...(body.publishedAt !== undefined
+              ? { published_at: body.publishedAt || null }
+              : {}),
+            ...(body.expiresAt !== undefined
+              ? { expires_at: body.expiresAt || null }
+              : {}),
+          });
+        }
+
         if (Object.keys(patch).length === 0) {
           reply.code(400);
           return { error: 'bad_request', message: 'No hay cambios que aplicar' };
@@ -198,6 +253,57 @@ export function registerChurchProductionRoutes(app: FastifyInstance, prefix: '' 
           reply.code(404);
           return { error: 'not_found', message: 'Producción no encontrada' };
         }
+
+        // Si estamos activando visibilidad pública, validamos el predicado.
+        const effectiveVisibility = body.visibility ?? row.visibility;
+        const effectiveShow = body.showOnLanding ?? row.show_on_landing;
+        if (
+          canPublishOnWebPerm &&
+          (effectiveShow || effectiveVisibility === 'publica') &&
+          !canPublishOnWeb(row.status as ProductionStatus)
+        ) {
+          reply.code(409);
+          return {
+            error: 'status_not_publishable_on_web',
+            message: `El estado "${row.status}" no es publicable en el sitio web. Espera al estado "aprobado" o "publicado".`,
+            currentStatus: row.status,
+          };
+        }
+
+        // Si no hay slug pero se está exponiendo al público, autogeneramos uno.
+        if (
+          canPublishOnWebPerm &&
+          (effectiveShow || effectiveVisibility === 'publica') &&
+          !row.slug &&
+          row.title
+        ) {
+          const generated = slugifyProductionTitle(row.title);
+          const updated = await context.db.update<ProductionRow>(
+            'productions',
+            { slug: generated },
+            { id: `eq.${id}`, church_id: `eq.${context.churchId}` },
+          );
+          const updatedRow = updated[0];
+          if (updatedRow) {
+            // Audit log: registramos el cambio como comentario del sistema.
+            try {
+              await context.db.insert(
+                'production_comments',
+                {
+                  church_id: context.churchId,
+                  production_id: id,
+                  author_user_id: request.userId ?? null,
+                  body: `[sistema] slug generado automáticamente: ${generated}`,
+                },
+                { prefer: 'return=minimal' },
+              );
+            } catch {
+              // audit best-effort
+            }
+            return toProduction(updatedRow);
+          }
+        }
+
         return toProduction(row);
       } catch (error) {
         return handleChurchError(reply, error);

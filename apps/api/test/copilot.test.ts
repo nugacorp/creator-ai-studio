@@ -19,7 +19,7 @@ describe('copilot persistence', () => {
     storageDir = path.join(rootDir, 'episodes');
     process.env.LOCAL_STORAGE_PATH = storageDir;
     process.env.AI_ALLOW_DEMO_FALLBACK = 'true';
-    app = buildApp({ storage: new EpisodeStorage(storageDir) });
+    app = await buildApp({ storage: new EpisodeStorage(storageDir) });
     await app.ready();
   });
 

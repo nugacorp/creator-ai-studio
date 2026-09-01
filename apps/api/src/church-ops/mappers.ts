@@ -17,6 +17,7 @@ import type {
   Ministry,
   Production,
   ProductionComment,
+  ProductionVisibility,
   PublishTarget,
 } from '@creator-ai-studio/shared';
 
@@ -181,6 +182,15 @@ export interface ProductionRow {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  // Public portal V1
+  visibility: ProductionVisibility;
+  show_on_landing: boolean;
+  slug: string | null;
+  public_title: string | null;
+  public_summary: string | null;
+  watch_url: string | null;
+  cover_asset_id: string | null;
+  expires_at: string | null;
 }
 
 export function toProduction(row: ProductionRow): Production {
@@ -203,6 +213,14 @@ export function toProduction(row: ProductionRow): Production {
     publishedAt: optional(row.published_at),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    visibility: row.visibility ?? 'interna',
+    showOnLanding: row.show_on_landing ?? false,
+    slug: optional(row.slug),
+    publicTitle: optional(row.public_title),
+    publicSummary: optional(row.public_summary),
+    watchUrl: optional(row.watch_url),
+    coverAssetId: optional(row.cover_asset_id),
+    expiresAt: optional(row.expires_at),
   };
 }
 
@@ -295,6 +313,12 @@ export interface LiveEventRow {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  // Public portal V1
+  visibility: ProductionVisibility;
+  show_on_landing: boolean;
+  public_title: string | null;
+  watch_url: string | null;
+  cover_asset_id: string | null;
 }
 
 export function toLiveEvent(row: LiveEventRow): LiveEvent {
@@ -313,6 +337,11 @@ export function toLiveEvent(row: LiveEventRow): LiveEvent {
     createdBy: optional(row.created_by),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    visibility: row.visibility ?? 'interna',
+    showOnLanding: row.show_on_landing ?? false,
+    publicTitle: optional(row.public_title),
+    watchUrl: optional(row.watch_url),
+    coverAssetId: optional(row.cover_asset_id),
   };
 }
 

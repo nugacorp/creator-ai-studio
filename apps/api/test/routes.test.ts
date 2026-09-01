@@ -22,7 +22,7 @@ describe('api routes', () => {
   beforeEach(async () => {
     storageDir = await mkdtemp(path.join(tmpdir(), 'cas-episodes-'));
     process.env.AI_ALLOW_DEMO_FALLBACK = 'true';
-    app = buildApp({ storage: new EpisodeStorage(storageDir) });
+    app = await buildApp({ storage: new EpisodeStorage(storageDir) });
     await app.ready();
   });
 

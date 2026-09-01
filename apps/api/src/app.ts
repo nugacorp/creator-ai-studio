@@ -56,7 +56,7 @@ export interface BuildAppOptions {
   storage?: EpisodeStorage;
 }
 
-export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
+export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options.logger ?? false,
     trustProxy: true,
@@ -110,6 +110,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerCopilotRoutes(app, prefix, storage);
     registerSecretRoutes(app, prefix);
     registerOAuthRoutes(app, prefix);
+  }
+
+  // Public portal (only if CHURCH_PUBLIC_SLUG is defined). Mounted under
+  // /api once (not twice like the other routers) so the surface is auditable.
+  if (process.env.CHURCH_PUBLIC_SLUG) {
+    const { registerPublicPortal } = await import('./public-portal/plugin.js');
+    await app.register(async scope => {
+      await registerPublicPortal(scope);
+    }, { prefix: '/api/public' });
   }
 
   return app;
